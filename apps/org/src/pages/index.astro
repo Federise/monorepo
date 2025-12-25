@@ -1,0 +1,214 @@
+---
+import Layout from '../layouts/Layout.astro';
+import LoginButton from '../components/LoginButton.svelte';
+---
+
+<Layout>
+  <main>
+    <section class="hero">
+      <div class="hero-content">
+        <h1 class="gradient-text">federise</h1>
+        <div class="ipa">\&#712;f&#603;d&#601;ra&#618;z\</div>
+        <p class="definition">to make federated</p>
+        <div class="cta-container">
+          <LoginButton client:load defaultText="Get Started" />
+        </div>
+      </div>
+    </section>
+
+    <section class="features-grid" id="core-premise">
+      <div class="card intro-card">
+        <h2>Core Premise</h2>
+        <p>
+          Apps request capabilities. Each capability points to a user-controlled provider. You own
+          the providers. Apps never see your keys.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>KV Storage</h3>
+        <p>Typed key-value storage with sync semantics and conflict rules.</p>
+      </div>
+      <div class="card">
+        <h3>Blob Store</h3>
+        <p>Private or shared objects for your files and media.</p>
+      </div>
+      <div class="card">
+        <h3>Worker</h3>
+        <p>User-owned compute for background tasks</p>
+      </div>
+      <div class="card">
+        <h3>Notifications</h3>
+        <p>User-owned notifications for your apps.</p>
+      </div>
+      <div class="card">
+        <h3>LLM</h3>
+        <p>User-owned LLM for your apps.</p>
+      </div>
+      <div class="card">
+        <h3>Share & Identity</h3>
+        <p>Explicit cross-user exchange. Deterministic identity.</p>
+      </div>
+    </section>
+
+    <section class="details-section">
+      <div class="detail-block">
+        <h2>Trust Model</h2>
+        <p>
+          You give permissions to apps to use your capabilities. Apps can only initiate usage when
+          you are using them. They never see your keys. You can revoke permissions at any time.
+        </p>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <div class="footer-content">
+        <p class="footer-tagline">User-centric federation.</p>
+        <nav class="footer-links">
+          <a href="#">User Documentation</a>
+          <a href="#">Developer Documentation</a>
+        </nav>
+      </div>
+    </footer>
+  </main>
+</Layout>
+
+<style>
+  h1 {
+    margin-bottom: 0rem;
+  }
+
+  /* Scroll Indicator */
+  .scroll-indicator {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.5);
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    animation: bounce 2s infinite;
+  }
+
+  .scroll-indicator:hover {
+    color: rgba(255, 255, 255, 0.8);
+    transform: translateX(-50%) translateY(-4px);
+  }
+
+  @keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+      transform: translateX(-50%) translateY(0);
+    }
+    40% {
+      transform: translateX(-50%) translateY(-10px);
+    }
+    60% {
+      transform: translateX(-50%) translateY(-5px);
+    }
+  }
+
+  .ipa {
+    font-size: 0.9rem;
+    color: #a0a0a0;
+  }
+
+  .cta-container {
+    display: flex;
+    gap: 1rem;
+  }
+
+  /* Cards Grid */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 6rem;
+    scroll-snap-align: start;
+    padding-top: 2rem;
+  }
+
+  .intro-card {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.1));
+    border-color: rgba(139, 92, 246, 0.2);
+  }
+
+  .intro-card h2 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: var(--color-primary);
+  }
+
+  .card {
+    padding: 2rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    transition: transform 0.2s;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: #fff;
+  }
+
+  /* Details Section */
+  .details-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    margin-bottom: 6rem;
+  }
+
+  .detail-block h2 {
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+    color: #fff;
+  }
+
+  .site-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 3rem 0;
+    margin-top: 4rem;
+  }
+
+  .footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-tagline {
+    color: #666;
+    margin: 0;
+  }
+
+  .footer-links a {
+    color: #888;
+    text-decoration: none;
+    margin-left: 2rem;
+    transition: color 0.2s;
+  }
+
+  .footer-links a:hover {
+    color: #fff;
+  }
+
+  @media (max-width: 768px) {
+    .details-section {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+  }
+</style>

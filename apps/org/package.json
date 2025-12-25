@@ -1,0 +1,30 @@
+{
+  "name": "federise-org",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "pnpm build:sw && astro dev",
+    "dev:sw": "pnpm --filter service-worker watch",
+    "build": "pnpm build:sw && astro build",
+    "build:sw": "pnpm --filter service-worker build",
+    "preview": "pnpm build:sw && astro build && wrangler dev",
+    "astro": "astro",
+    "deploy": "pnpm build:sw && astro build && wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "fmt": "prettier --write .",
+    "fmt:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^12.6.12",
+    "@astrojs/svelte": "^7.2.4",
+    "astro": "^5.16.6",
+    "svelte": "^5.2.9"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "prettier": "^3.4.2",
+    "prettier-plugin-astro": "^0.14.1",
+    "prettier-plugin-svelte": "^3.3.2",
+    "wrangler": "^4.54.0"
+  }
+}

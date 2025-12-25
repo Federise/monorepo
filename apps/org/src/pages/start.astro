@@ -1,0 +1,27 @@
+---
+import Layout from '../layouts/Layout.astro';
+import DeployFlow from '../components/DeployFlow.svelte';
+---
+
+<Layout>
+  <main>
+    <section class="content-section">
+      <DeployFlow client:load />
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .hero-content {
+    text-align: center;
+  }
+
+  h1 {
+    margin-bottom: 1rem;
+  }
+
+  .content-section {
+    scroll-snap-align: start;
+    padding: 2rem 0 4rem;
+  }
+</style>
