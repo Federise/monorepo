@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import CtaButton from './CtaButton.svelte';
+  import { createGatewayClient, withAuth } from '../api/client';
+
+  const STORAGE_KEY_API = 'federise:gateway:apiKey';
+  const STORAGE_KEY_URL = 'federise:gateway:url';
 
   let installed = $state(false);
   let bootstrapToken = $state('');
@@ -8,8 +12,6 @@
   let gatewayApiKey = $state('');
   let connectionStatus = $state<'idle' | 'activating' | 'success' | 'error'>('idle');
   let connectionMessage = $state('');
-
-  const GATEWAY_API_KEY_STORAGE = 'federise:gateway:apiKey';
 
   function generateToken() {
     const array = new Uint8Array(32);
@@ -28,17 +30,14 @@
 
   onMount(async () => {
     bootstrapToken = generateToken();
-    // Load saved gateway API key if it exists
-    const savedKey = localStorage.getItem(GATEWAY_API_KEY_STORAGE);
-    if (savedKey) {
-      gatewayApiKey = savedKey;
 
-      // If we have a saved key and worker URL, check if it's still valid
-      const savedUrl = localStorage.getItem('federise:gateway:url');
-      if (savedUrl) {
-        workerUrl = savedUrl;
-        await checkGatewayStatus();
-      }
+    // Load saved gateway config
+    const savedKey = localStorage.getItem(STORAGE_KEY_API);
+    const savedUrl = localStorage.getItem(STORAGE_KEY_URL);
+    if (savedKey && savedUrl) {
+      gatewayApiKey = savedKey;
+      workerUrl = savedUrl;
+      await checkGatewayStatus();
     }
   });
 
@@ -46,24 +45,14 @@
     if (!workerUrl.trim() || !gatewayApiKey) return;
 
     try {
-      const url = new URL(workerUrl);
-      const pingUrl = new URL('/ping', url);
-      const pingResponse = await fetch(pingUrl.href, {
-        method: 'GET',
-        headers: {
-          'Authorization': `ApiKey ${gatewayApiKey}`
-        }
-      });
+      const client = createGatewayClient(workerUrl);
+      const { data } = await client.GET('/ping', withAuth(gatewayApiKey));
 
-      if (pingResponse.ok) {
-        const data = await pingResponse.json();
-        if ((data as any).message === 'pong') {
-          connectionStatus = 'success';
-          connectionMessage = 'Gateway is active';
-        }
+      if (data?.message === 'pong') {
+        connectionStatus = 'success';
+        connectionMessage = 'Gateway is active';
       }
     } catch (error) {
-      // Silently fail on mount check
       console.error('Gateway status check failed:', error);
     }
   }
@@ -76,17 +65,14 @@
     e.preventDefault();
     const url = 'https://deploy.workers.cloudflare.com/?url=https://github.com/Federise/deploy';
 
-    const width = 900;
-    const height = 700;
-
     window.open(
       url,
       'Deploy to Cloudflare',
-      `width=${width},height=${height},popup=yes,resizable=yes,scrollbars=yes`
+      'width=900,height=700,popup=yes,resizable=yes,scrollbars=yes'
     );
   }
 
-  async function activateGateway() {
+  async function handleActivateGateway() {
     if (!workerUrl.trim()) {
       connectionMessage = 'Please enter a worker URL';
       connectionStatus = 'error';
@@ -97,57 +83,26 @@
     connectionMessage = 'Activating gateway...';
 
     try {
-      const url = new URL(workerUrl);
+      const client = createGatewayClient(workerUrl);
 
-      // Create a principal using the bootstrap token
-      const createUrl = new URL('/principal/create', url);
-      const createResponse = await fetch(createUrl.href, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `ApiKey ${bootstrapToken}`
-        },
-        body: JSON.stringify({
-          display_name: 'Federise Gateway'
-        })
+      // Create principal with bootstrap token
+      const { data, error } = await client.POST('/principal/create', {
+        ...withAuth(bootstrapToken),
+        body: { display_name: 'Federise Gateway' },
       });
 
-      if (!createResponse.ok) {
-        const error = await createResponse.json();
+      if (error || !data) {
         connectionStatus = 'error';
-        connectionMessage = `Failed to create principal: ${(error as any).message || createResponse.statusText}`;
+        connectionMessage = error?.message || 'Failed to create principal';
         return;
       }
 
-      const principal = await createResponse.json();
-      gatewayApiKey = (principal as any).secret;
+      gatewayApiKey = data.secret;
+      localStorage.setItem(STORAGE_KEY_API, gatewayApiKey);
+      localStorage.setItem(STORAGE_KEY_URL, workerUrl);
 
-      // Save the API key and worker URL to localStorage
-      localStorage.setItem(GATEWAY_API_KEY_STORAGE, gatewayApiKey);
-      localStorage.setItem('federise:gateway:url', workerUrl);
-
-      // Test the connection with the new API key
-      const pingUrl = new URL('/ping', url);
-      const pingResponse = await fetch(pingUrl.href, {
-        method: 'GET',
-        headers: {
-          'Authorization': `ApiKey ${gatewayApiKey}`
-        }
-      });
-
-      if (pingResponse.ok) {
-        const data = await pingResponse.json();
-        if ((data as any).message === 'pong') {
-          connectionStatus = 'success';
-          connectionMessage = 'Gateway activated successfully!';
-        } else {
-          connectionStatus = 'error';
-          connectionMessage = 'Unexpected response from ping endpoint';
-        }
-      } else {
-        connectionStatus = 'error';
-        connectionMessage = `Ping failed: ${pingResponse.status} ${pingResponse.statusText}`;
-      }
+      connectionStatus = 'success';
+      connectionMessage = 'Gateway activated successfully!';
     } catch (error) {
       connectionStatus = 'error';
       connectionMessage = error instanceof Error ? error.message : 'Activation failed';
@@ -195,7 +150,7 @@
         placeholder="https://your-worker.workers.dev"
         class="url-input"
       />
-      <button onclick={activateGateway} class="test-button" disabled={connectionStatus === 'success'}>
+      <button onclick={handleActivateGateway} class="test-button" disabled={connectionStatus === 'success'}>
         {connectionStatus === 'success' ? 'Activated' : 'Activate Gateway'}
       </button>
     </div>
