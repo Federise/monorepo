@@ -1,0 +1,7 @@
+{
+  "name": "federise-monorepo",
+  "version": "1.0.0",
+  "scripts": {
+  },
+  "packageManager": "pnpm@10.26.0"
+}
