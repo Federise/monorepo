@@ -1,0 +1,15 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "federise-gateway-test",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-02-04",
+	"observability": {
+		"enabled": true
+	},
+	"kv_namespaces": [
+		{ "binding": "KV", "id": "test-namespace" }
+	],
+	"vars": {
+		"BOOTSTRAP_API_KEY": "testbootstrapkey123"
+	}
+}
