@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Federise Frame Test Harness</title>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>🧪 Federise Frame Test Harness</h1>
+        <p>Testing /frame endpoint on different origin (localhost:4321)</p>
+      </header>
+
+      <div class="status-summary">
+        <div class="summary-item">
+          <span class="summary-label">Total Tests:</span>
+          <span id="total-tests" class="summary-value">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Passed:</span>
+          <span id="passed-tests" class="summary-value success">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Failed:</span>
+          <span id="failed-tests" class="summary-value error">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Status:</span>
+          <span id="overall-status" class="summary-value">Not Run</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="control-group">
+          <label class="control-label" for="test-group-select">Test Group:</label>
+          <select id="test-group-select" class="filter-select">
+            <option value="all">All Tests</option>
+            <option value="unauthorized">Unauthorized</option>
+            <option value="authorized">Authorized</option>
+          </select>
+          <button id="run-tests" class="btn btn-primary">Run</button>
+        </div>
+        <div class="control-group">
+          <button id="clear-results" class="btn btn-secondary">Clear Results</button>
+          <label class="control-label" for="filter-test">Filter:</label>
+          <select id="filter-test" class="filter-select">
+            <option value="">All Results</option>
+            <option value="__failed__">Failed Only</option>
+            <option value="__passed__">Passed Only</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="test-grid">
+        <div class="test-list">
+          <h2>Tests</h2>
+          <div id="test-list"></div>
+        </div>
+
+        <div class="test-results">
+          <h2>Results</h2>
+          <div id="results"></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #0a0a0a;
+    color: #e0e0e0;
+    padding: 2rem;
+  }
+
+  #app {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #333;
+  }
+
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    color: #fff;
+  }
+
+  header p {
+    color: #888;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    color: #fff;
+  }
+
+  .status-summary {
+    display: flex;
+    gap: 2rem;
+    padding: 1.5rem;
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+  }
+
+  .summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .summary-label {
+    font-size: 0.85rem;
+    color: #888;
+    font-weight: 500;
+  }
+
+  .summary-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .summary-value.success {
+    color: #4ade80;
+  }
+
+  .summary-value.error {
+    color: #f87171;
+  }
+
+  .controls {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .control-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .control-label {
+    font-size: 0.9rem;
+    color: #888;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .filter-select {
+    padding: 0.75rem 1rem;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .filter-select:hover {
+    border-color: #444;
+  }
+
+  .filter-select:focus {
+    outline: none;
+    border-color: #8b5cf6;
+  }
+
+  .btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: #8b5cf6;
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: #7c3aed;
+  }
+
+  .btn-secondary {
+    background: #333;
+    color: white;
+  }
+
+  .btn-secondary:hover {
+    background: #444;
+  }
+
+  .btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  .test-grid {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    gap: 2rem;
+  }
+
+  .test-list,
+  .test-results {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+
+  .test-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    transition: border-color 0.2s;
+  }
+
+  .test-item:hover {
+    border-color: #444;
+  }
+
+  .test-info h3 {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    color: #fff;
+  }
+
+  .test-info p {
+    font-size: 0.85rem;
+    color: #888;
+  }
+
+  .test-status {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+
+  .test-status.success {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+  }
+
+  .test-status.error {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+  }
+
+  .test-status.running {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+  }
+
+  .result {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 6px;
+    border-left: 4px solid;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+  }
+
+  .result.pending {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: #8b5cf6;
+    color: #c4b5fd;
+  }
+
+  .result.running {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+    color: #93c5fd;
+  }
+
+  .result.success {
+    background: rgba(74, 222, 128, 0.1);
+    border-color: #4ade80;
+    color: #86efac;
+  }
+
+  .result.error {
+    background: rgba(248, 113, 113, 0.1);
+    border-color: #f87171;
+    color: #fca5a5;
+  }
+
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .result-title {
+    font-weight: 600;
+  }
+
+  .result-time {
+    font-size: 0.8rem;
+    opacity: 0.7;
+  }
+
+  .result-message {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .result-details {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    opacity: 0.8;
+  }
+
+  #results:empty::before {
+    content: 'No test results yet. Run a test to see results here.';
+    display: block;
+    padding: 2rem;
+    text-align: center;
+    color: #666;
+  }
+</style>
