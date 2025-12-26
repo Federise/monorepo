@@ -1,0 +1,41 @@
+---
+import Layout from './Layout.astro';
+import Sidebar from '../components/manage/Sidebar.svelte';
+
+interface Props {
+  title: string;
+  activeSection: 'connection' | 'overview' | 'permissions' | 'data' | 'settings' | 'recovery';
+}
+
+const { activeSection } = Astro.props;
+---
+
+<Layout>
+  <div class="dashboard">
+    <Sidebar activeSection={activeSection} client:load />
+
+    <main class="main-content">
+      <slot />
+    </main>
+  </div>
+</Layout>
+
+<style>
+  .dashboard {
+    display: flex;
+    min-height: 100vh;
+    background: var(--color-bg);
+  }
+
+  .main-content {
+    flex: 1;
+    margin-left: 260px;
+    min-height: 100vh;
+  }
+
+  @media (max-width: 900px) {
+    .main-content {
+      margin-left: 70px;
+    }
+  }
+</style>

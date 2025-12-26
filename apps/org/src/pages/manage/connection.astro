@@ -1,0 +1,10 @@
+---
+import ManageLayout from '../../layouts/ManageLayout.astro';
+import GatewayConnection from '../../components/manage/GatewayConnection.svelte';
+import Toast from '../../components/manage/Toast.svelte';
+---
+
+<ManageLayout title="Gateway Connection" activeSection="connection">
+  <Toast client:load />
+  <GatewayConnection client:load />
+</ManageLayout>

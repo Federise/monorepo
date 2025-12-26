@@ -1,0 +1,10 @@
+---
+import ManageLayout from '../../layouts/ManageLayout.astro';
+import RecoveryPage from '../../components/manage/Recovery.svelte';
+import Toast from '../../components/manage/Toast.svelte';
+---
+
+<ManageLayout title="Recovery" activeSection="recovery">
+  <Toast client:load />
+  <RecoveryPage client:load />
+</ManageLayout>

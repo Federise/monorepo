@@ -1,0 +1,10 @@
+---
+import ManageLayout from '../../layouts/ManageLayout.astro';
+import GatewayOverview from '../../components/manage/GatewayOverview.svelte';
+import Toast from '../../components/manage/Toast.svelte';
+---
+
+<ManageLayout title="Gateway Overview" activeSection="overview">
+  <Toast client:load />
+  <GatewayOverview client:load />
+</ManageLayout>

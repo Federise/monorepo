@@ -1,3 +1,5 @@
+/// <reference lib="webworker" />
+
 import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
 import { StaleWhileRevalidate, CacheFirst } from 'workbox-strategies';
@@ -28,12 +30,12 @@ registerRoute(
   })
 );
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', (_event: ExtendableEvent) => {
   console.log('Service Worker installing...');
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', (event: ExtendableEvent) => {
   console.log('Service Worker activating...');
   event.waitUntil(self.clients.claim());
 });
