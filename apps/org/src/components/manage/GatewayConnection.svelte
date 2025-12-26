@@ -67,7 +67,7 @@
 
       if (data?.message === 'pong') {
         testStatus = 'success';
-        testMessage = 'Connection successful! You can now save these credentials.';
+        testMessage = 'Connection successful!';
       } else {
         testStatus = 'error';
         testMessage = 'Unexpected response from gateway';
@@ -167,11 +167,6 @@
       <button class="btn btn-secondary" onclick={testConnection} disabled={testStatus === 'testing'}>
         Test Connection
       </button>
-      {#if testStatus === 'success'}
-        <button class="btn btn-primary" onclick={saveCredentials}>
-          Save Credentials
-        </button>
-      {/if}
     </div>
   </section>
 

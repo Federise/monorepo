@@ -12,6 +12,7 @@
     "deploy": "pnpm build:sw && astro build && wrangler deploy",
     "cf-typegen": "wrangler types",
     "generate:api": "openapi-typescript ../gateway/openapi.json -o ./src/api/schema.ts",
+    "test:frame": "cd tests && pnpm dev",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check ."
   },

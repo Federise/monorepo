@@ -1,0 +1,23 @@
+---
+import FrameEnforcer from '../components/FrameEnforcer.svelte';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Federise Frame</title>
+    <style>
+      /* Invisible frame - no visible content */
+      body {
+        margin: 0;
+        padding: 0;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <FrameEnforcer client:only="svelte" />
+  </body>
+</html>
