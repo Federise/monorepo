@@ -11,6 +11,9 @@
     "build:sw:copy": "cp public/sw.js dist/sw.js && cp public/sw.js.map dist/sw.js.map",
     "preview": "pnpm build && wrangler dev",
     "astro": "astro",
+    "check": "astro check && svelte-check --tsconfig ./tsconfig.json",
+    "check:astro": "astro check",
+    "check:svelte": "svelte-check --tsconfig ./tsconfig.json",
     "deploy": "pnpm build && wrangler deploy",
     "cf-typegen": "wrangler types",
     "generate:api": "openapi-typescript ../gateway/openapi.json -o ./src/api/schema.ts",
@@ -33,6 +36,7 @@
     "prettier": "^3.4.2",
     "prettier-plugin-astro": "^0.14.1",
     "prettier-plugin-svelte": "^3.3.2",
+    "svelte-check": "^4.3.5",
     "wrangler": "^4.54.0"
   }
 }

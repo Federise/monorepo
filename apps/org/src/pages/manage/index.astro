@@ -1,4 +1,8 @@
----
-// Redirect to connection page as the default
-return Astro.redirect('/manage/connection');
----
+<!doctype html>
+<html>
+<head>
+  <meta http-equiv="refresh" content="0;url=/manage/connection">
+  <script>window.location.replace('/manage/connection');</script>
+</head>
+<body></body>
+</html>

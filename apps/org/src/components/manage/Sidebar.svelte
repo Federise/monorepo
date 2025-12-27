@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
-  type Section = 'connection' | 'overview' | 'permissions' | 'data' | 'settings' | 'recovery';
+  type Section = 'connection' | 'overview' | 'permissions' | 'data' | 'settings' | 'recovery' | 'principals';
 
   let { activeSection }: { activeSection: Section } = $props();
   let isConnected = $state(false);
@@ -25,6 +25,7 @@
     {
       label: 'System',
       items: [
+        { id: 'principals' as Section, label: 'Principals', icon: 'users', href: '/manage/principals' },
         { id: 'settings' as Section, label: 'Settings', icon: 'gear', href: '/manage/settings' },
         { id: 'recovery' as Section, label: 'Recovery', icon: 'key', href: '/manage/recovery' },
       ],
@@ -46,7 +47,7 @@
         const response = await fetch(`${gatewayUrl}/ping`, {
           headers: { authorization: `ApiKey ${apiKey}` },
         });
-        const data = await response.json();
+        const data = (await response.json()) as { message?: string };
         isConnected = data?.message === 'pong';
       } catch {
         isConnected = false;
@@ -106,6 +107,13 @@
               {:else if item.icon === 'key'}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                </svg>
+              {:else if item.icon === 'users'}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               {/if}
             </span>

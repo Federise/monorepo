@@ -184,10 +184,21 @@ export class FederiseClient {
       const neededCaps = capabilities.filter(
         (c) => !response.granted?.includes(c)
       );
-      await this.waitForPermissionUpdate(neededCaps);
 
-      // Re-request to get updated capabilities
-      return this.requestCapabilities(capabilities);
+      try {
+        await this.waitForPermissionUpdate(neededCaps);
+        // Re-request to get updated capabilities
+        return this.requestCapabilities(capabilities);
+      } catch (error) {
+        if (error instanceof FederiseError && error.code === 'PERMISSION_TIMEOUT') {
+          // User closed popup or popup was blocked
+          throw new FederiseError(
+            'Permission request was not completed. Please try again and allow the popup.',
+            'PERMISSION_DENIED'
+          );
+        }
+        throw error;
+      }
     }
 
     if (response.type === 'ERROR') {
@@ -351,9 +362,30 @@ export class FederiseClient {
     }
   }
 
-  private waitForPermissionUpdate(capabilities: Capability[]): Promise<void> {
-    return new Promise((resolve) => {
-      this.permissionWaiters.push({ capabilities, resolve });
+  private waitForPermissionUpdate(
+    capabilities: Capability[],
+    timeoutMs: number = 30000
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        // Remove this waiter from the list
+        this.permissionWaiters = this.permissionWaiters.filter(
+          (w) => w.resolve !== resolve
+        );
+        reject(
+          new FederiseError(
+            'Permission update timeout - popup may have been closed or blocked',
+            'PERMISSION_TIMEOUT'
+          )
+        );
+      }, timeoutMs);
+
+      const wrappedResolve = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      this.permissionWaiters.push({ capabilities, resolve: wrappedResolve });
     });
   }
 

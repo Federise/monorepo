@@ -1,18 +1,13 @@
 const KV_PREFIX = 'federise:kv';
 
-// Simple hash function for origin namespacing
-function hashOrigin(origin: string): string {
-  let hash = 0;
-  for (let i = 0; i < origin.length; i++) {
-    const char = origin.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0');
+// URL-encode origin to safely use as namespace
+function encodeOrigin(origin: string): string {
+  // Encode the origin to handle special characters
+  return encodeURIComponent(origin);
 }
 
 function buildStorageKey(origin: string, key: string): string {
-  return `${KV_PREFIX}:${hashOrigin(origin)}:${key}`;
+  return `${KV_PREFIX}:${encodeOrigin(origin)}:${key}`;
 }
 
 export function getKV(origin: string, key: string): string | null {
@@ -33,15 +28,15 @@ export function deleteKV(origin: string, key: string): boolean {
 }
 
 export function listKVKeys(origin: string, prefix?: string): string[] {
-  const originHash = hashOrigin(origin);
-  const keyPrefix = `${KV_PREFIX}:${originHash}:`;
+  const encodedOrigin = encodeOrigin(origin);
+  const keyPrefix = `${KV_PREFIX}:${encodedOrigin}:`;
   const fullPrefix = prefix ? `${keyPrefix}${prefix}` : keyPrefix;
   const keys: string[] = [];
 
   for (let i = 0; i < localStorage.length; i++) {
     const storageKey = localStorage.key(i);
     if (storageKey?.startsWith(fullPrefix)) {
-      // Extract the user key portion (after the origin hash prefix)
+      // Extract the user key portion (after the origin prefix)
       const userKey = storageKey.slice(keyPrefix.length);
       keys.push(userKey);
     }

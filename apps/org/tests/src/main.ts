@@ -219,8 +219,9 @@ runner.on('result', (result: TestResult) => {
 
 // Run tests based on selected group
 document.getElementById('run-tests')!.addEventListener('click', async () => {
-  const groupSelect = document.getElementById('test-group-select') as HTMLSelectElement;
-  const selectedGroup = groupSelect.value;
+  const groupSelectEl = document.getElementById('test-group-select');
+  if (!(groupSelectEl instanceof HTMLSelectElement)) return;
+  const selectedGroup = groupSelectEl.value;
 
   await ensureConnected();
 

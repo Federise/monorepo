@@ -6,26 +6,18 @@
   const STORAGE_KEY_API = 'federise:gateway:apiKey';
   const STORAGE_KEY_URL = 'federise:gateway:url';
 
-  let installed = $state(false);
   let bootstrapToken = $state('');
   let workerUrl = $state('');
   let gatewayApiKey = $state('');
   let connectionStatus = $state<'idle' | 'activating' | 'success' | 'error'>('idle');
   let connectionMessage = $state('');
+  let copyClicked = $state(false);
+  let deployCompleted = $state(false);
 
   function generateToken() {
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
     return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }
-
-  async function handleInstall() {
-    try {
-      await navigator.serviceWorker.register('/sw.js');
-      installed = true;
-    } catch (error) {
-      console.error('Failed to install service worker:', error);
-    }
   }
 
   onMount(async () => {
@@ -59,6 +51,7 @@
 
   function copyToken() {
     navigator.clipboard.writeText(bootstrapToken);
+    copyClicked = true;
   }
 
   function openDeployPopup(e: MouseEvent) {
@@ -70,6 +63,7 @@
       'Deploy to Cloudflare',
       'width=900,height=700,popup=yes,resizable=yes,scrollbars=yes'
     );
+    deployCompleted = true;
   }
 
   async function handleActivateGateway() {
@@ -103,6 +97,11 @@
 
       connectionStatus = 'success';
       connectionMessage = 'Gateway activated successfully!';
+
+      // Auto-redirect to management
+      setTimeout(() => {
+        window.location.href = '/manage/connection';
+      }, 1500);
     } catch (error) {
       connectionStatus = 'error';
       connectionMessage = error instanceof Error ? error.message : 'Activation failed';
@@ -112,36 +111,39 @@
 
 <div class="deploy-flow">
   <div class="flow-section">
-    <h3>Step 1: Install Federise</h3>
-    <p>Install the Federise service worker to enable federated capabilities.</p>
-    {#if installed}
-      <div class="connection-status success">
-        ✓ Federise installed successfully!
-      </div>
-    {:else}
-      <CtaButton buttonText="Install Federise" onClick={handleInstall} />
-    {/if}
-  </div>
-
-  <div class="flow-section">
-    <h3>Step 2: Copy Your Bootstrap Token</h3>
+    <h3>Step 1: Copy Your Bootstrap Token</h3>
     <p>This token will authenticate your worker. You'll need to paste it into the Cloudflare template.</p>
     <div class="token-container">
       <input type="text" readonly value={bootstrapToken} class="token-input" />
-      <button onclick={copyToken} class="copy-button">Copy</button>
+      <button
+        onclick={copyToken}
+        disabled={copyClicked}
+        class="copy-button"
+        class:greyed-out={copyClicked}>
+        {copyClicked ? 'Copied ✓' : 'Copy'}
+      </button>
     </div>
   </div>
 
   <div class="flow-section">
-    <h3>Step 3: Deploy to Cloudflare</h3>
+    <h3>Step 2: Deploy to Cloudflare</h3>
     <p>Click the button below to deploy your worker. Paste the bootstrap token when prompted.</p>
-    <button onclick={openDeployPopup} class="deploy-button">
+    <button
+      onclick={openDeployPopup}
+      disabled={deployCompleted}
+      class="deploy-button"
+      class:greyed-out={deployCompleted}>
       <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" />
     </button>
+    {#if deployCompleted}
+      <div class="connection-status success" style="margin-top: 1rem;">
+        ✓ Deployed successfully!
+      </div>
+    {/if}
   </div>
 
   <div class="flow-section">
-    <h3>Step 4: Activate Gateway</h3>
+    <h3>Step 3: Activate Gateway</h3>
     <p>After deployment, paste your worker URL below to activate your gateway.</p>
     <div class="url-container">
       <input
@@ -231,6 +233,17 @@
   .test-button:hover {
     background: rgba(139, 92, 246, 0.3);
     border-color: rgba(139, 92, 246, 0.5);
+  }
+
+  .greyed-out {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+  }
+
+  .greyed-out:hover {
+    background: rgba(139, 92, 246, 0.2) !important;
+    border-color: rgba(139, 92, 246, 0.3) !important;
+    transform: none !important;
   }
 
   .test-button:disabled {

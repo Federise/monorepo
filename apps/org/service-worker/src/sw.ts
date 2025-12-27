@@ -3,11 +3,9 @@
 import { precacheAndRoute, matchPrecache } from 'workbox-precaching';
 import {
   registerRoute,
-  setDefaultHandler,
   setCatchHandler,
 } from 'workbox-routing';
 import {
-  StaleWhileRevalidate,
   CacheFirst,
   NetworkFirst,
   NetworkOnly,
@@ -110,7 +108,7 @@ registerRoute(
 // ===== OFFLINE FALLBACK =====
 
 // Catch-all: if everything fails, show offline page
-setCatchHandler(async ({ event, request }) => {
+setCatchHandler(async ({ request }) => {
   // Only return offline page for navigation requests
   if (request.destination === 'document') {
     return (await matchPrecache('/offline')) || Response.error();
@@ -122,7 +120,7 @@ setCatchHandler(async ({ event, request }) => {
 
 // ===== LIFECYCLE EVENTS =====
 
-self.addEventListener('install', (event: ExtendableEvent) => {
+self.addEventListener('install', () => {
   console.log('[SW] Installing service worker...');
   // Force the waiting service worker to become the active service worker
   self.skipWaiting();

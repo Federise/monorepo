@@ -1,139 +1,151 @@
 [
   {
     "url": "/authorize",
-    "revision": "51e72ba8"
+    "revision": "df67acc1"
   },
   {
     "url": "/frame",
-    "revision": "c29019c3"
+    "revision": "919ff40c"
   },
   {
     "url": "/",
-    "revision": "b8907b31"
+    "revision": "d9a01d39"
   },
   {
     "url": "/manage/connection",
-    "revision": "1c4a2f37"
+    "revision": "6463189d"
   },
   {
     "url": "/manage/data",
-    "revision": "3a14c015"
+    "revision": "7df5092f"
   },
   {
     "url": "/manage",
-    "revision": "d39716f6"
+    "revision": "b87e2448"
   },
   {
     "url": "/manage/overview",
-    "revision": "5eee1a69"
+    "revision": "87073387"
   },
   {
     "url": "/manage/permissions",
-    "revision": "20397b19"
+    "revision": "d1de9a39"
+  },
+  {
+    "url": "/manage/principals",
+    "revision": "8fb336da"
   },
   {
     "url": "/manage/recovery",
-    "revision": "a68e64c7"
+    "revision": "fc226373"
   },
   {
     "url": "/manage/settings",
-    "revision": "e04bad3a"
+    "revision": "9cfc4bbc"
   },
   {
     "url": "/offline",
-    "revision": "8dcb0892"
+    "revision": "01d528cc"
   },
   {
     "url": "/start",
-    "revision": "d0b9f246"
+    "revision": "b2238b2e"
   },
   {
-    "url": "/_astro/AuthorizeFlow.Fg3E6Wyj.js",
-    "revision": "41ca4f41"
+    "url": "/_astro/AuthorizeFlow.BrU3E9Lu.js",
+    "revision": "e25af87d"
   },
   {
-    "url": "/_astro/CtaButton.C0l--Q5H.js",
-    "revision": "d514f26b"
+    "url": "/_astro/CtaButton.Cz6IIfJj.js",
+    "revision": "9fa5c6fe"
   },
   {
-    "url": "/_astro/DeployFlow.Dp2RmftA.js",
-    "revision": "6452c077"
+    "url": "/_astro/DeployFlow.dgxcHMLF.js",
+    "revision": "8a9f2788"
   },
   {
-    "url": "/_astro/FrameEnforcer.DCbBIESp.js",
-    "revision": "8d2b2ffc"
+    "url": "/_astro/FrameEnforcer.DNqsJGfM.js",
+    "revision": "f29c1472"
   },
   {
-    "url": "/_astro/GatewayConnection.DY4NoNsD.js",
-    "revision": "56d5046d"
+    "url": "/_astro/GatewayConnection.BgRIjzDO.js",
+    "revision": "232b0dae"
   },
   {
-    "url": "/_astro/GatewayOverview.8Y-KXu1w.js",
-    "revision": "b6336b0c"
+    "url": "/_astro/GatewayOverview.D2QjCNQw.js",
+    "revision": "c1801f0b"
   },
   {
-    "url": "/_astro/LoginButton.BPfRtdcC.js",
-    "revision": "0d764afe"
+    "url": "/_astro/LoginButton.DdVYKcxO.js",
+    "revision": "6fb11427"
   },
   {
-    "url": "/_astro/Permissions.Chl2AJFf.js",
-    "revision": "fa581fa7"
+    "url": "/_astro/Permissions.CnawXvA6.js",
+    "revision": "d21a8b4b"
   },
   {
-    "url": "/_astro/Recovery.CyfDguIO.js",
-    "revision": "95be5ea0"
+    "url": "/_astro/PrincipalsManager.A_Fkvjx5.js",
+    "revision": "bc225c8e"
   },
   {
-    "url": "/_astro/Settings.CZO_KY4R.js",
-    "revision": "b42958cc"
+    "url": "/_astro/Recovery.D4k2ta_e.js",
+    "revision": "ee4090ea"
   },
   {
-    "url": "/_astro/Sidebar.BCFsxWcY.js",
-    "revision": "3cac9d97"
+    "url": "/_astro/Settings.TKrK_vAx.js",
+    "revision": "1920db71"
   },
   {
-    "url": "/_astro/Toast.DNh1x-jG.js",
-    "revision": "9d67b9a2"
+    "url": "/_astro/Sidebar.Bu1wqNNo.js",
+    "revision": "b42218d3"
   },
   {
-    "url": "/_astro/attributes.2rlOr3hN.js",
-    "revision": "6a54939d"
+    "url": "/_astro/Toast.tKqBSmh0.js",
+    "revision": "5c2bb99d"
   },
   {
-    "url": "/_astro/class.Cz1xE82Q.js",
-    "revision": "d7803dee"
+    "url": "/_astro/attributes._61bBUCd.js",
+    "revision": "6136a480"
+  },
+  {
+    "url": "/_astro/class.uvSdycm1.js",
+    "revision": "4a1dacb1"
   },
   {
     "url": "/_astro/client._HoVVZXZ.js",
     "revision": "1b3ea4ec"
   },
   {
-    "url": "/_astro/client.svelte.Ba1iD1Hi.js",
-    "revision": "1a2228ba"
+    "url": "/_astro/client.svelte.CO5x2SKG.js",
+    "revision": "bbae6881"
   },
   {
-    "url": "/_astro/connection.B7MWY2Kw.css",
-    "revision": "3e5837d0"
+    "url": "/_astro/connection.B3GxN3P-.css",
+    "revision": "a734ac13"
   },
   {
-    "url": "/_astro/connection.ao8UK-sa.css",
-    "revision": "0594b420"
+    "url": "/_astro/connection.CxOgs4_t.css",
+    "revision": "0f94d17d"
   },
   {
-    "url": "/_astro/each.KEI_KoU7.js",
-    "revision": "0eda8ed7"
+    "url": "/_astro/connection.DSGPhoRf.css",
+    "revision": "e6e54790"
   },
   {
-    "url": "/_astro/if.C6vSl94C.js",
-    "revision": "4ce02e8d"
+    "url": "/_astro/each.CWXz9HOF.js",
+    "revision": "baa044fb"
   },
   {
-    "url": "/_astro/index-client.DEsNfezl.js",
-    "revision": "6f28608d"
+    "url": "/_astro/if.D1UcBgpU.js",
+    "revision": "79030d49"
   },
   {
-    "url": "/_astro/input.SngHNGQx.js",
-    "revision": "0c7b467b"
+    "url": "/_astro/index-client.DoIHYzA9.js",
+    "revision": "70ab58eb"
+  },
+  {
+    "url": "/_astro/input.D1aiWXNy.js",
+    "revision": "c610ece1"
   },
   {
     "url": "/_astro/overview.D6wwF72K.css",
@@ -144,8 +156,12 @@
     "revision": "e734104f"
   },
   {
-    "url": "/_astro/permissions.DIiopetZ.js",
-    "revision": "db118dc7"
+    "url": "/_astro/permissions.NRQn6dmu.js",
+    "revision": "a53a3ba5"
+  },
+  {
+    "url": "/_astro/principals.CGDgY5aD.css",
+    "revision": "07aef613"
   },
   {
     "url": "/_astro/protocol.C-cuaqKR.js",
@@ -156,32 +172,32 @@
     "revision": "889c33d0"
   },
   {
-    "url": "/_astro/render.Bm7jj2Hx.js",
-    "revision": "6c0d913a"
+    "url": "/_astro/render.BOG1jREu.js",
+    "revision": "8a1d0b28"
   },
   {
-    "url": "/_astro/runtime.RwfqAR0B.js",
-    "revision": "c3a1696e"
+    "url": "/_astro/runtime.uDRRcw_s.js",
+    "revision": "075ac45c"
   },
   {
     "url": "/_astro/settings.CENHxWbl.css",
     "revision": "5d8b3dc9"
   },
   {
-    "url": "/_astro/start.BmE5ej1F.css",
-    "revision": "9a2f66b5"
-  },
-  {
     "url": "/_astro/start.CD5iy86q.css",
     "revision": "44d5e940"
   },
   {
-    "url": "/_astro/template.FHNjPg-q.js",
-    "revision": "15c8f779"
+    "url": "/_astro/start.WSs_H6WA.css",
+    "revision": "cd89675e"
+  },
+  {
+    "url": "/_astro/template._V6gHuyI.js",
+    "revision": "10c30848"
   },
   {
     "url": "/sw.js",
-    "revision": "1c677647"
+    "revision": "a53b623a"
   },
   {
     "url": "/manifest.json",

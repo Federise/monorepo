@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createGatewayClient } from '../../api/client';
+  import { createGatewayClient, withAuth } from '../../api/client';
 
   const STORAGE_KEY_API = 'federise:gateway:apiKey';
   const STORAGE_KEY_URL = 'federise:gateway:url';
@@ -53,10 +53,8 @@
     try {
       const client = createGatewayClient(newPrincipalUrl);
       const { data, error } = await client.POST('/principal/create', {
+        ...withAuth(bootstrapKey),
         body: { display_name: 'Recovery Principal' },
-        headers: {
-          authorization: `ApiKey ${bootstrapKey}`,
-        },
       });
 
       if (error) {

@@ -20,7 +20,7 @@
         const response = await fetch(`${savedUrl}/ping`, {
           headers: { authorization: `ApiKey ${savedKey}` },
         });
-        const data = await response.json();
+        const data = (await response.json()) as { message?: string };
         isConnected = data?.message === 'pong';
       } catch {
         isConnected = false;

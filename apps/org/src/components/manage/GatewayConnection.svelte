@@ -17,6 +17,7 @@
   let testMessage = $state('');
   let showTestApiKey = $state(false);
   let showApiKey = $state(false);
+  let showLoginForm = $state(false);
 
   onMount(async () => {
     const savedKey = localStorage.getItem(STORAGE_KEY_API);
@@ -84,6 +85,9 @@
     gatewayUrl = testUrl;
     apiKey = testApiKey;
     isConnected = true;
+    showLoginForm = false;
+    testStatus = 'idle';
+    testMessage = '';
     showToast('Gateway credentials saved!');
   }
 
@@ -112,6 +116,7 @@
     <p>Connect to your Federise Gateway by entering its URL and API key.</p>
   </header>
 
+  {#if !isConnected || showLoginForm}
   <section class="card">
     <h2>Test Connection</h2>
     <p class="card-desc">Enter your gateway credentials to test the connection before saving.</p>
@@ -167,12 +172,25 @@
       <button class="btn btn-secondary" onclick={testConnection} disabled={testStatus === 'testing'}>
         Test Connection
       </button>
+      {#if testStatus === 'success'}
+        <button class="btn btn-primary" onclick={saveCredentials}>
+          Save & Connect
+        </button>
+      {/if}
     </div>
   </section>
+  {/if}
 
   {#if isConnected}
     <section class="card">
-      <h2>Current Connection</h2>
+      <div class="card-header">
+        <h2>Current Connection</h2>
+        {#if !showLoginForm}
+          <button class="btn btn-secondary" onclick={() => (showLoginForm = true)}>
+            Change Connection
+          </button>
+        {/if}
+      </div>
       <div class="info-grid">
         <div class="info-item">
           <span class="info-label">Gateway URL</span>
@@ -241,6 +259,17 @@
     font-weight: 600;
     margin-bottom: var(--space-sm);
     color: var(--color-white);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+  }
+
+  .card-header h2 {
+    margin-bottom: 0;
   }
 
   .card-desc {
