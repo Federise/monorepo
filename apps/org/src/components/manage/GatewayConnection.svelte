@@ -18,6 +18,7 @@
   let showTestApiKey = $state(false);
   let showApiKey = $state(false);
   let showLoginForm = $state(false);
+  let loaded = $state(false);
 
   onMount(async () => {
     const savedKey = localStorage.getItem(STORAGE_KEY_API);
@@ -30,6 +31,7 @@
       testApiKey = savedKey;
       await checkConnection();
     }
+    loaded = true;
   });
 
   async function checkConnection() {
@@ -110,6 +112,7 @@
   }
 </script>
 
+{#if loaded}
 <div class="page">
   <header class="page-header">
     <h1>Gateway Connection</h1>
@@ -223,6 +226,7 @@
     </section>
   {/if}
 </div>
+{/if}
 
 <style>
   .page {
@@ -487,9 +491,50 @@
     white-space: nowrap;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     .page {
-      padding: 1.5rem;
+      padding: 1rem;
+    }
+
+    .page-header h1 {
+      font-size: 1.5rem;
+    }
+
+    .card {
+      padding: var(--space-lg);
+    }
+
+    .card-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-md);
+    }
+
+    .info-value {
+      font-size: var(--font-size-sm);
+      word-break: break-all;
+      white-space: normal;
+    }
+
+    .info-value-row {
+      flex-wrap: wrap;
+    }
+
+    .input-group {
+      flex-direction: column;
+    }
+
+    .btn-icon {
+      width: 100%;
+    }
+
+    .button-row {
+      width: 100%;
+    }
+
+    .button-row .btn {
+      flex: 1;
+      min-width: 0;
     }
   }
 </style>

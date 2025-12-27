@@ -76,6 +76,7 @@
           <a
             class="nav-item {activeSection === item.id ? 'active' : ''}"
             href={item.href}
+            data-astro-prefetch
           >
             <span class="nav-icon">
               {#if item.icon === 'plug'}
@@ -157,6 +158,9 @@
   .logo {
     width: 36px;
     height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    flex-shrink: 0;
     background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
     border-radius: var(--radius-lg);
     display: flex;

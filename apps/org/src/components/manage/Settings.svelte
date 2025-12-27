@@ -6,6 +6,7 @@
     notifications: true,
     debugMode: false,
   });
+  let loaded = $state(false);
 
   onMount(() => {
     // Load settings from localStorage
@@ -17,6 +18,7 @@
         // Use defaults
       }
     }
+    loaded = true;
   });
 
   // Save settings whenever they change
@@ -25,6 +27,7 @@
   });
 </script>
 
+{#if loaded}
 <div class="page">
   <header class="page-header">
     <h1>Settings</h1>
@@ -74,6 +77,7 @@
     <button class="btn btn-danger">Reset Everything</button>
   </section>
 </div>
+{/if}
 
 <style>
   .page {

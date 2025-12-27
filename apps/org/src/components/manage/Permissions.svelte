@@ -4,9 +4,11 @@
   import type { PermissionRecord } from '../../lib/protocol';
 
   let appPermissions = $state<PermissionRecord[]>([]);
+  let loaded = $state(false);
 
   onMount(() => {
     loadPermissions();
+    loaded = true;
   });
 
   function loadPermissions() {
@@ -38,6 +40,7 @@
   }
 </script>
 
+{#if loaded}
 <div class="page">
   <header class="page-header">
     <h1>App Permissions</h1>
@@ -72,6 +75,7 @@
     {/if}
   </section>
 </div>
+{/if}
 
 <style>
   .page {

@@ -6,6 +6,7 @@
   let isConnected = $state(false);
   let gatewayUrl = $state('');
   let appPermissions = $state<PermissionRecord[]>([]);
+  let loaded = $state(false);
 
   onMount(async () => {
     // Load from localStorage
@@ -28,9 +29,11 @@
     }
 
     appPermissions = getAllPermissions();
+    loaded = true;
   });
 </script>
 
+{#if loaded}
 <div class="page">
   <header class="page-header">
     <h1>Overview</h1>
@@ -83,6 +86,7 @@
     </section>
   {/if}
 </div>
+{/if}
 
 <style>
   .page {

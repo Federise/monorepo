@@ -12,6 +12,7 @@
   let newPrincipalName = $state('');
   let newPrincipalSecret = $state('');
   let toast = $state({ show: false, message: '', type: 'success' as 'success' | 'error' });
+  let loaded = $state(false);
 
   let apiKey = $state<string | null>(null);
   let gatewayUrl = $state<string | null>(null);
@@ -116,13 +117,15 @@
     newPrincipalSecret = '';
   }
 
-  onMount(() => {
+  onMount(async () => {
     apiKey = localStorage.getItem(STORAGE_KEY_API);
     gatewayUrl = localStorage.getItem(STORAGE_KEY_URL);
-    loadPrincipals();
+    await loadPrincipals();
+    loaded = true;
   });
 </script>
 
+{#if loaded}
 <div class="principals-manager">
   {#if !apiKey || !gatewayUrl}
     <div class="empty-state">
@@ -218,6 +221,7 @@
     </div>
   {/if}
 </div>
+{/if}
 
 <style>
   .principals-manager {
@@ -509,6 +513,120 @@
     to {
       transform: translateY(0);
       opacity: 1;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .principals-manager {
+      padding: 1rem;
+    }
+
+    .header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 1rem;
+    }
+
+    .header h2 {
+      font-size: 1.5rem;
+    }
+
+    .create-button {
+      width: 100%;
+    }
+
+    .create-form {
+      padding: 1rem;
+    }
+
+    /* Make table responsive with card layout */
+    .principals-list {
+      overflow-x: visible;
+    }
+
+    table {
+      border: none;
+      background: transparent;
+    }
+
+    thead {
+      display: none;
+    }
+
+    tbody {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    tr {
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 1rem;
+      gap: 0.75rem;
+    }
+
+    td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0;
+      border: none;
+    }
+
+    td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: var(--color-text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .principal-name::before {
+      content: 'Name';
+    }
+
+    .secret-hash::before {
+      content: 'Secret Hash';
+    }
+
+    .created-date::before {
+      content: 'Created';
+    }
+
+    td:nth-child(4)::before {
+      content: 'Status';
+    }
+
+    td:nth-child(5)::before {
+      content: 'Actions';
+    }
+
+    .delete-button {
+      width: auto;
+    }
+
+    .modal {
+      padding: 1.5rem;
+      width: 95%;
+    }
+
+    .secret-display {
+      flex-direction: column;
+    }
+
+    .copy-button {
+      width: 100%;
+    }
+
+    .toast {
+      left: 1rem;
+      right: 1rem;
+      bottom: 1rem;
     }
   }
 </style>

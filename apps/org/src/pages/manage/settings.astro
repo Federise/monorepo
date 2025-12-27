@@ -1,10 +1,8 @@
 ---
 import ManageLayout from '../../layouts/ManageLayout.astro';
 import SettingsPage from '../../components/manage/Settings.svelte';
-import Toast from '../../components/manage/Toast.svelte';
 ---
 
 <ManageLayout title="Settings" activeSection="settings">
-  <Toast client:load />
   <SettingsPage client:load />
 </ManageLayout>

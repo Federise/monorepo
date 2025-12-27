@@ -1,10 +1,8 @@
 ---
 import ManageLayout from '../../layouts/ManageLayout.astro';
 import PermissionsPage from '../../components/manage/Permissions.svelte';
-import Toast from '../../components/manage/Toast.svelte';
 ---
 
 <ManageLayout title="App Permissions" activeSection="permissions">
-  <Toast client:load />
   <PermissionsPage client:load />
 </ManageLayout>

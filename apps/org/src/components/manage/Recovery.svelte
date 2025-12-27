@@ -17,6 +17,7 @@
   let newPrincipalKey = $state('');
   let recoveryStatus = $state<'idle' | 'processing' | 'success' | 'error'>('idle');
   let recoveryMessage = $state('');
+  let loaded = $state(false);
 
   onMount(() => {
     const savedKey = localStorage.getItem(STORAGE_KEY_API);
@@ -26,6 +27,7 @@
       apiKey = savedKey;
       gatewayUrl = savedUrl;
     }
+    loaded = true;
   });
 
   function showToast(message: string) {
@@ -103,6 +105,7 @@
   }
 </script>
 
+{#if loaded}
 <div class="page">
   <header class="page-header">
     <h1>Recovery</h1>
@@ -264,6 +267,7 @@
     </section>
   {/if}
 </div>
+{/if}
 
 <style>
   .page {

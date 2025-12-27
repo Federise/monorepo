@@ -1,6 +1,7 @@
 ---
 import Layout from './Layout.astro';
 import Sidebar from '../components/manage/Sidebar.svelte';
+import Toast from '../components/manage/Toast.svelte';
 
 interface Props {
   title: string;
@@ -12,7 +13,8 @@ const { activeSection } = Astro.props;
 
 <Layout>
   <div class="dashboard">
-    <Sidebar activeSection={activeSection} client:load />
+    <Sidebar activeSection={activeSection} client:load transition:persist />
+    <Toast client:load transition:persist />
 
     <main class="main-content">
       <slot />
