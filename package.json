@@ -7,7 +7,7 @@
     "build": "pnpm --stream -r build",
     "test": "pnpm --stream -r test",
     "clean": "pnpm --stream -r clean && rm -rf node_modules",
-    "generate:api": "pnpm --filter federise-gateway generate-openapi && pnpm --filter federise-org generate:api"
+    "generate:api": "cd apps/gateway && pnpm generate-openapi && cd ../org && pnpm generate:api"
   },
   "packageManager": "pnpm@10.26.0"
 }

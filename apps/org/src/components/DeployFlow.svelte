@@ -56,7 +56,7 @@
 
   function openDeployPopup(e: MouseEvent) {
     e.preventDefault();
-    const url = 'https://deploy.workers.cloudflare.com/?url=https://github.com/Federise/monorepo/tree/main/apps/gateway';
+    const url = 'https://deploy.workers.cloudflare.com/?url=https://github.com/Federise/deploy';
 
     window.open(
       url,
