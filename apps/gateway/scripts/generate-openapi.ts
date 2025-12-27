@@ -4,16 +4,20 @@ import { fileURLToPath } from "url";
 import { fromHono } from "chanfana";
 import { Hono } from "hono";
 import { PingEndpoint } from "../src/endpoints/ping";
-import { PrincipalListEndpoint } from "../src/endpoints/principalList";
-import { PrincipalCreateEndpoint } from "../src/endpoints/principalCreate";
-import { PrincipalDeleteEndpoint } from "../src/endpoints/principalDelete";
-import { KVListNamespacesEndpoint } from "../src/endpoints/kvListNamespaces";
-import { KVListKeysEndpoint } from "../src/endpoints/kvListKeys";
-import { KVGetEndpoint } from "../src/endpoints/kvGet";
-import { KVSetEndpoint } from "../src/endpoints/kvSet";
-import { KVBulkGetEndpoint } from "../src/endpoints/kvBulkGet";
-import { KVBulkSetEndpoint } from "../src/endpoints/kvBulkSet";
-import { KVDumpEndpoint } from "../src/endpoints/kvDump";
+import { PrincipalListEndpoint } from "../src/endpoints/principal/list";
+import { PrincipalCreateEndpoint } from "../src/endpoints/principal/create";
+import { PrincipalDeleteEndpoint } from "../src/endpoints/principal/delete";
+import { KVListNamespacesEndpoint } from "../src/endpoints/kv/list-namespaces";
+import { KVListKeysEndpoint } from "../src/endpoints/kv/list-keys";
+import { KVGetEndpoint } from "../src/endpoints/kv/get";
+import { KVSetEndpoint } from "../src/endpoints/kv/set";
+import { KVBulkGetEndpoint } from "../src/endpoints/kv/bulk-get";
+import { KVBulkSetEndpoint } from "../src/endpoints/kv/bulk-set";
+import { KVDumpEndpoint } from "../src/endpoints/kv/dump";
+import { BlobUploadEndpoint } from "../src/endpoints/blob/upload";
+import { BlobGetEndpoint } from "../src/endpoints/blob/get";
+import { BlobDeleteEndpoint } from "../src/endpoints/blob/delete";
+import { BlobListEndpoint } from "../src/endpoints/blob/list";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,6 +53,10 @@ openapi.post("/kv/bulk/get", KVBulkGetEndpoint);
 openapi.post("/kv/bulk/set", KVBulkSetEndpoint);
 openapi.post("/kv/namespaces", KVListNamespacesEndpoint);
 openapi.post("/kv/dump", KVDumpEndpoint);
+openapi.post("/blob/upload", BlobUploadEndpoint);
+openapi.post("/blob/get", BlobGetEndpoint);
+openapi.post("/blob/delete", BlobDeleteEndpoint);
+openapi.post("/blob/list", BlobListEndpoint);
 
 // Generate OpenAPI spec by making a request to the /openapi endpoint
 async function generateSpec() {

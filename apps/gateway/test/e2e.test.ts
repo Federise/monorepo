@@ -471,4 +471,358 @@ describe("KV Gateway E2E Tests", () => {
       expect(data.value).toBe("test");
     });
   });
+
+  describe("Blob Operations", () => {
+    beforeEach(async () => {
+      // Clear KV and bootstrap admin for each test
+      const list = await env.KV.list();
+      await Promise.all(list.keys.map((k: { name: string }) => env.KV.delete(k.name)));
+
+      const bootstrap = await SELF.fetch("http://localhost/principal/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
+        },
+        body: JSON.stringify({ display_name: "Admin" }),
+      });
+      const admin = await bootstrap.json() as any;
+      adminApiKey = admin.secret;
+    });
+
+    it("should initiate private blob upload and return presigned URL", async () => {
+      const response = await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "test-file.txt",
+          contentType: "text/plain",
+          size: 1024,
+          isPublic: false,
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data).toHaveProperty("uploadUrl");
+      expect(data).toHaveProperty("expiresAt");
+      expect(data.uploadUrl).toContain("federise-objects");
+
+      // Verify metadata was created in KV
+      const metadata = await env.KV.get("__BLOB:myapp:test-file.txt");
+      expect(metadata).toBeTruthy();
+      const parsed = JSON.parse(metadata!);
+      expect(parsed.isPublic).toBe(false);
+      expect(parsed.size).toBe(1024);
+      expect(parsed.contentType).toBe("text/plain");
+    });
+
+    it("should initiate public blob upload and return presigned URL", async () => {
+      const response = await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "public-image.png",
+          contentType: "image/png",
+          size: 2048,
+          isPublic: true,
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data).toHaveProperty("uploadUrl");
+      expect(data).toHaveProperty("expiresAt");
+      expect(data.uploadUrl).toContain("federise-objects-public");
+
+      // Verify metadata was created in KV
+      const metadata = await env.KV.get("__BLOB:myapp:public-image.png");
+      expect(metadata).toBeTruthy();
+      const parsed = JSON.parse(metadata!);
+      expect(parsed.isPublic).toBe(true);
+    });
+
+    it("should get private blob download URL with expiry", async () => {
+      // Create blob metadata first
+      await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "private-doc.pdf",
+          contentType: "application/pdf",
+          size: 1024,
+          isPublic: false,
+        }),
+      });
+
+      const response = await SELF.fetch("http://localhost/blob/get", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ namespace: "myapp", key: "private-doc.pdf" }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data).toHaveProperty("url");
+      expect(data).toHaveProperty("metadata");
+      expect(data).toHaveProperty("expiresAt");
+      expect(data.metadata.isPublic).toBe(false);
+      expect(data.url).toContain("federise-objects");
+    });
+
+    it("should get public blob custom domain URL without expiry", async () => {
+      // Create blob metadata first
+      await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "public-banner.jpg",
+          contentType: "image/jpeg",
+          size: 2048,
+          isPublic: true,
+        }),
+      });
+
+      const response = await SELF.fetch("http://localhost/blob/get", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ namespace: "myapp", key: "public-banner.jpg" }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data).toHaveProperty("url");
+      expect(data).toHaveProperty("metadata");
+      expect(data.expiresAt).toBeUndefined();
+      expect(data.metadata.isPublic).toBe(true);
+      expect(data.url).toContain("cdn.example.com");
+      expect(data.url).toContain("myapp:public-banner.jpg");
+    });
+
+    it("should return 404 for non-existent blob", async () => {
+      const response = await SELF.fetch("http://localhost/blob/get", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ namespace: "myapp", key: "nonexistent.txt" }),
+      });
+
+      expect(response.status).toBe(404);
+      const data = await response.json() as any;
+      expect(data.message).toBe("Blob not found");
+    });
+
+    it("should list blobs in a namespace", async () => {
+      // Create multiple blobs
+      await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "file1.txt",
+          contentType: "text/plain",
+          size: 1024,
+          isPublic: false,
+        }),
+      });
+
+      await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "file2.txt",
+          contentType: "text/plain",
+          size: 2048,
+          isPublic: true,
+        }),
+      });
+
+      const response = await SELF.fetch("http://localhost/blob/list", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ namespace: "myapp" }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data.blobs).toHaveLength(2);
+      expect(data.blobs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: "file1.txt", isPublic: false }),
+          expect.objectContaining({ key: "file2.txt", isPublic: true }),
+        ])
+      );
+    });
+
+    it("should list all blobs across namespaces", async () => {
+      // Create blobs in different namespaces
+      await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "app1",
+          key: "file.txt",
+          contentType: "text/plain",
+          size: 1024,
+          isPublic: false,
+        }),
+      });
+
+      await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "app2",
+          key: "image.png",
+          contentType: "image/png",
+          size: 2048,
+          isPublic: true,
+        }),
+      });
+
+      const response = await SELF.fetch("http://localhost/blob/list", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data.blobs).toHaveLength(2);
+      expect(data.blobs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ namespace: "app1", key: "file.txt" }),
+          expect.objectContaining({ namespace: "app2", key: "image.png" }),
+        ])
+      );
+    });
+
+    it("should delete a blob", async () => {
+      // Create blob first
+      await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "to-delete.txt",
+          contentType: "text/plain",
+          size: 1024,
+          isPublic: false,
+        }),
+      });
+
+      // Verify it exists
+      const metadata = await env.KV.get("__BLOB:myapp:to-delete.txt");
+      expect(metadata).toBeTruthy();
+
+      const response = await SELF.fetch("http://localhost/blob/delete", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ namespace: "myapp", key: "to-delete.txt" }),
+      });
+
+      expect(response.status).toBe(204);
+
+      // Verify metadata was deleted
+      const deletedMetadata = await env.KV.get("__BLOB:myapp:to-delete.txt");
+      expect(deletedMetadata).toBeNull();
+    });
+
+    it("should return 404 when deleting non-existent blob", async () => {
+      const response = await SELF.fetch("http://localhost/blob/delete", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ namespace: "myapp", key: "nonexistent.txt" }),
+      });
+
+      expect(response.status).toBe(404);
+      const data = await response.json() as any;
+      expect(data.message).toBe("Blob not found");
+    });
+
+    it("should handle blob keys with special characters", async () => {
+      const response = await SELF.fetch("http://localhost/blob/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace: "myapp",
+          key: "folder/subfolder/file-name_v2.txt",
+          contentType: "text/plain",
+          size: 1024,
+          isPublic: false,
+        }),
+      });
+
+      expect(response.status).toBe(200);
+
+      // Verify it can be retrieved
+      const getRes = await SELF.fetch("http://localhost/blob/get", {
+        method: "POST",
+        headers: {
+          Authorization: `ApiKey ${adminApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ namespace: "myapp", key: "folder/subfolder/file-name_v2.txt" }),
+      });
+
+      expect(getRes.status).toBe(200);
+      const data = await getRes.json() as any;
+      expect(data.metadata.key).toBe("folder/subfolder/file-name_v2.txt");
+    });
+  });
 });

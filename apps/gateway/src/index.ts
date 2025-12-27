@@ -13,6 +13,10 @@ import { KVSetEndpoint } from "./endpoints/kv/set";
 import { KVBulkGetEndpoint } from "./endpoints/kv/bulk-get";
 import { KVBulkSetEndpoint } from "./endpoints/kv/bulk-set";
 import { KVDumpEndpoint } from "./endpoints/kv/dump";
+import { BlobUploadEndpoint } from "./endpoints/blob/upload";
+import { BlobGetEndpoint } from "./endpoints/blob/get";
+import { BlobDeleteEndpoint } from "./endpoints/blob/delete";
+import { BlobListEndpoint } from "./endpoints/blob/list";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -49,5 +53,11 @@ openapi.post("/kv/bulk/get", KVBulkGetEndpoint);
 openapi.post("/kv/bulk/set", KVBulkSetEndpoint);
 openapi.post("/kv/namespaces", KVListNamespacesEndpoint);
 openapi.post("/kv/dump", KVDumpEndpoint);
+
+// Blob routes
+openapi.post("/blob/upload", BlobUploadEndpoint);
+openapi.post("/blob/get", BlobGetEndpoint);
+openapi.post("/blob/delete", BlobDeleteEndpoint);
+openapi.post("/blob/list", BlobListEndpoint);
 
 export default app;

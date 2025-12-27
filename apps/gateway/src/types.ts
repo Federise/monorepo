@@ -74,6 +74,60 @@ export const KVDumpEntry = z.object({
   entries: z.array(KVEntry),
 });
 
+// Blob metadata stored in KV
+export const BlobMetadata = z.object({
+  key: z.string(),
+  namespace: NamespaceValue,
+  size: z.number().int().positive(),
+  contentType: z.string(),
+  uploadedAt: z.string().datetime(),
+  isPublic: z.boolean(),
+});
+
+// Request to initiate blob upload
+export const BlobUploadRequest = z.object({
+  namespace: NamespaceValue,
+  key: z.string(),
+  contentType: z.string(),
+  size: z.number().int().positive(),
+  isPublic: z.boolean().default(false),
+});
+
+// Response with presigned upload URL
+export const BlobUploadResponse = z.object({
+  uploadUrl: z.string().url(),
+  expiresAt: z.string().datetime(),
+});
+
+// Request to get blob download URL
+export const BlobGetRequest = z.object({
+  namespace: NamespaceValue,
+  key: z.string(),
+});
+
+// Response with download URL
+export const BlobGetResponse = z.object({
+  url: z.string().url(),
+  metadata: BlobMetadata,
+  expiresAt: z.string().datetime().optional(), // Only for private blobs
+});
+
+// Request to delete blob
+export const BlobDeleteRequest = z.object({
+  namespace: NamespaceValue,
+  key: z.string(),
+});
+
+// Request to list blobs
+export const BlobListRequest = z.object({
+  namespace: NamespaceValue.optional(),
+});
+
+// Response with blob list
+export const BlobListResponse = z.object({
+  blobs: z.array(BlobMetadata),
+});
+
 export const ErrorResponse = z.object({
   code: z.number().int(),
   message: z.string(),
