@@ -1,0 +1,37 @@
+{
+  "name": "Federise",
+  "short_name": "Federise",
+  "description": "User-centric federated capabilities platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020106",
+  "theme_color": "#8b5cf6",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Start",
+      "short_name": "Start",
+      "description": "Get started with Federise",
+      "url": "/start",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Manage",
+      "short_name": "Manage",
+      "description": "Manage your gateway",
+      "url": "/manage/connection",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
