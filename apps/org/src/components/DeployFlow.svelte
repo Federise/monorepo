@@ -110,29 +110,25 @@
 </script>
 
 <div class="deploy-flow">
-  <div class="flow-section">
+  <div class="flow-section" class:greyed-out={copyClicked}>
     <h3>Step 1: Copy Your Bootstrap Token</h3>
     <p>This token will authenticate your worker. You'll need to paste it into the Cloudflare template.</p>
     <div class="token-container">
       <input type="text" readonly value={bootstrapToken} class="token-input" />
       <button
         onclick={copyToken}
-        disabled={copyClicked}
-        class="copy-button"
-        class:greyed-out={copyClicked}>
+        class="copy-button">
         {copyClicked ? 'Copied ✓' : 'Copy'}
       </button>
     </div>
   </div>
 
-  <div class="flow-section">
+  <div class="flow-section" class:greyed-out={deployCompleted}>
     <h3>Step 2: Deploy to Cloudflare</h3>
     <p>Click the button below to deploy your worker. Paste the bootstrap token when prompted.</p>
     <button
       onclick={openDeployPopup}
-      disabled={deployCompleted}
-      class="deploy-button"
-      class:greyed-out={deployCompleted}>
+      class="deploy-button">
       <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" />
     </button>
     {#if deployCompleted}
@@ -142,7 +138,7 @@
     {/if}
   </div>
 
-  <div class="flow-section">
+  <div class="flow-section" class:greyed-out={connectionStatus === 'success'}>
     <h3>Step 3: Activate Gateway</h3>
     <p>After deployment, paste your worker URL below to activate your gateway.</p>
     <div class="url-container">
@@ -152,7 +148,7 @@
         placeholder="https://your-worker.workers.dev"
         class="url-input"
       />
-      <button onclick={handleActivateGateway} class="test-button" disabled={connectionStatus === 'success'}>
+      <button onclick={handleActivateGateway} class="test-button">
         {connectionStatus === 'success' ? 'Activated' : 'Activate Gateway'}
       </button>
     </div>
@@ -178,6 +174,11 @@
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 16px;
+    transition: opacity 0.3s ease;
+  }
+
+  .flow-section.greyed-out {
+    opacity: 0.4;
   }
 
   .flow-section h3 {
@@ -233,27 +234,6 @@
   .test-button:hover {
     background: rgba(139, 92, 246, 0.3);
     border-color: rgba(139, 92, 246, 0.5);
-  }
-
-  .greyed-out {
-    opacity: 0.5;
-    cursor: not-allowed !important;
-  }
-
-  .greyed-out:hover {
-    background: rgba(139, 92, 246, 0.2) !important;
-    border-color: rgba(139, 92, 246, 0.3) !important;
-    transform: none !important;
-  }
-
-  .test-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .test-button:disabled:hover {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: rgba(139, 92, 246, 0.3);
   }
 
   .deploy-button {
