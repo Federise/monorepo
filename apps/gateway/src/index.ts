@@ -3,16 +3,16 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authMiddleware } from "./middleware/auth";
 import { PingEndpoint } from "./endpoints/ping";
-import { PrincipalListEndpoint } from "./endpoints/principalList";
-import { PrincipalCreateEndpoint } from "./endpoints/principalCreate";
-import { PrincipalDeleteEndpoint } from "./endpoints/principalDelete";
-import { KVListNamespacesEndpoint } from "./endpoints/kvListNamespaces";
-import { KVListKeysEndpoint } from "./endpoints/kvListKeys";
-import { KVGetEndpoint } from "./endpoints/kvGet";
-import { KVSetEndpoint } from "./endpoints/kvSet";
-import { KVBulkGetEndpoint } from "./endpoints/kvBulkGet";
-import { KVBulkSetEndpoint } from "./endpoints/kvBulkSet";
-import { KVDumpEndpoint } from "./endpoints/kvDump";
+import { PrincipalListEndpoint } from "./endpoints/principal/list";
+import { PrincipalCreateEndpoint } from "./endpoints/principal/create";
+import { PrincipalDeleteEndpoint } from "./endpoints/principal/delete";
+import { KVListNamespacesEndpoint } from "./endpoints/kv/list-namespaces";
+import { KVListKeysEndpoint } from "./endpoints/kv/list-keys";
+import { KVGetEndpoint } from "./endpoints/kv/get";
+import { KVSetEndpoint } from "./endpoints/kv/set";
+import { KVBulkGetEndpoint } from "./endpoints/kv/bulk-get";
+import { KVBulkSetEndpoint } from "./endpoints/kv/bulk-set";
+import { KVDumpEndpoint } from "./endpoints/kv/dump";
 
 const app = new Hono<{ Bindings: Env }>();
 

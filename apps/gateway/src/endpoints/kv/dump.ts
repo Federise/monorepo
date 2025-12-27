@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { OpenAPIRoute } from "chanfana";
 
-import { type AppContext, AuthorizationHeader, KVDumpEntry, ErrorResponse } from "../types";
+import { type AppContext, AuthorizationHeader, KVDumpEntry, ErrorResponse } from "../../types";
 
 export class KVDumpEndpoint extends OpenAPIRoute {
   schema = {

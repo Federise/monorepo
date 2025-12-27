@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { OpenAPIRoute } from "chanfana";
 
-import { type AppContext, AuthorizationHeader, PrincipalList, ErrorResponse } from "../types";
+import { type AppContext, AuthorizationHeader, PrincipalList, ErrorResponse } from "../../types";
 
 export class PrincipalListEndpoint extends OpenAPIRoute {
   schema = {

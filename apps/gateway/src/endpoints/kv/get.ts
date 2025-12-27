@@ -1,24 +1,24 @@
 import { z } from "zod";
 import { OpenAPIRoute } from "chanfana";
 
-import { type AppContext, AuthorizationHeader, ListKeysRequest, ErrorResponse } from "../types";
+import { type AppContext, AuthorizationHeader, GetRequest, KVEntry, ErrorResponse } from "../../types";
 
-export class KVListKeysEndpoint extends OpenAPIRoute {
+export class KVGetEndpoint extends OpenAPIRoute {
   schema = {
     tags: ["Key-Value Operations"],
-    summary: "List all keys in a namespace",
+    summary: "Get a value by key",
     request: {
       headers: z.object({
         authorization: AuthorizationHeader,
       }),
       body: {
-        content: { "application/json": { schema: ListKeysRequest } },
+        content: { "application/json": { schema: GetRequest } },
       },
     },
     responses: {
       "200": {
         description: "The request has succeeded.",
-        content: { "application/json": { schema: z.array(z.string()) } },
+        content: { "application/json": { schema: KVEntry } },
       },
       "401": {
         description: "Unauthorized",
@@ -27,14 +27,16 @@ export class KVListKeysEndpoint extends OpenAPIRoute {
       "404": {
         description: "Not found",
         content: { "application/json": { schema: ErrorResponse } },
-      },
+      }
     },
   };
 
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
-    const ns = data.body.namespace;
-    const list = await c.env.KV.list({ prefix: `${ns}:` });
-    return list.keys.map((k) => k.name.substring(ns.length + 1));
+    const value = await c.env.KV.get(`${data.body.namespace}:${data.body.key}`);
+    if (value === null) {
+      return c.json({ code: 404, message: "Key not found" }, 404);
+    }
+    return { key: data.body.key, value };
   }
 }

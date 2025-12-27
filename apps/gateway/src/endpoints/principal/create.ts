@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { OpenAPIRoute } from "chanfana";
 
-import { type AppContext, PrincipalCreateRequest, PrincipalCreateResponse, ErrorResponse, AuthorizationHeader } from "../types";
-import { generateApiKey, hashApiKey } from "../lib/crypto";
+import { type AppContext, PrincipalCreateRequest, PrincipalCreateResponse, ErrorResponse, AuthorizationHeader } from "../../types";
+import { generateApiKey, hashApiKey } from "../../lib/crypto";
 
 export class PrincipalCreateEndpoint extends OpenAPIRoute {
   schema = {

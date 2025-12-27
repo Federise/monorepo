@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { OpenAPIRoute } from "chanfana";
 
-import { type AppContext, AuthorizationHeader, BulkGetRequest, BulkGetResponse, ErrorResponse } from "../types";
+import { type AppContext, AuthorizationHeader, BulkGetRequest, BulkGetResponse, ErrorResponse } from "../../types";
 
 export class KVBulkGetEndpoint extends OpenAPIRoute {
   schema = {
