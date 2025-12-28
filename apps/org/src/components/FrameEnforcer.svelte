@@ -8,7 +8,7 @@
     PROTOCOL_VERSION,
     isValidRequest,
   } from '../lib/protocol';
-  import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
+  import { getPermissions, hasCapability, grantCapabilities, revokePermissions, initPermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
 
   let broadcastChannel: BroadcastChannel | null = null;
@@ -271,9 +271,12 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
     console.log('[FrameEnforcer] Component mounted, setting up message listeners');
     console.log('[FrameEnforcer] Window origin:', window.location.origin);
+
+    // Initialize permissions from gateway KV store
+    await initPermissions();
 
     window.addEventListener('message', handleMessage);
 

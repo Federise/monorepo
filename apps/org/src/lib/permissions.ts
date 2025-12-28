@@ -1,9 +1,20 @@
 import type { Capability, PermissionRecord, PermissionsTable } from './protocol';
+import { createGatewayClient, withAuth } from '../api/client';
+import { getGatewayConfig } from '../utils/auth';
 
-const PERMISSIONS_KEY = 'federise:permissions';
+const KV_NAMESPACE = '__ORG';
+const KV_KEY = 'permissions';
+const LOCALSTORAGE_KEY = 'federise:permissions';
 
-export function getPermissionsTable(): PermissionsTable {
-  const stored = localStorage.getItem(PERMISSIONS_KEY);
+// In-memory cache for fast synchronous access
+let permissionsCache: PermissionsTable = {};
+let isInitialized = false;
+
+/**
+ * Load permissions from localStorage cache
+ */
+function loadFromLocalStorage(): PermissionsTable {
+  const stored = localStorage.getItem(LOCALSTORAGE_KEY);
   if (!stored) return {};
   try {
     return JSON.parse(stored) as PermissionsTable;
@@ -12,8 +23,84 @@ export function getPermissionsTable(): PermissionsTable {
   }
 }
 
+/**
+ * Save permissions to localStorage cache
+ */
+function saveToLocalStorage(table: PermissionsTable): void {
+  localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(table));
+}
+
+/**
+ * Initialize permissions from the gateway KV store with localStorage fallback
+ * Should be called on app startup
+ */
+export async function initPermissions(): Promise<void> {
+  const { apiKey, url } = getGatewayConfig();
+
+  // Always load from localStorage first (for offline support)
+  permissionsCache = loadFromLocalStorage();
+
+  if (!apiKey || !url) {
+    // Gateway not configured, use localStorage cache
+    isInitialized = true;
+    return;
+  }
+
+  try {
+    // Try to get the latest from KV (source of truth)
+    const client = createGatewayClient(url);
+    const { data } = await client.POST('/kv/get', {
+      ...withAuth(apiKey),
+      body: { namespace: KV_NAMESPACE, key: KV_KEY },
+    });
+
+    if (data?.value) {
+      // KV is the source of truth - use it and update cache
+      permissionsCache = JSON.parse(data.value) as PermissionsTable;
+      saveToLocalStorage(permissionsCache);
+      console.log('[Permissions] Loaded from gateway KV');
+    } else {
+      // No data in KV yet, but we have localStorage cache
+      console.log('[Permissions] No data in gateway KV, using localStorage cache');
+    }
+  } catch (err) {
+    // Failed to reach gateway (offline?), use localStorage cache
+    console.warn('[Permissions] Failed to load from gateway, using localStorage cache:', err);
+  }
+
+  isInitialized = true;
+}
+
+export function getPermissionsTable(): PermissionsTable {
+  if (!isInitialized) {
+    console.warn('Permissions not initialized. Call initPermissions() first.');
+  }
+  return permissionsCache;
+}
+
 export function savePermissionsTable(table: PermissionsTable): void {
-  localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(table));
+  permissionsCache = table;
+
+  // Always save to localStorage cache immediately (for offline support)
+  saveToLocalStorage(table);
+
+  // Also save to gateway KV asynchronously (fire and forget)
+  const { apiKey, url } = getGatewayConfig();
+  if (apiKey && url) {
+    const client = createGatewayClient(url);
+    client.POST('/kv/set', {
+      ...withAuth(apiKey),
+      body: {
+        namespace: KV_NAMESPACE,
+        key: KV_KEY,
+        value: JSON.stringify(table),
+      },
+    }).then(() => {
+      console.log('[Permissions] Saved to gateway KV');
+    }).catch(err => {
+      console.error('[Permissions] Failed to save to gateway KV:', err);
+    });
+  }
 }
 
 export function getPermissions(origin: string): PermissionRecord | null {
