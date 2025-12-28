@@ -31,4 +31,5 @@ pnpm-debug.log*
 
 # generated service worker files
 public/sw.js
+public/sw.js.map
 service-worker/src/sw-manifest.json
