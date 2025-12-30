@@ -473,4 +473,43 @@
   .hint a:hover {
     text-decoration: underline;
   }
+
+  /* Mobile styles */
+  @media (max-width: 480px) {
+    .connect-container {
+      padding: 0.75rem;
+      align-items: flex-start;
+      padding-top: 10vh;
+    }
+
+    .connect-card {
+      padding: 1.5rem;
+      border-radius: 12px;
+      max-width: 100%;
+    }
+
+    .logo {
+      width: 40px;
+      height: 40px;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+    }
+
+    p {
+      font-size: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .connect-button {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+    }
+
+    .hint {
+      margin-top: 1.25rem;
+      font-size: 0.75rem;
+    }
+  }
 </style>

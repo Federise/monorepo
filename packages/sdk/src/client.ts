@@ -74,8 +74,8 @@ export class FederiseClient {
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 400px;
-        height: 450px;
+        width: min(400px, calc(100vw - 2rem));
+        height: min(500px, calc(100vh - 2rem));
         border: none;
         border-radius: 16px;
         box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);

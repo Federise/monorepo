@@ -14,6 +14,9 @@
   let editContent = $state('');
   let hasUnsavedChanges = $state(false);
 
+  // Mobile view state
+  let mobileView = $state<'list' | 'editor'>('list');
+
   const NOTE_PREFIX = 'note:';
 
   function handleKeyDown(e: KeyboardEvent) {
@@ -51,12 +54,11 @@
           try {
             loadedNotes.push(JSON.parse(value));
           } catch {
-            console.warn('Failed to parse note:', key);
+            // Skip invalid notes
           }
         }
       }
 
-      // Sort by updatedAt descending
       notes = loadedNotes.sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       );
@@ -94,6 +96,11 @@
     editTitle = note.title;
     editContent = note.content;
     hasUnsavedChanges = false;
+    mobileView = 'editor';
+  }
+
+  function backToList() {
+    mobileView = 'list';
   }
 
   function markUnsaved() {
@@ -116,7 +123,6 @@
 
       await client.kv.set(`${NOTE_PREFIX}${updatedNote.id}`, JSON.stringify(updatedNote));
 
-      // Update local state
       selectedNote = updatedNote;
       notes = notes
         .map((n) => (n.id === updatedNote.id ? updatedNote : n))
@@ -143,6 +149,7 @@
         selectedNote = null;
         editTitle = '';
         editContent = '';
+        mobileView = 'list';
       }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to delete note';
@@ -160,23 +167,45 @@
   }
 </script>
 
-<div class="notes-app">
-  <div class="sidebar card">
-    <div class="sidebar-header">
+<div class="notes-app" class:show-editor={mobileView === 'editor'}>
+  <div class="list-panel card">
+    <div class="panel-header">
       <h2>Notes</h2>
-      <button class="btn btn-primary" onclick={createNote}>+ New</button>
+      <button class="btn btn-primary btn-sm" onclick={createNote}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        New
+      </button>
     </div>
 
     {#if isLoading}
-      <div class="loading">Loading notes...</div>
+      <div class="empty-state">
+        <div class="spinner"></div>
+        <p>Loading notes...</p>
+      </div>
     {:else if notes.length === 0}
-      <div class="empty">No notes yet. Create one to get started!</div>
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+        </svg>
+        <p>No notes yet</p>
+        <button class="btn btn-primary" onclick={createNote}>Create your first note</button>
+      </div>
     {:else}
       <ul class="notes-list">
         {#each notes as note (note.id)}
           <li class:selected={selectedNote?.id === note.id}>
             <button class="note-item" onclick={() => selectNote(note)}>
-              <span class="note-title">{note.title || 'Untitled'}</span>
+              <span class="note-title-row">
+                <span class="note-title">{note.title || 'Untitled'}</span>
+                {#if selectedNote?.id === note.id && hasUnsavedChanges}
+                  <span class="unsaved-dot" title="Unsaved changes"></span>
+                {/if}
+              </span>
+              <span class="note-preview">{note.content.slice(0, 50) || 'No content'}</span>
               <span class="note-date">{formatDate(note.updatedAt)}</span>
             </button>
             <button
@@ -187,7 +216,10 @@
               }}
               title="Delete note"
             >
-              ×
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
             </button>
           </li>
         {/each}
@@ -195,9 +227,14 @@
     {/if}
   </div>
 
-  <div class="editor card">
+  <div class="editor-panel card">
     {#if selectedNote}
-      <div class="editor-header">
+      <div class="panel-header">
+        <button class="back-btn" onclick={backToList} aria-label="Back to notes list">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
         <div class="title-wrapper">
           <input
             type="text"
@@ -206,17 +243,10 @@
             placeholder="Note title"
             oninput={markUnsaved}
           />
-          {#if hasUnsavedChanges}
-            <span class="unsaved-dot" title="Unsaved changes (Ctrl+S to save)"></span>
-          {/if}
         </div>
-        <span class="save-hint">
-          {#if isSaving}
-            Saving...
-          {:else if hasUnsavedChanges}
-            <kbd>Ctrl</kbd>+<kbd>S</kbd>
-          {/if}
-        </span>
+        {#if isSaving}
+          <span class="save-status">Saving...</span>
+        {/if}
       </div>
       <textarea
         class="content-input"
@@ -224,44 +254,82 @@
         placeholder="Write your note here..."
         oninput={markUnsaved}
       ></textarea>
+      <div class="editor-footer">
+        <span class="keyboard-hint">
+          {#if hasUnsavedChanges}
+            <kbd>Ctrl</kbd>+<kbd>S</kbd> to save
+          {:else}
+            All changes saved
+          {/if}
+        </span>
+      </div>
     {:else}
-      <div class="no-selection">
-        <p>Select a note or create a new one</p>
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+        <p>Select a note to edit</p>
       </div>
     {/if}
   </div>
 </div>
 
 {#if error}
-  <div class="error-toast">{error}</div>
+  <div class="error-toast">
+    {error}
+    <button class="toast-close" onclick={() => (error = null)}>×</button>
+  </div>
 {/if}
 
 <style>
   .notes-app {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 280px 1fr;
     gap: 1rem;
-    height: calc(100vh - 150px);
+    height: calc(100vh - 180px);
     min-height: 400px;
   }
 
-  .sidebar {
+  .list-panel,
+  .editor-panel {
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
 
-  .sidebar-header {
+  .panel-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 0.75rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--color-border);
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
   }
 
-  .sidebar-header h2 {
-    font-size: 1.125rem;
+  .panel-header h2 {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .back-btn {
+    display: none;
+    padding: 0.375rem;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    border-radius: var(--radius);
+  }
+
+  .back-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
   }
 
   .notes-list {
@@ -287,41 +355,60 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.25rem;
+    gap: 0.125rem;
     padding: 0.75rem 1rem;
     border: none;
     background: transparent;
     text-align: left;
     cursor: pointer;
     color: var(--color-text);
+    min-width: 0;
   }
 
   .note-item:hover {
     background: var(--color-surface-hover);
   }
 
+  .note-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    width: 100%;
+  }
+
   .note-title {
     font-weight: 500;
+    font-size: 0.9rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 200px;
+  }
+
+  .note-preview {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
   }
 
   .note-date {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--color-text-muted);
+    opacity: 0.7;
   }
 
   .delete-btn {
-    padding: 0 1rem;
+    padding: 0 0.75rem;
     border: none;
     background: transparent;
     color: var(--color-text-muted);
-    font-size: 1.25rem;
     cursor: pointer;
     opacity: 0;
     transition: opacity 0.15s ease;
+    display: flex;
+    align-items: center;
   }
 
   .notes-list li:hover .delete-btn {
@@ -332,26 +419,37 @@
     color: var(--color-error);
   }
 
-  .loading,
-  .empty {
-    padding: 1rem;
-    text-align: center;
-    color: var(--color-text-muted);
-  }
-
-  .editor {
+  .empty-state {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 2rem;
+    text-align: center;
+    color: var(--color-text-muted);
+    gap: 1rem;
   }
 
-  .editor-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--color-border);
-    margin-bottom: 1rem;
+  .empty-state svg {
+    opacity: 0.5;
+  }
+
+  .empty-state p {
+    font-size: 0.9rem;
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .title-wrapper {
@@ -359,16 +457,18 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
   }
 
   .title-input {
     flex: 1;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 600;
     border: none;
     outline: none;
     background: transparent;
     color: var(--color-text);
+    min-width: 0;
   }
 
   .title-input::placeholder {
@@ -376,52 +476,59 @@
   }
 
   .unsaved-dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     background: var(--color-primary);
     border-radius: 50%;
     flex-shrink: 0;
   }
 
-  .save-hint {
+  .save-status {
     font-size: 0.75rem;
     color: var(--color-text-muted);
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    white-space: nowrap;
-  }
-
-  .save-hint kbd {
-    background: var(--color-surface-hover);
-    border: 1px solid var(--color-border);
-    border-radius: 3px;
-    padding: 0.1rem 0.35rem;
-    font-size: 0.7rem;
-    font-family: inherit;
   }
 
   .content-input {
     flex: 1;
-    border: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
     outline: none;
     resize: none;
-    font-size: 1rem;
-    line-height: 1.6;
-    background: transparent;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    background: var(--color-bg);
     color: var(--color-text);
+    padding: 0.75rem;
+  }
+
+  .content-input:focus {
+    border-color: var(--color-primary);
   }
 
   .content-input::placeholder {
     color: var(--color-text-muted);
   }
 
-  .no-selection {
+  .editor-footer {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .keyboard-hint {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
     display: flex;
     align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--color-text-muted);
+    gap: 0.25rem;
+  }
+
+  .keyboard-hint kbd {
+    background: var(--color-surface-hover);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: 0.1rem 0.3rem;
+    font-size: 0.65rem;
+    font-family: inherit;
   }
 
   .error-toast {
@@ -432,7 +539,21 @@
     color: white;
     padding: 0.75rem 1rem;
     border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     animation: slideIn 0.3s ease;
+    z-index: 1000;
+  }
+
+  .toast-close {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
   }
 
   @keyframes slideIn {
@@ -446,14 +567,39 @@
     }
   }
 
+  /* Mobile styles */
   @media (max-width: 768px) {
     .notes-app {
       grid-template-columns: 1fr;
-      grid-template-rows: auto 1fr;
+      height: calc(100vh - 120px);
     }
 
-    .sidebar {
-      max-height: 200px;
+    .list-panel {
+      display: flex;
+    }
+
+    .editor-panel {
+      display: none;
+    }
+
+    .notes-app.show-editor .list-panel {
+      display: none;
+    }
+
+    .notes-app.show-editor .editor-panel {
+      display: flex;
+    }
+
+    .back-btn {
+      display: flex;
+    }
+
+    .delete-btn {
+      opacity: 1;
+    }
+
+    .keyboard-hint {
+      display: none;
     }
   }
 </style>
