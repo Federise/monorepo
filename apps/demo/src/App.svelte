@@ -2,14 +2,16 @@
   import Sidebar from './components/Sidebar.svelte';
   import Settings from './components/Settings.svelte';
   import Notes from './components/demos/Notes.svelte';
-  import { connectionState, hasKVPermissions, initialized, initializeConnection } from './stores/federise.svelte';
+  import Files from './components/demos/Files.svelte';
+  import { connectionState, hasKVPermissions, hasBlobPermissions, initialized, initializeConnection } from './stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
 
-  type View = 'notes' | 'settings';
+  type View = 'notes' | 'files' | 'settings';
 
   function getViewFromHash(): View {
     const hash = window.location.hash.slice(1);
     if (hash === 'settings') return 'settings';
+    if (hash === 'files') return 'files';
     return 'notes';
   }
 
@@ -83,6 +85,25 @@
               <p class="hint">Click "Connect" in the sidebar to get started.</p>
             {:else if connectionState.value === 'connected'}
               <p class="hint">Click "Grant Permissions" to enable KV access.</p>
+            {/if}
+          </div>
+        {/if}
+      {:else if currentView === 'files'}
+        {#if connectionState.value === 'connected' && hasBlobPermissions()}
+          <Files />
+        {:else}
+          <div class="card connect-prompt">
+            <div class="prompt-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
+            <h2>Files Demo</h2>
+            <p>Connect to Federise and grant blob permissions to use the files demo.</p>
+            {#if connectionState.value === 'disconnected'}
+              <p class="hint">Click "Connect" in the sidebar to get started.</p>
+            {:else if connectionState.value === 'connected'}
+              <p class="hint">Click "Grant Permissions" to enable file access.</p>
             {/if}
           </div>
         {/if}

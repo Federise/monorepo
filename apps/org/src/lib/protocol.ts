@@ -7,6 +7,16 @@ export type Capability =
   | 'blob:write'
   | 'notifications';
 
+// Blob metadata returned from operations
+export interface BlobMetadata {
+  key: string;
+  namespace: string;
+  size: number;
+  contentType: string;
+  uploadedAt: string;
+  isPublic: boolean;
+}
+
 // Request messages from SDK to Frame
 export type RequestMessage =
   | { type: 'SYN'; id: string; version: string }
@@ -15,6 +25,10 @@ export type RequestMessage =
   | { type: 'KV_SET'; id: string; key: string; value: string }
   | { type: 'KV_DELETE'; id: string; key: string }
   | { type: 'KV_KEYS'; id: string; prefix?: string }
+  | { type: 'BLOB_UPLOAD'; id: string; key: string; contentType: string; data: ArrayBuffer; isPublic: boolean }
+  | { type: 'BLOB_GET'; id: string; key: string }
+  | { type: 'BLOB_DELETE'; id: string; key: string }
+  | { type: 'BLOB_LIST'; id: string }
   | { type: 'TEST_GRANT_PERMISSIONS'; id: string; capabilities: Capability[] }
   | { type: 'TEST_CLEAR_PERMISSIONS'; id: string };
 
@@ -27,6 +41,10 @@ export type ResponseMessage =
   | { type: 'KV_RESULT'; id: string; value: string | null }
   | { type: 'KV_KEYS_RESULT'; id: string; keys: string[] }
   | { type: 'KV_OK'; id: string }
+  | { type: 'BLOB_UPLOADED'; id: string; metadata: BlobMetadata }
+  | { type: 'BLOB_DOWNLOAD_URL'; id: string; url: string; metadata: BlobMetadata }
+  | { type: 'BLOB_LIST_RESULT'; id: string; blobs: BlobMetadata[] }
+  | { type: 'BLOB_OK'; id: string }
   | { type: 'ERROR'; id: string; code: string; message: string }
   | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }
   | { type: 'TEST_PERMISSIONS_CLEARED'; id: string };
@@ -82,6 +100,18 @@ export function isValidRequest(data: unknown): data is RequestMessage {
       return typeof msg.key === 'string' && typeof msg.value === 'string';
     case 'KV_KEYS':
       return msg.prefix === undefined || typeof msg.prefix === 'string';
+    case 'BLOB_UPLOAD':
+      return (
+        typeof msg.key === 'string' &&
+        typeof msg.contentType === 'string' &&
+        msg.data instanceof ArrayBuffer &&
+        typeof msg.isPublic === 'boolean'
+      );
+    case 'BLOB_GET':
+    case 'BLOB_DELETE':
+      return typeof msg.key === 'string';
+    case 'BLOB_LIST':
+      return true;
     case 'TEST_CLEAR_PERMISSIONS':
       return true;
     default:

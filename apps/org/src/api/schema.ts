@@ -200,8 +200,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Initiate blob upload and get presigned URL */
+        /** Upload a blob directly to storage */
         post: operations["post_BlobUploadEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blob/presign-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Get a presigned URL for direct upload to R2 */
+        post: operations["post_BlobPresignUploadEndpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -767,6 +784,69 @@ export interface operations {
             query?: never;
             header: {
                 authorization: string;
+                "content-type": string;
+                /** @description Namespace for the blob */
+                "x-blob-namespace": string;
+                /** @description Key/filename for the blob */
+                "x-blob-key": string;
+                /** @description Set to 'true' for public storage */
+                "x-blob-public"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blob uploaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        metadata: {
+                            key: string;
+                            namespace: string;
+                            size: number;
+                            contentType: string;
+                            /** Format: date-time */
+                            uploadedAt: string;
+                            isPublic: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_BlobPresignUploadEndpoint: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
             };
             path?: never;
             cookie?: never;
@@ -784,7 +864,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Presigned upload URL generated */
+            /** @description Presigned URL generated successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -798,8 +878,32 @@ export interface operations {
                     };
                 };
             };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+            /** @description R2 credentials not configured */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

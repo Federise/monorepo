@@ -2,13 +2,13 @@
   import {
     connectionState,
     connect,
-    disconnect,
     requestPermissions,
     hasKVPermissions,
+    hasBlobPermissions,
   } from '../stores/federise.svelte';
 
   interface Props {
-    currentView: 'notes' | 'settings';
+    currentView: 'notes' | 'files' | 'settings';
     mobileMenuOpen?: boolean;
   }
 
@@ -29,7 +29,7 @@
     }
   }
 
-  function navigate(view: 'notes' | 'settings') {
+  function navigate(view: 'notes' | 'files' | 'settings') {
     currentView = view;
     mobileMenuOpen = false;
   }
@@ -61,6 +61,16 @@
         <line x1="16" y1="17" x2="8" y2="17" />
       </svg>
       Notes
+    </button>
+    <button
+      class="nav-item"
+      class:active={currentView === 'files'}
+      onclick={() => navigate('files')}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      </svg>
+      Files
     </button>
   </nav>
 
@@ -95,7 +105,7 @@
           Connect
         </button>
       {:else if connectionState.value === 'connected'}
-        {#if !hasKVPermissions()}
+        {#if !hasKVPermissions() || !hasBlobPermissions()}
           <button class="btn btn-primary full-width" onclick={handleRequestPermissions} disabled={isRequesting}>
             {isRequesting ? 'Requesting...' : 'Grant Permissions'}
           </button>

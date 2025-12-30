@@ -1,4 +1,5 @@
 import type {
+  BlobMetadata,
   Capability,
   FederiseClientOptions,
   GrantResult,
@@ -321,6 +322,116 @@ export class FederiseClient {
     },
   };
 
+  // Blob namespace
+  blob = {
+    /**
+     * Upload a file to storage.
+     * The file is sent as an ArrayBuffer using transferable objects for efficiency.
+     */
+    upload: async (
+      file: File,
+      options?: { isPublic?: boolean; key?: string }
+    ): Promise<{ metadata: BlobMetadata }> => {
+      this.ensureConnected();
+      this.ensureCapability('blob:write');
+
+      const key = options?.key ?? file.name;
+      const isPublic = options?.isPublic ?? false;
+
+      // Get ArrayBuffer from file
+      const arrayBuffer = await file.arrayBuffer();
+
+      const response = await this.sendRequest(
+        {
+          type: 'BLOB_UPLOAD',
+          key,
+          contentType: file.type || 'application/octet-stream',
+          data: arrayBuffer,
+          isPublic,
+        },
+        [arrayBuffer] // Transfer ownership for efficiency
+      );
+
+      if (response.type === 'BLOB_UPLOADED') {
+        return { metadata: response.metadata };
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Get a download URL for a file.
+     */
+    get: async (key: string): Promise<{ url: string; metadata: BlobMetadata }> => {
+      this.ensureConnected();
+      this.ensureCapability('blob:read');
+
+      const response = await this.sendRequest({ type: 'BLOB_GET', key });
+
+      if (response.type === 'BLOB_DOWNLOAD_URL') {
+        return { url: response.url, metadata: response.metadata };
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Delete a file from storage.
+     */
+    delete: async (key: string): Promise<void> => {
+      this.ensureConnected();
+      this.ensureCapability('blob:write');
+
+      const response = await this.sendRequest({ type: 'BLOB_DELETE', key });
+
+      if (response.type === 'BLOB_OK') {
+        return;
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * List all files in storage.
+     */
+    list: async (): Promise<BlobMetadata[]> => {
+      this.ensureConnected();
+      this.ensureCapability('blob:read');
+
+      const response = await this.sendRequest({ type: 'BLOB_LIST' });
+
+      if (response.type === 'BLOB_LIST_RESULT') {
+        return response.blobs;
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+  };
+
   private handleMessage(event: MessageEvent): void {
     // Verify source is our iframe
     if (event.source !== this.iframe?.contentWindow) {
@@ -339,7 +450,10 @@ export class FederiseClient {
     }
   }
 
-  private async sendRequest(payload: RequestPayload): Promise<ResponseMessage> {
+  private async sendRequest(
+    payload: RequestPayload,
+    transferables?: Transferable[]
+  ): Promise<ResponseMessage> {
     const id = generateRequestId();
     const message = { ...payload, id };
 
@@ -352,7 +466,11 @@ export class FederiseClient {
       this.pendingRequests.set(id, { resolve, reject, timeout });
 
       const frameOrigin = new URL(this.frameUrl).origin;
-      this.iframe!.contentWindow!.postMessage(message, frameOrigin);
+      if (transferables && transferables.length > 0) {
+        this.iframe!.contentWindow!.postMessage(message, frameOrigin, transferables);
+      } else {
+        this.iframe!.contentWindow!.postMessage(message, frameOrigin);
+      }
     });
   }
 

@@ -3,6 +3,7 @@ export { FederiseClient } from './client';
 
 // Types
 export type {
+  BlobMetadata,
   Capability,
   FederiseClientOptions,
   GrantResult,

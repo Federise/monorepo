@@ -9,6 +9,7 @@
   } from '../lib/protocol';
   import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
+  import { uploadBlob, getBlob, deleteBlob, listBlobs } from '../lib/blob-storage';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured } from '../utils/auth';
 
   // Track connected clients by origin (used by handleSyn)
@@ -198,6 +199,103 @@
     });
   }
 
+  async function handleBlobUpload(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'BLOB_UPLOAD' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'blob:write'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'blob:write',
+      });
+      return;
+    }
+
+    try {
+      // Data is already an ArrayBuffer (transferred from SDK)
+      const metadata = await uploadBlob(origin, msg.key, msg.contentType, msg.data, msg.isPublic);
+      sendResponse(source, origin, {
+        type: 'BLOB_UPLOADED',
+        id: msg.id,
+        metadata,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'UPLOAD_FAILED', err instanceof Error ? err.message : 'Upload failed');
+    }
+  }
+
+  async function handleBlobGet(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'BLOB_GET' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'blob:read'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'blob:read',
+      });
+      return;
+    }
+
+    try {
+      const result = await getBlob(origin, msg.key);
+      sendResponse(source, origin, {
+        type: 'BLOB_DOWNLOAD_URL',
+        id: msg.id,
+        url: result.url,
+        metadata: result.metadata,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'NOT_FOUND', 'Blob not found');
+    }
+  }
+
+  async function handleBlobDelete(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'BLOB_DELETE' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'blob:write'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'blob:write',
+      });
+      return;
+    }
+
+    await deleteBlob(origin, msg.key);
+    sendResponse(source, origin, {
+      type: 'BLOB_OK',
+      id: msg.id,
+    });
+  }
+
+  async function handleBlobList(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'BLOB_LIST' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'blob:read'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'blob:read',
+      });
+      return;
+    }
+
+    const blobs = await listBlobs(origin);
+    sendResponse(source, origin, {
+      type: 'BLOB_LIST_RESULT',
+      id: msg.id,
+      blobs,
+    });
+  }
+
   async function handleTestGrantPermissions(
     source: MessageEventSource,
     origin: string,
@@ -266,6 +364,18 @@
         break;
       case 'KV_KEYS':
         await handleKVKeys(source, origin, message);
+        break;
+      case 'BLOB_UPLOAD':
+        await handleBlobUpload(source, origin, message);
+        break;
+      case 'BLOB_GET':
+        await handleBlobGet(source, origin, message);
+        break;
+      case 'BLOB_DELETE':
+        await handleBlobDelete(source, origin, message);
+        break;
+      case 'BLOB_LIST':
+        await handleBlobList(source, origin, message);
         break;
       case 'TEST_GRANT_PERMISSIONS':
         await handleTestGrantPermissions(source, origin, message);
