@@ -31,7 +31,13 @@ export type ResponseMessage =
   | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }
   | { type: 'TEST_PERMISSIONS_CLEARED'; id: string };
 
-// Permission record stored in localStorage
+// Frame status messages (no id, broadcast style)
+export type FrameStatusMessage =
+  | { type: '__FRAME_READY__' }
+  | { type: '__STORAGE_ACCESS_REQUIRED__' }
+  | { type: '__STORAGE_ACCESS_GRANTED__' };
+
+// Permission record stored in KV
 export interface PermissionRecord {
   origin: string;
   capabilities: Capability[];
@@ -42,12 +48,6 @@ export interface PermissionRecord {
 // Permission table mapping origins to records
 export interface PermissionsTable {
   [origin: string]: PermissionRecord;
-}
-
-// BroadcastChannel message for permission updates
-export interface PermissionUpdateMessage {
-  type: 'PERMISSIONS_UPDATED';
-  origin: string;
 }
 
 // Protocol version

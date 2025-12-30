@@ -9,11 +9,15 @@ import FrameEnforcer from '../components/FrameEnforcer.svelte';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Federise Frame</title>
     <style>
-      /* Invisible frame - no visible content */
-      body {
+      /* Reset styles - component controls visibility */
+      * {
         margin: 0;
         padding: 0;
-        display: none;
+        box-sizing: border-box;
+      }
+      html, body {
+        height: 100%;
+        width: 100%;
       }
     </style>
   </head>

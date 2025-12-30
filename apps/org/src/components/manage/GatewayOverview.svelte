@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { getAllPermissions } from '../../lib/permissions';
   import type { PermissionRecord } from '../../lib/protocol';
+  import { createGatewayClient, withAuth } from '../../api/client';
+  import { getGatewayConfig } from '../../utils/auth';
 
   let isConnected = $state(false);
   let gatewayUrl = $state('');
@@ -9,26 +11,26 @@
   let loaded = $state(false);
 
   onMount(async () => {
-    // Load from localStorage
-    const savedKey = localStorage.getItem('federise:gateway:apiKey');
-    const savedUrl = localStorage.getItem('federise:gateway:url');
+    const config = getGatewayConfig();
 
-    if (savedKey && savedUrl) {
-      gatewayUrl = savedUrl;
+    if (config.apiKey && config.url) {
+      gatewayUrl = config.url;
 
       // Check connection
       try {
-        const response = await fetch(`${savedUrl}/ping`, {
-          headers: { authorization: `ApiKey ${savedKey}` },
-        });
-        const data = (await response.json()) as { message?: string };
+        const client = createGatewayClient(config.url);
+        const { data } = await client.GET('/ping', withAuth(config.apiKey));
         isConnected = data?.message === 'pong';
       } catch {
         isConnected = false;
       }
     }
 
-    appPermissions = getAllPermissions();
+    try {
+      appPermissions = await getAllPermissions();
+    } catch {
+      // Silently handle - permissions may not be available if not connected
+    }
     loaded = true;
   });
 </script>

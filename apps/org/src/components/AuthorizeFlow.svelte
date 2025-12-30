@@ -39,18 +39,14 @@
     isProcessing = true;
 
     try {
-      // Grant the capabilities
-      grantCapabilities(appOrigin, requestedCapabilities);
+      // Save permissions directly to KV
+      // No BroadcastChannel needed - SDK will re-request after popup closes
+      await grantCapabilities(appOrigin, requestedCapabilities);
 
-      // Notify /frame via BroadcastChannel
-      const bc = new BroadcastChannel('federise:permissions');
-      bc.postMessage({ type: 'PERMISSIONS_UPDATED', origin: appOrigin });
-      bc.close();
-
-      // Close popup
+      // Close popup - SDK will detect closure and re-request capabilities
       window.close();
     } catch (e) {
-      error = 'Failed to save permissions';
+      error = e instanceof Error ? e.message : 'Failed to save permissions';
       isProcessing = false;
     }
   }

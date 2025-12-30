@@ -8,6 +8,31 @@ importers:
 
   .: {}
 
+  apps/demo:
+    dependencies:
+      '@federise/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^5.0.0
+        version: 5.1.1(svelte@5.46.1)(vite@6.4.1(@types/node@25.0.3)(tsx@4.21.0)(yaml@2.8.2))
+      svelte:
+        specifier: ^5.2.9
+        version: 5.46.1
+      svelte-check:
+        specifier: ^4.0.0
+        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@25.0.3)(tsx@4.21.0)(yaml@2.8.2)
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.56.0(@cloudflare/workers-types@4.20251225.0)
+
   apps/gateway:
     dependencies:
       '@aws-sdk/client-s3':

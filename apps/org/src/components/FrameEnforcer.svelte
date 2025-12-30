@@ -4,17 +4,21 @@
     type RequestMessage,
     type ResponseMessage,
     type Capability,
-    type PermissionUpdateMessage,
     PROTOCOL_VERSION,
     isValidRequest,
   } from '../lib/protocol';
-  import { getPermissions, hasCapability, grantCapabilities, revokePermissions, initPermissions } from '../lib/permissions';
+  import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
+  import { checkStorageAccess, requestStorageAccess, isGatewayConfigured } from '../utils/auth';
 
-  let broadcastChannel: BroadcastChannel | null = null;
-
-  // Track connected clients by origin for permission update notifications
+  // Track connected clients by origin (used by handleSyn)
   const connectedClients = new Map<string, MessageEventSource>();
+
+  // UI state for storage access flow
+  let needsStorageAccess = $state(false);
+  let storageAccessError = $state<string | null>(null);
+  let isRequestingAccess = $state(false);
+  let handlersInitialized = false;
 
   function sendResponse(
     source: MessageEventSource | null,
@@ -35,59 +39,85 @@
     sendResponse(source, origin, { type: 'ERROR', id, code, message });
   }
 
-  function handleSyn(
+  async function handleSyn(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'SYN' }>
-  ): void {
-    const permissions = getPermissions(origin);
-    connectedClients.set(origin, source);
+  ): Promise<void> {
+    // Check if gateway is configured
+    if (!isGatewayConfigured()) {
+      sendError(
+        source,
+        origin,
+        msg.id,
+        'GATEWAY_NOT_CONFIGURED',
+        'Gateway not configured. Visit the Federise management page to configure your gateway connection.'
+      );
+      return;
+    }
 
-    sendResponse(source, origin, {
-      type: 'ACK',
-      id: msg.id,
-      version: PROTOCOL_VERSION,
-      capabilities: permissions?.capabilities,
-    });
+    try {
+      const permissions = await getPermissions(origin);
+      connectedClients.set(origin, source);
+
+      sendResponse(source, origin, {
+        type: 'ACK',
+        id: msg.id,
+        version: PROTOCOL_VERSION,
+        capabilities: permissions?.capabilities,
+      });
+    } catch (err) {
+      console.error('[FrameEnforcer] Error in handleSyn:', err);
+      sendError(
+        source,
+        origin,
+        msg.id,
+        'INTERNAL_ERROR',
+        err instanceof Error ? err.message : 'Failed to initialize connection'
+      );
+    }
   }
 
-  function handleRequestCapabilities(
+  async function handleRequestCapabilities(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'REQUEST_CAPABILITIES' }>
-  ): void {
-    const permissions = getPermissions(origin);
+  ): Promise<void> {
+    const permissions = await getPermissions(origin);
     const granted = permissions?.capabilities ?? [];
     const requested = msg.capabilities;
 
     const alreadyGranted = requested.filter((c) => granted.includes(c));
     const needsApproval = requested.filter((c) => !granted.includes(c));
 
+    // Early return if all capabilities already granted
     if (needsApproval.length === 0) {
       sendResponse(source, origin, {
         type: 'CAPABILITIES_GRANTED',
         id: msg.id,
         granted: alreadyGranted,
       });
-    } else {
-      const scope = needsApproval.join(',');
-      const authUrl = `/authorize?app_origin=${encodeURIComponent(origin)}&scope=${encodeURIComponent(scope)}`;
-
-      sendResponse(source, origin, {
-        type: 'AUTH_REQUIRED',
-        id: msg.id,
-        url: new URL(authUrl, window.location.origin).href,
-        granted: alreadyGranted,
-      });
+      return;
     }
+
+    // Need user approval for some capabilities
+    const scope = needsApproval.join(',');
+    const authUrl = `/authorize?app_origin=${encodeURIComponent(origin)}&scope=${encodeURIComponent(scope)}`;
+
+    sendResponse(source, origin, {
+      type: 'AUTH_REQUIRED',
+      id: msg.id,
+      url: new URL(authUrl, window.location.origin).href,
+      granted: alreadyGranted,
+    });
   }
 
-  function handleKVGet(
+  async function handleKVGet(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'KV_GET' }>
-  ): void {
-    if (!hasCapability(origin, 'kv:read')) {
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'kv:read'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
@@ -96,7 +126,7 @@
       return;
     }
 
-    const value = getKV(origin, msg.key);
+    const value = await getKV(origin, msg.key);
     sendResponse(source, origin, {
       type: 'KV_RESULT',
       id: msg.id,
@@ -104,12 +134,12 @@
     });
   }
 
-  function handleKVSet(
+  async function handleKVSet(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'KV_SET' }>
-  ): void {
-    if (!hasCapability(origin, 'kv:write')) {
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'kv:write'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
@@ -118,19 +148,19 @@
       return;
     }
 
-    setKV(origin, msg.key, msg.value);
+    await setKV(origin, msg.key, msg.value);
     sendResponse(source, origin, {
       type: 'KV_OK',
       id: msg.id,
     });
   }
 
-  function handleKVDelete(
+  async function handleKVDelete(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'KV_DELETE' }>
-  ): void {
-    if (!hasCapability(origin, 'kv:delete')) {
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'kv:delete'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
@@ -139,19 +169,19 @@
       return;
     }
 
-    deleteKV(origin, msg.key);
+    await deleteKV(origin, msg.key);
     sendResponse(source, origin, {
       type: 'KV_OK',
       id: msg.id,
     });
   }
 
-  function handleKVKeys(
+  async function handleKVKeys(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'KV_KEYS' }>
-  ): void {
-    if (!hasCapability(origin, 'kv:read')) {
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'kv:read'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
@@ -160,7 +190,7 @@
       return;
     }
 
-    const keys = listKVKeys(origin, msg.prefix);
+    const keys = await listKVKeys(origin, msg.prefix);
     sendResponse(source, origin, {
       type: 'KV_KEYS_RESULT',
       id: msg.id,
@@ -168,14 +198,14 @@
     });
   }
 
-  function handleTestGrantPermissions(
+  async function handleTestGrantPermissions(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'TEST_GRANT_PERMISSIONS' }>
-  ): void {
+  ): Promise<void> {
     // Only allow test harness origin (localhost:5174) in development
     if (import.meta.env.DEV && origin === 'http://localhost:5174') {
-      grantCapabilities(origin, msg.capabilities);
+      await grantCapabilities(origin, msg.capabilities);
       sendResponse(source, origin, {
         type: 'TEST_PERMISSIONS_GRANTED',
         id: msg.id,
@@ -185,14 +215,14 @@
     }
   }
 
-  function handleTestClearPermissions(
+  async function handleTestClearPermissions(
     source: MessageEventSource,
     origin: string,
     msg: Extract<RequestMessage, { type: 'TEST_CLEAR_PERMISSIONS' }>
-  ): void {
+  ): Promise<void> {
     // Only allow test harness origin (localhost:5174) in development
     if (import.meta.env.DEV && origin === 'http://localhost:5174') {
-      revokePermissions(origin);
+      await revokePermissions(origin);
       sendResponse(source, origin, {
         type: 'TEST_PERMISSIONS_CLEARED',
         id: msg.id,
@@ -202,25 +232,17 @@
     }
   }
 
-  function handleMessage(event: MessageEvent): void {
-    console.log('[FrameEnforcer] Received message:', event.data, 'from origin:', event.origin);
-
+  async function handleMessage(event: MessageEvent): Promise<void> {
     // Ignore messages from self
-    if (event.origin === window.location.origin) {
-      console.log('[FrameEnforcer] Ignoring message from same origin');
-      return;
-    }
+    if (event.origin === window.location.origin) return;
 
     // Validate message structure
     if (!isValidRequest(event.data)) {
-      console.log('[FrameEnforcer] Invalid message format');
       if (event.data?.id) {
         sendError(event.source, event.origin, event.data.id, 'INVALID_MESSAGE', 'Invalid message format');
       }
       return;
     }
-
-    console.log('[FrameEnforcer] Processing valid message:', event.data.type);
 
     const message = event.data as RequestMessage;
     const origin = event.origin;
@@ -228,74 +250,227 @@
 
     switch (message.type) {
       case 'SYN':
-        handleSyn(source, origin, message);
+        await handleSyn(source, origin, message);
         break;
       case 'REQUEST_CAPABILITIES':
-        handleRequestCapabilities(source, origin, message);
+        await handleRequestCapabilities(source, origin, message);
         break;
       case 'KV_GET':
-        handleKVGet(source, origin, message);
+        await handleKVGet(source, origin, message);
         break;
       case 'KV_SET':
-        handleKVSet(source, origin, message);
+        await handleKVSet(source, origin, message);
         break;
       case 'KV_DELETE':
-        handleKVDelete(source, origin, message);
+        await handleKVDelete(source, origin, message);
         break;
       case 'KV_KEYS':
-        handleKVKeys(source, origin, message);
+        await handleKVKeys(source, origin, message);
         break;
       case 'TEST_GRANT_PERMISSIONS':
-        handleTestGrantPermissions(source, origin, message);
+        await handleTestGrantPermissions(source, origin, message);
         break;
       case 'TEST_CLEAR_PERMISSIONS':
-        handleTestClearPermissions(source, origin, message);
+        await handleTestClearPermissions(source, origin, message);
         break;
     }
   }
 
-  function handlePermissionUpdate(event: MessageEvent<PermissionUpdateMessage>): void {
-    if (event.data.type !== 'PERMISSIONS_UPDATED') return;
+  async function handleConnectClick(): Promise<void> {
+    isRequestingAccess = true;
+    storageAccessError = null;
 
-    const origin = event.data.origin;
-    const source = connectedClients.get(origin);
-    const permissions = getPermissions(origin);
+    try {
+      const success = await requestStorageAccess();
 
-    if (source && permissions) {
-      // Notify the client that permissions were updated
-      sendResponse(source, origin, {
-        type: 'CAPABILITIES_GRANTED',
-        id: 'permission-update',
-        granted: permissions.capabilities,
-      });
+      if (!success) {
+        storageAccessError = 'Storage access was denied. Please try again.';
+        return;
+      }
+
+      if (!isGatewayConfigured()) {
+        storageAccessError = 'Storage access granted, but Federise is not configured. Please visit federise.org to set up your account first.';
+        return;
+      }
+
+      // Success - hide UI and signal parent
+      needsStorageAccess = false;
+      window.parent.postMessage({ type: '__STORAGE_ACCESS_GRANTED__' }, '*');
+    } catch (err) {
+      storageAccessError = err instanceof Error ? err.message : 'Failed to request storage access';
+    } finally {
+      isRequestingAccess = false;
     }
   }
 
   onMount(async () => {
-    console.log('[FrameEnforcer] Component mounted, setting up message listeners');
-    console.log('[FrameEnforcer] Window origin:', window.location.origin);
+    const isIframe = window.self !== window.top;
 
-    // Initialize permissions from gateway KV store
-    await initPermissions();
+    if (!isIframe) {
+      // Top-level context - just set up handlers
+      setupMessageHandlers();
+      return;
+    }
+
+    // In iframe context, check if we already have storage access
+    // This also updates the internal auth state so isGatewayConfigured() can read cookies
+    const hasAccess = await checkStorageAccess();
+
+    if (hasAccess && isGatewayConfigured()) {
+      // We have storage access and gateway is configured - ready to go
+      setupMessageHandlers();
+      return;
+    }
+
+    // Either no storage access or gateway not configured - show modal
+    needsStorageAccess = true;
+    window.parent.postMessage({ type: '__STORAGE_ACCESS_REQUIRED__' }, '*');
+  });
+
+  function setupMessageHandlers(): void {
+    if (handlersInitialized) return;
+    handlersInitialized = true;
 
     window.addEventListener('message', handleMessage);
 
-    // Listen for permission updates from /authorize popup
-    broadcastChannel = new BroadcastChannel('federise:permissions');
-    broadcastChannel.onmessage = handlePermissionUpdate;
-
-    console.log('[FrameEnforcer] Ready to receive messages');
-
-    // Signal to parent that frame is ready to receive messages
-    // This is sent AFTER the message listener is set up
+    // Signal to parent that frame is ready
     if (window.parent !== window) {
-      console.log('[FrameEnforcer] Sending ready signal to parent');
       window.parent.postMessage({ type: '__FRAME_READY__' }, '*');
+    }
+  }
+
+  // Called after successful storage access
+  $effect(() => {
+    if (!needsStorageAccess && window.self !== window.top) {
+      // Storage access was granted, set up handlers
+      setupMessageHandlers();
     }
   });
 
   onDestroy(() => {
     window.removeEventListener('message', handleMessage);
-    broadcastChannel?.close();
   });
 </script>
+
+{#if needsStorageAccess}
+  <div class="connect-container">
+    <div class="connect-card">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
+        <path d="M10 16h12M16 10v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <h2>Connect with Federise</h2>
+      <p>This app uses Federise for secure data storage. Click below to connect your Federise account.</p>
+
+      {#if storageAccessError}
+        <div class="error">{storageAccessError}</div>
+      {/if}
+
+      <button
+        class="connect-button"
+        onclick={handleConnectClick}
+        disabled={isRequestingAccess}
+      >
+        {#if isRequestingAccess}
+          Connecting...
+        {:else}
+          Connect with Federise
+        {/if}
+      </button>
+
+      <p class="hint">
+        Don't have an account? <a href="https://federise.org" target="_blank">Set up Federise</a>
+      </p>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .connect-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .connect-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 360px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .logo {
+    width: 48px;
+    height: 48px;
+    color: #667eea;
+    margin-bottom: 1rem;
+  }
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+    color: #1a1a2e;
+  }
+
+  p {
+    margin: 0 0 1.5rem;
+    color: #666;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .error {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+  }
+
+  .connect-button {
+    width: 100%;
+    padding: 0.875rem 1.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .connect-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
+
+  .connect-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .hint {
+    margin-top: 1.5rem;
+    margin-bottom: 0;
+    font-size: 0.8rem;
+    color: #888;
+  }
+
+  .hint a {
+    color: #667eea;
+    text-decoration: none;
+  }
+
+  .hint a:hover {
+    text-decoration: underline;
+  }
+</style>

@@ -2,9 +2,7 @@
   import { onMount } from 'svelte';
   import CtaButton from './CtaButton.svelte';
   import { createGatewayClient, withAuth } from '../api/client';
-
-  const STORAGE_KEY_API = 'federise:gateway:apiKey';
-  const STORAGE_KEY_URL = 'federise:gateway:url';
+  import { getGatewayConfig, saveGatewayConfig } from '../utils/auth';
 
   let bootstrapToken = $state('');
   let workerUrl = $state('');
@@ -24,11 +22,10 @@
     bootstrapToken = generateToken();
 
     // Load saved gateway config
-    const savedKey = localStorage.getItem(STORAGE_KEY_API);
-    const savedUrl = localStorage.getItem(STORAGE_KEY_URL);
-    if (savedKey && savedUrl) {
-      gatewayApiKey = savedKey;
-      workerUrl = savedUrl;
+    const config = getGatewayConfig();
+    if (config.apiKey && config.url) {
+      gatewayApiKey = config.apiKey;
+      workerUrl = config.url;
       await checkGatewayStatus();
     }
   });
@@ -92,8 +89,7 @@
       }
 
       gatewayApiKey = data.secret;
-      localStorage.setItem(STORAGE_KEY_API, gatewayApiKey);
-      localStorage.setItem(STORAGE_KEY_URL, workerUrl);
+      saveGatewayConfig(gatewayApiKey, workerUrl);
 
       connectionStatus = 'success';
       connectionMessage = 'Gateway activated successfully!';

@@ -1,9 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createGatewayClient, withAuth } from '../../api/client';
-
-  const STORAGE_KEY_API = 'federise:gateway:apiKey';
-  const STORAGE_KEY_URL = 'federise:gateway:url';
+  import { getGatewayConfig, saveGatewayConfig, clearGatewayConfig } from '../../utils/auth';
 
   // Gateway state
   let gatewayUrl = $state('');
@@ -21,14 +19,13 @@
   let loaded = $state(false);
 
   onMount(async () => {
-    const savedKey = localStorage.getItem(STORAGE_KEY_API);
-    const savedUrl = localStorage.getItem(STORAGE_KEY_URL);
+    const config = getGatewayConfig();
 
-    if (savedKey && savedUrl) {
-      apiKey = savedKey;
-      gatewayUrl = savedUrl;
-      testUrl = savedUrl;
-      testApiKey = savedKey;
+    if (config.apiKey && config.url) {
+      apiKey = config.apiKey;
+      gatewayUrl = config.url;
+      testUrl = config.url;
+      testApiKey = config.apiKey;
       await checkConnection();
     }
     loaded = true;
@@ -82,8 +79,7 @@
   }
 
   function saveCredentials() {
-    localStorage.setItem(STORAGE_KEY_URL, testUrl);
-    localStorage.setItem(STORAGE_KEY_API, testApiKey);
+    saveGatewayConfig(testApiKey, testUrl);
     gatewayUrl = testUrl;
     apiKey = testApiKey;
     isConnected = true;
@@ -94,8 +90,7 @@
   }
 
   function disconnect() {
-    localStorage.removeItem(STORAGE_KEY_API);
-    localStorage.removeItem(STORAGE_KEY_URL);
+    clearGatewayConfig();
     apiKey = '';
     gatewayUrl = '';
     testUrl = '';

@@ -5,20 +5,34 @@
 
   let appPermissions = $state<PermissionRecord[]>([]);
   let loaded = $state(false);
+  let isRevoking = $state(false);
 
-  onMount(() => {
-    loadPermissions();
+  onMount(async () => {
+    await loadPermissions();
     loaded = true;
   });
 
-  function loadPermissions() {
-    appPermissions = getAllPermissions();
+  async function loadPermissions() {
+    try {
+      appPermissions = await getAllPermissions();
+    } catch (err) {
+      console.error('Failed to load permissions:', err);
+      showToast('Failed to load permissions');
+    }
   }
 
-  function revokeAppPermission(origin: string) {
-    revokePermissions(origin);
-    loadPermissions();
-    showToast('Permission revoked');
+  async function revokeAppPermission(origin: string) {
+    isRevoking = true;
+    try {
+      await revokePermissions(origin);
+      await loadPermissions();
+      showToast('Permission revoked');
+    } catch (err) {
+      console.error('Failed to revoke permission:', err);
+      showToast('Failed to revoke permission');
+    } finally {
+      isRevoking = false;
+    }
   }
 
   function showToast(message: string) {
@@ -66,8 +80,8 @@
                 {/each}
               </div>
             </div>
-            <button class="btn btn-small btn-danger" onclick={() => revokeAppPermission(perm.origin)}>
-              Revoke
+            <button class="btn btn-small btn-danger" onclick={() => revokeAppPermission(perm.origin)} disabled={isRevoking}>
+              {isRevoking ? 'Revoking...' : 'Revoke'}
             </button>
           </div>
         {/each}

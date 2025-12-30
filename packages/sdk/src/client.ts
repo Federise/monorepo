@@ -28,6 +28,7 @@ function generateRequestId(): string {
 
 export class FederiseClient {
   private iframe: HTMLIFrameElement | null = null;
+  private iframeContainer: HTMLDivElement | null = null;
   private connected = false;
   private connecting = false;
   private pendingRequests = new Map<string, PendingRequest>();
@@ -35,10 +36,6 @@ export class FederiseClient {
   private frameUrl: string;
   private timeout: number;
   private messageHandler: ((event: MessageEvent) => void) | null = null;
-  private permissionWaiters: Array<{
-    capabilities: Capability[];
-    resolve: () => void;
-  }> = [];
 
   constructor(options?: FederiseClientOptions) {
     this.frameUrl = options?.frameUrl ?? DEFAULT_FRAME_URL;
@@ -54,12 +51,67 @@ export class FederiseClient {
     this.connecting = true;
 
     try {
-      // Create invisible iframe
+      // Create container for iframe (allows showing/hiding with overlay)
+      this.iframeContainer = document.createElement('div');
+      this.iframeContainer.id = 'federise-frame-container';
+      this.iframeContainer.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 999999;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+      `;
+
+      // Create iframe - starts hidden in container
       this.iframe = document.createElement('iframe');
       this.iframe.src = this.frameUrl;
-      this.iframe.style.display = 'none';
-      this.iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-      document.body.appendChild(this.iframe);
+      this.iframe.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 400px;
+        height: 450px;
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+      `;
+      this.iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-storage-access-by-user-activation allow-popups');
+
+      // Setup message listeners BEFORE adding iframe to DOM to avoid race conditions
+      this.messageHandler = this.handleMessage.bind(this);
+      window.addEventListener('message', this.messageHandler);
+
+      // Create promise for frame ready/storage access flow
+      const frameReadyPromise = new Promise<void>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new ConnectionError('Frame ready timeout - component may not have initialized'));
+        }, this.timeout);
+
+        const frameMessageHandler = (event: MessageEvent) => {
+          if (this.iframe && event.source !== this.iframe.contentWindow) return;
+
+          if (event.data?.type === '__FRAME_READY__') {
+            clearTimeout(timeoutId);
+            window.removeEventListener('message', frameMessageHandler);
+            this.hideFrame();
+            resolve();
+          } else if (event.data?.type === '__STORAGE_ACCESS_REQUIRED__') {
+            this.showFrame();
+          }
+          // __STORAGE_ACCESS_GRANTED__ - keep listening for FRAME_READY
+        };
+
+        window.addEventListener('message', frameMessageHandler);
+      });
+
+      // Now add iframe to DOM
+      this.iframeContainer.appendChild(this.iframe);
+      document.body.appendChild(this.iframeContainer);
 
       // Wait for iframe to load
       await new Promise<void>((resolve, reject) => {
@@ -77,27 +129,8 @@ export class FederiseClient {
         };
       });
 
-      // Setup message listener BEFORE waiting for ready signal
-      this.messageHandler = this.handleMessage.bind(this);
-      window.addEventListener('message', this.messageHandler);
-
-      // Wait for frame to signal it's ready (handles client:only components)
-      await new Promise<void>((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          reject(new ConnectionError('Frame ready timeout - component may not have initialized'));
-        }, this.timeout);
-
-        const readyHandler = (event: MessageEvent) => {
-          if (event.source === this.iframe?.contentWindow &&
-              event.data?.type === '__FRAME_READY__') {
-            clearTimeout(timeoutId);
-            window.removeEventListener('message', readyHandler);
-            resolve();
-          }
-        };
-
-        window.addEventListener('message', readyHandler);
-      });
+      // Wait for frame ready signal
+      await frameReadyPromise;
 
       // Perform handshake
       const response = await this.sendRequest({
@@ -118,14 +151,27 @@ export class FederiseClient {
     }
   }
 
+  private showFrame(): void {
+    if (this.iframeContainer) {
+      this.iframeContainer.style.display = 'block';
+    }
+  }
+
+  private hideFrame(): void {
+    if (this.iframeContainer) {
+      this.iframeContainer.style.display = 'none';
+    }
+  }
+
   disconnect(): void {
     if (this.messageHandler) {
       window.removeEventListener('message', this.messageHandler);
       this.messageHandler = null;
     }
 
-    if (this.iframe) {
-      this.iframe.remove();
+    if (this.iframeContainer) {
+      this.iframeContainer.remove();
+      this.iframeContainer = null;
       this.iframe = null;
     }
 
@@ -180,25 +226,13 @@ export class FederiseClient {
         );
       }
 
-      // Wait for permission update
-      const neededCaps = capabilities.filter(
-        (c) => !response.granted?.includes(c)
-      );
+      // Wait for popup to close (user approved or denied)
+      await this.waitForPopupClose(popup);
 
-      try {
-        await this.waitForPermissionUpdate(neededCaps);
-        // Re-request to get updated capabilities
-        return this.requestCapabilities(capabilities);
-      } catch (error) {
-        if (error instanceof FederiseError && error.code === 'PERMISSION_TIMEOUT') {
-          // User closed popup or popup was blocked
-          throw new FederiseError(
-            'Permission request was not completed. Please try again and allow the popup.',
-            'PERMISSION_DENIED'
-          );
-        }
-        throw error;
-      }
+      // Re-request to get updated capabilities from KV
+      // Small delay to ensure KV write has propagated
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return this.requestCapabilities(capabilities);
     }
 
     if (response.type === 'ERROR') {
@@ -288,39 +322,13 @@ export class FederiseClient {
   };
 
   private handleMessage(event: MessageEvent): void {
-    console.log('[SDK] Received message:', event.data, 'from:', event.origin);
-
     // Verify source is our iframe
     if (event.source !== this.iframe?.contentWindow) {
-      console.log('[SDK] Ignoring message - not from our iframe');
       return;
     }
 
     const response = event.data as ResponseMessage;
     const id = response.id;
-    console.log('[SDK] Processing message with id:', id, 'type:', response.type);
-
-    // Check for permission update broadcasts
-    if (id === 'permission-update' && response.type === 'CAPABILITIES_GRANTED') {
-      this.grantedCapabilities = response.granted;
-
-      // Resolve any waiting permission requests
-      for (const waiter of this.permissionWaiters) {
-        const hasAll = waiter.capabilities.every((c) =>
-          response.granted.includes(c)
-        );
-        if (hasAll) {
-          waiter.resolve();
-        }
-      }
-      this.permissionWaiters = this.permissionWaiters.filter((w) => {
-        const hasAll = w.capabilities.every((c) =>
-          response.granted.includes(c)
-        );
-        return !hasAll;
-      });
-      return;
-    }
 
     // Handle regular request responses
     const pending = this.pendingRequests.get(id);
@@ -338,14 +346,12 @@ export class FederiseClient {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(id);
-        console.error('[SDK] Request timed out:', message);
         reject(new TimeoutError());
       }, this.timeout);
 
       this.pendingRequests.set(id, { resolve, reject, timeout });
 
       const frameOrigin = new URL(this.frameUrl).origin;
-      console.log('[SDK] Sending message:', message, 'to origin:', frameOrigin);
       this.iframe!.contentWindow!.postMessage(message, frameOrigin);
     });
   }
@@ -362,30 +368,14 @@ export class FederiseClient {
     }
   }
 
-  private waitForPermissionUpdate(
-    capabilities: Capability[],
-    timeoutMs: number = 30000
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        // Remove this waiter from the list
-        this.permissionWaiters = this.permissionWaiters.filter(
-          (w) => w.resolve !== resolve
-        );
-        reject(
-          new FederiseError(
-            'Permission update timeout - popup may have been closed or blocked',
-            'PERMISSION_TIMEOUT'
-          )
-        );
-      }, timeoutMs);
-
-      const wrappedResolve = () => {
-        clearTimeout(timeout);
-        resolve();
-      };
-
-      this.permissionWaiters.push({ capabilities, resolve: wrappedResolve });
+  private waitForPopupClose(popup: Window): Promise<void> {
+    return new Promise((resolve) => {
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          resolve();
+        }
+      }, 200);
     });
   }
 

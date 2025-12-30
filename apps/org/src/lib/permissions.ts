@@ -4,118 +4,87 @@ import { getGatewayConfig } from '../utils/auth';
 
 const KV_NAMESPACE = '__ORG';
 const KV_KEY = 'permissions';
-const LOCALSTORAGE_KEY = 'federise:permissions';
-
-// In-memory cache for fast synchronous access
-let permissionsCache: PermissionsTable = {};
-let isInitialized = false;
 
 /**
- * Load permissions from localStorage cache
+ * Get the gateway client and auth config.
+ * Throws if gateway is not configured.
  */
-function loadFromLocalStorage(): PermissionsTable {
-  const stored = localStorage.getItem(LOCALSTORAGE_KEY);
-  if (!stored) return {};
+function getClient() {
+  const { apiKey, url } = getGatewayConfig();
+  if (!apiKey || !url) {
+    throw new Error('Gateway not configured');
+  }
+  return { client: createGatewayClient(url), apiKey };
+}
+
+/**
+ * Load the entire permissions table from KV.
+ */
+async function loadPermissionsTable(): Promise<PermissionsTable> {
+  const { client, apiKey } = getClient();
+
+  const { data, error } = await client.POST('/kv/get', {
+    ...withAuth(apiKey),
+    body: { namespace: KV_NAMESPACE, key: KV_KEY },
+  });
+
+  if (error) {
+    throw new Error('Failed to load permissions from KV');
+  }
+
+  if (!data?.value) {
+    return {};
+  }
+
   try {
-    return JSON.parse(stored) as PermissionsTable;
+    return JSON.parse(data.value) as PermissionsTable;
   } catch {
     return {};
   }
 }
 
 /**
- * Save permissions to localStorage cache
+ * Save the entire permissions table to KV.
  */
-function saveToLocalStorage(table: PermissionsTable): void {
-  localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(table));
+async function savePermissionsTable(table: PermissionsTable): Promise<void> {
+  const { client, apiKey } = getClient();
+
+  const { error } = await client.POST('/kv/set', {
+    ...withAuth(apiKey),
+    body: {
+      namespace: KV_NAMESPACE,
+      key: KV_KEY,
+      value: JSON.stringify(table),
+    },
+  });
+
+  if (error) {
+    throw new Error('Failed to save permissions to KV');
+  }
 }
 
 /**
- * Initialize permissions from the gateway KV store with localStorage fallback
- * Should be called on app startup
+ * Get permissions for a specific origin.
  */
-export async function initPermissions(): Promise<void> {
-  const { apiKey, url } = getGatewayConfig();
-
-  // Always load from localStorage first (for offline support)
-  permissionsCache = loadFromLocalStorage();
-
-  if (!apiKey || !url) {
-    // Gateway not configured, use localStorage cache
-    isInitialized = true;
-    return;
-  }
-
-  try {
-    // Try to get the latest from KV (source of truth)
-    const client = createGatewayClient(url);
-    const { data } = await client.POST('/kv/get', {
-      ...withAuth(apiKey),
-      body: { namespace: KV_NAMESPACE, key: KV_KEY },
-    });
-
-    if (data?.value) {
-      // KV is the source of truth - use it and update cache
-      permissionsCache = JSON.parse(data.value) as PermissionsTable;
-      saveToLocalStorage(permissionsCache);
-      console.log('[Permissions] Loaded from gateway KV');
-    } else {
-      // No data in KV yet, but we have localStorage cache
-      console.log('[Permissions] No data in gateway KV, using localStorage cache');
-    }
-  } catch (err) {
-    // Failed to reach gateway (offline?), use localStorage cache
-    console.warn('[Permissions] Failed to load from gateway, using localStorage cache:', err);
-  }
-
-  isInitialized = true;
-}
-
-export function getPermissionsTable(): PermissionsTable {
-  if (!isInitialized) {
-    console.warn('Permissions not initialized. Call initPermissions() first.');
-  }
-  return permissionsCache;
-}
-
-export function savePermissionsTable(table: PermissionsTable): void {
-  permissionsCache = table;
-
-  // Always save to localStorage cache immediately (for offline support)
-  saveToLocalStorage(table);
-
-  // Also save to gateway KV asynchronously (fire and forget)
-  const { apiKey, url } = getGatewayConfig();
-  if (apiKey && url) {
-    const client = createGatewayClient(url);
-    client.POST('/kv/set', {
-      ...withAuth(apiKey),
-      body: {
-        namespace: KV_NAMESPACE,
-        key: KV_KEY,
-        value: JSON.stringify(table),
-      },
-    }).then(() => {
-      console.log('[Permissions] Saved to gateway KV');
-    }).catch(err => {
-      console.error('[Permissions] Failed to save to gateway KV:', err);
-    });
-  }
-}
-
-export function getPermissions(origin: string): PermissionRecord | null {
-  const table = getPermissionsTable();
+export async function getPermissions(origin: string): Promise<PermissionRecord | null> {
+  const table = await loadPermissionsTable();
   return table[origin] ?? null;
 }
 
-export function setPermissions(origin: string, record: PermissionRecord): void {
-  const table = getPermissionsTable();
+/**
+ * Set permissions for a specific origin.
+ */
+export async function setPermissions(origin: string, record: PermissionRecord): Promise<void> {
+  const table = await loadPermissionsTable();
   table[origin] = record;
-  savePermissionsTable(table);
+  await savePermissionsTable(table);
 }
 
-export function hasCapability(origin: string, capability: Capability): boolean {
-  const record = getPermissions(origin);
+/**
+ * Check if an origin has a specific capability.
+ */
+export async function hasCapability(origin: string, capability: Capability): Promise<boolean> {
+  const record = await getPermissions(origin);
   if (!record) return false;
 
   // Check expiration
@@ -126,8 +95,11 @@ export function hasCapability(origin: string, capability: Capability): boolean {
   return record.capabilities.includes(capability);
 }
 
-export function grantCapabilities(origin: string, capabilities: Capability[]): PermissionRecord {
-  const existing = getPermissions(origin);
+/**
+ * Grant capabilities to an origin. Merges with existing capabilities.
+ */
+export async function grantCapabilities(origin: string, capabilities: Capability[]): Promise<PermissionRecord> {
+  const existing = await getPermissions(origin);
   const existingCaps = existing?.capabilities ?? [];
   const merged = [...new Set([...existingCaps, ...capabilities])];
 
@@ -137,30 +109,39 @@ export function grantCapabilities(origin: string, capabilities: Capability[]): P
     grantedAt: new Date().toISOString(),
   };
 
-  setPermissions(origin, record);
+  await setPermissions(origin, record);
   return record;
 }
 
-export function revokePermissions(origin: string): void {
-  const table = getPermissionsTable();
+/**
+ * Revoke all permissions for an origin.
+ */
+export async function revokePermissions(origin: string): Promise<void> {
+  const table = await loadPermissionsTable();
   delete table[origin];
-  savePermissionsTable(table);
+  await savePermissionsTable(table);
 }
 
-export function revokeCapability(origin: string, capability: Capability): void {
-  const record = getPermissions(origin);
+/**
+ * Revoke a specific capability from an origin.
+ */
+export async function revokeCapability(origin: string, capability: Capability): Promise<void> {
+  const record = await getPermissions(origin);
   if (!record) return;
 
   record.capabilities = record.capabilities.filter((c) => c !== capability);
 
   if (record.capabilities.length === 0) {
-    revokePermissions(origin);
+    await revokePermissions(origin);
   } else {
-    setPermissions(origin, record);
+    await setPermissions(origin, record);
   }
 }
 
-export function getAllPermissions(): PermissionRecord[] {
-  const table = getPermissionsTable();
+/**
+ * Get all permission records.
+ */
+export async function getAllPermissions(): Promise<PermissionRecord[]> {
+  const table = await loadPermissionsTable();
   return Object.values(table);
 }

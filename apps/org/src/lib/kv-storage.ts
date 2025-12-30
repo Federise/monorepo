@@ -1,54 +1,127 @@
-const KV_PREFIX = 'federise:kv';
+import { createGatewayClient, withAuth } from '../api/client';
+import { getGatewayConfig } from '../utils/auth';
 
-// URL-encode origin to safely use as namespace
-function encodeOrigin(origin: string): string {
-  // Encode the origin to handle special characters
-  return encodeURIComponent(origin);
+/**
+ * Get the gateway client and auth config.
+ * Throws if gateway is not configured.
+ */
+function getClient() {
+  const { apiKey, url } = getGatewayConfig();
+  if (!apiKey || !url) {
+    throw new Error('Gateway not configured. API key and URL are required.');
+  }
+  return { client: createGatewayClient(url), apiKey };
 }
 
-function buildStorageKey(origin: string, key: string): string {
-  return `${KV_PREFIX}:${encodeOrigin(origin)}:${key}`;
+/**
+ * Build a namespaced key for origin isolation.
+ * Each origin gets its own namespace to prevent cross-origin data access.
+ * Uses a hash of the origin to create a safe, consistent namespace.
+ */
+async function buildNamespace(origin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(origin);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return `origin_${hashHex}`;
 }
 
-export function getKV(origin: string, key: string): string | null {
-  const storageKey = buildStorageKey(origin, key);
-  return localStorage.getItem(storageKey);
-}
+/**
+ * Get a value from KV storage for the given origin.
+ */
+export async function getKV(origin: string, key: string): Promise<string | null> {
+  const { client, apiKey } = getClient();
+  const namespace = await buildNamespace(origin);
 
-export function setKV(origin: string, key: string, value: string): void {
-  const storageKey = buildStorageKey(origin, key);
-  localStorage.setItem(storageKey, value);
-}
+  const { data, error } = await client.POST('/kv/get', {
+    ...withAuth(apiKey),
+    body: { namespace, key },
+  });
 
-export function deleteKV(origin: string, key: string): boolean {
-  const storageKey = buildStorageKey(origin, key);
-  const exists = localStorage.getItem(storageKey) !== null;
-  localStorage.removeItem(storageKey);
-  return exists;
-}
-
-export function listKVKeys(origin: string, prefix?: string): string[] {
-  const encodedOrigin = encodeOrigin(origin);
-  const keyPrefix = `${KV_PREFIX}:${encodedOrigin}:`;
-  const fullPrefix = prefix ? `${keyPrefix}${prefix}` : keyPrefix;
-  const keys: string[] = [];
-
-  for (let i = 0; i < localStorage.length; i++) {
-    const storageKey = localStorage.key(i);
-    if (storageKey?.startsWith(fullPrefix)) {
-      // Extract the user key portion (after the origin prefix)
-      const userKey = storageKey.slice(keyPrefix.length);
-      keys.push(userKey);
-    }
+  if (error) {
+    console.error('[KV] Failed to get:', error);
+    throw new Error('Failed to get value from KV');
   }
 
-  return keys.sort();
+  return data?.value ?? null;
 }
 
-export function clearKVForOrigin(origin: string): number {
-  const keys = listKVKeys(origin);
+/**
+ * Set a value in KV storage for the given origin.
+ */
+export async function setKV(origin: string, key: string, value: string): Promise<void> {
+  const { client, apiKey } = getClient();
+  const namespace = await buildNamespace(origin);
+
+  const { error } = await client.POST('/kv/set', {
+    ...withAuth(apiKey),
+    body: { namespace, key, value },
+  });
+
+  if (error) {
+    console.error('[KV] Failed to set:', error);
+    throw new Error('Failed to set value in KV');
+  }
+}
+
+/**
+ * Delete a value from KV storage for the given origin.
+ */
+export async function deleteKV(origin: string, key: string): Promise<void> {
+  const { client, apiKey } = getClient();
+  const namespace = await buildNamespace(origin);
+
+  // Use set with empty value to "delete" (or implement a delete endpoint)
+  // For now, we set to empty string - gateway should handle actual deletion
+  const { error } = await client.POST('/kv/set', {
+    ...withAuth(apiKey),
+    body: { namespace, key, value: '' },
+  });
+
+  if (error) {
+    console.error('[KV] Failed to delete:', error);
+    throw new Error('Failed to delete value from KV');
+  }
+}
+
+/**
+ * List keys in KV storage for the given origin.
+ */
+export async function listKVKeys(origin: string, prefix?: string): Promise<string[]> {
+  const { client, apiKey } = getClient();
+  const namespace = await buildNamespace(origin);
+
+  const { data, error } = await client.POST('/kv/keys', {
+    ...withAuth(apiKey),
+    body: { namespace },
+  });
+
+  if (error) {
+    console.error('[KV] Failed to list keys:', error);
+    throw new Error('Failed to list keys from KV');
+  }
+
+  // API returns string[] directly
+  const keys = data ?? [];
+
+  // Filter by prefix if provided
+  if (prefix) {
+    return keys.filter(key => key.startsWith(prefix));
+  }
+
+  return keys;
+}
+
+/**
+ * Clear all KV data for the given origin.
+ */
+export async function clearKVForOrigin(origin: string): Promise<number> {
+  const keys = await listKVKeys(origin);
+
   for (const key of keys) {
-    deleteKV(origin, key);
+    await deleteKV(origin, key);
   }
+
   return keys.length;
 }
