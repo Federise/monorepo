@@ -2,4 +2,3 @@ packages:
   - 'apps/*'
   - 'apps/org/tests'
   - 'packages/*'
-  # Note: apps/gateway is a git submodule with its own lockfile

@@ -1,3 +1,0 @@
-[submodule "apps/gateway"]
-	path = apps/gateway
-	url = git@github.com:Federise/deploy.git
