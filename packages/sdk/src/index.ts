@@ -10,6 +10,8 @@ export type {
   RequestMessage,
   RequestPayload,
   ResponseMessage,
+  UploadOptions,
+  UploadProgress,
 } from './types';
 
 // Errors

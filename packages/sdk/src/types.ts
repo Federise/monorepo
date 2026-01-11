@@ -17,6 +17,25 @@ export interface BlobMetadata {
   isPublic: boolean;
 }
 
+// Upload progress information
+export interface UploadProgress {
+  /** Current phase of upload */
+  phase: 'reading' | 'uploading';
+  /** Bytes processed in current phase */
+  loaded: number;
+  /** Total bytes to process in current phase */
+  total: number;
+  /** Percentage complete (0-100) for current phase */
+  percentage: number;
+}
+
+// Upload options
+export interface UploadOptions {
+  isPublic?: boolean;
+  key?: string;
+  onProgress?: (progress: UploadProgress) => void;
+}
+
 // Request payloads (without id, which is added by the client)
 export type SynPayload = { type: 'SYN'; version: string };
 export type RequestCapabilitiesPayload = { type: 'REQUEST_CAPABILITIES'; capabilities: Capability[] };
@@ -28,6 +47,7 @@ export type BlobUploadPayload = { type: 'BLOB_UPLOAD'; key: string; contentType:
 export type BlobGetPayload = { type: 'BLOB_GET'; key: string };
 export type BlobDeletePayload = { type: 'BLOB_DELETE'; key: string };
 export type BlobListPayload = { type: 'BLOB_LIST' };
+export type BlobGetUploadUrlPayload = { type: 'BLOB_GET_UPLOAD_URL'; key: string; contentType: string; size: number; isPublic: boolean };
 export type TestGrantPermissionsPayload = { type: 'TEST_GRANT_PERMISSIONS'; capabilities: Capability[] };
 export type TestClearPermissionsPayload = { type: 'TEST_CLEAR_PERMISSIONS' };
 
@@ -42,6 +62,7 @@ export type RequestPayload =
   | BlobGetPayload
   | BlobDeletePayload
   | BlobListPayload
+  | BlobGetUploadUrlPayload
   | TestGrantPermissionsPayload
   | TestClearPermissionsPayload;
 
@@ -59,6 +80,7 @@ export type ResponseMessage =
   | { type: 'KV_OK'; id: string }
   | { type: 'BLOB_UPLOADED'; id: string; metadata: BlobMetadata }
   | { type: 'BLOB_DOWNLOAD_URL'; id: string; url: string; metadata: BlobMetadata }
+  | { type: 'BLOB_UPLOAD_URL'; id: string; uploadUrl: string; metadata: BlobMetadata }
   | { type: 'BLOB_LIST_RESULT'; id: string; blobs: BlobMetadata[] }
   | { type: 'BLOB_OK'; id: string }
   | { type: 'ERROR'; id: string; code: string; message: string }

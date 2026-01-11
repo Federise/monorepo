@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getClient } from '../../stores/federise.svelte';
-  import type { BlobMetadata } from '@federise/sdk';
+  import type { BlobMetadata, UploadProgress } from '@federise/sdk';
 
   let files = $state<BlobMetadata[]>([]);
   let isLoading = $state(true);
   let isUploading = $state(false);
+  let uploadProgress = $state<UploadProgress | null>(null);
   let error = $state<string | null>(null);
 
   // Download URLs cache (for right-click copy link)
@@ -16,6 +17,9 @@
   let previewUrl = $state<string | null>(null);
   let previewContent = $state<string | null>(null);
   let previewLoading = $state(false);
+
+  // Upload settings
+  let uploadPublic = $state(false);
 
   let fileInput: HTMLInputElement;
 
@@ -49,17 +53,24 @@
     if (!client) return;
 
     isUploading = true;
+    uploadProgress = null;
     error = null;
 
     try {
       for (const file of selectedFiles) {
-        await client.blob.upload(file, { isPublic: false });
+        await client.blob.upload(file, {
+          isPublic: uploadPublic,
+          onProgress: (progress) => {
+            uploadProgress = progress;
+          },
+        });
       }
       await loadFiles();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to upload file';
     } finally {
       isUploading = false;
+      uploadProgress = null;
       input.value = '';
     }
   }
@@ -216,6 +227,21 @@
   <div class="files-panel card">
     <div class="panel-header">
       <h2>Files</h2>
+      <!-- svelte-ignore a11y_label_has_associated_control -->
+      <label class="toggle-label">
+        <span class="toggle-text">{uploadPublic ? 'Public' : 'Private'}</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={uploadPublic}
+          class="toggle-switch"
+          class:active={uploadPublic}
+          onclick={() => uploadPublic = !uploadPublic}
+          disabled={isUploading}
+        >
+          <span class="toggle-thumb"></span>
+        </button>
+      </label>
       <button
         class="btn btn-primary btn-sm"
         onclick={() => fileInput.click()}
@@ -223,7 +249,7 @@
       >
         {#if isUploading}
           <div class="btn-spinner"></div>
-          Uploading...
+          {uploadProgress ? `${uploadProgress.percentage}%` : 'Preparing...'}
         {:else}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -241,6 +267,23 @@
         class="hidden-input"
       />
     </div>
+
+    {#if isUploading && uploadProgress}
+      <div class="upload-progress">
+        <div class="progress-info">
+          <span class="progress-phase">
+            {uploadProgress.phase === 'reading' ? 'Reading file...' : 'Uploading...'}
+          </span>
+          <span class="progress-percent">{uploadProgress.percentage}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: {uploadProgress.percentage}%"></div>
+        </div>
+        <span class="progress-text">
+          {formatSize(uploadProgress.loaded)} / {formatSize(uploadProgress.total)}
+        </span>
+      </div>
+    {/if}
 
     {#if isLoading}
       <div class="empty-state">
@@ -430,6 +473,58 @@
     font-weight: 600;
   }
 
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .toggle-text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    min-width: 3.5rem;
+    text-align: right;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: var(--color-border);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    padding: 0;
+  }
+
+  .toggle-switch:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .toggle-switch.active {
+    background: var(--color-primary);
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .toggle-switch.active .toggle-thumb {
+    transform: translateX(16px);
+  }
+
   .btn-sm {
     padding: 0.375rem 0.75rem;
     font-size: 0.8rem;
@@ -446,6 +541,53 @@
 
   .hidden-input {
     display: none;
+  }
+
+  .upload-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 0.75rem 0;
+    margin-bottom: 0.5rem;
+  }
+
+  .progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .progress-phase {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  .progress-percent {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--color-border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 3px;
+    transition: width 0.15s ease;
+  }
+
+  .progress-text {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    text-align: right;
   }
 
   .files-list {

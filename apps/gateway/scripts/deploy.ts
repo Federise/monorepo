@@ -234,10 +234,19 @@ async function listR2Buckets(): Promise<R2Bucket[]> {
   return [];
 }
 
-// Create R2 bucket
+// Create R2 bucket (returns true if created or already exists)
 async function createR2Bucket(name: string): Promise<boolean> {
-  const result = await wrangler(["r2", "bucket", "create", name]);
-  return result.success;
+  const result = await wrangler(["r2", "bucket", "create", name], { silent: true });
+  if (result.success) {
+    return true;
+  }
+  // Check if bucket already exists (error code 10004)
+  if (result.output.includes("already exists") || result.output.includes("10004")) {
+    return true;
+  }
+  // Log the actual error for other failures
+  log(`    Error creating bucket: ${result.output}`, colors.red);
+  return false;
 }
 
 // CORS configuration for R2 buckets (enables presigned URL uploads from browsers)
@@ -455,32 +464,21 @@ async function deploy(codeOnly: boolean): Promise<void> {
 
     // Provision R2 buckets
     logStep("Provisioning R2 buckets");
-    const r2Buckets = await listR2Buckets();
 
-    // Private bucket
-    const hasPrivate = r2Buckets.some((b) => b.name === CONFIG.r2PrivateBucket);
-    if (hasPrivate) {
-      logSuccess(`Using existing private bucket: ${CONFIG.r2PrivateBucket}`);
+    // Private bucket - createR2Bucket handles "already exists" gracefully
+    if (await createR2Bucket(CONFIG.r2PrivateBucket)) {
+      logSuccess(`Private bucket ready: ${CONFIG.r2PrivateBucket}`);
     } else {
-      if (await createR2Bucket(CONFIG.r2PrivateBucket)) {
-        logSuccess(`Created private bucket: ${CONFIG.r2PrivateBucket}`);
-      } else {
-        logError(`Failed to create private bucket: ${CONFIG.r2PrivateBucket}`);
-        Deno.exit(1);
-      }
+      logError(`Failed to provision private bucket: ${CONFIG.r2PrivateBucket}`);
+      Deno.exit(1);
     }
 
-    // Public bucket
-    const hasPublic = r2Buckets.some((b) => b.name === CONFIG.r2PublicBucket);
-    if (hasPublic) {
-      logSuccess(`Using existing public bucket: ${CONFIG.r2PublicBucket}`);
+    // Public bucket - createR2Bucket handles "already exists" gracefully
+    if (await createR2Bucket(CONFIG.r2PublicBucket)) {
+      logSuccess(`Public bucket ready: ${CONFIG.r2PublicBucket}`);
     } else {
-      if (await createR2Bucket(CONFIG.r2PublicBucket)) {
-        logSuccess(`Created public bucket: ${CONFIG.r2PublicBucket}`);
-      } else {
-        logError(`Failed to create public bucket: ${CONFIG.r2PublicBucket}`);
-        Deno.exit(1);
-      }
+      logError(`Failed to provision public bucket: ${CONFIG.r2PublicBucket}`);
+      Deno.exit(1);
     }
 
     // Configure CORS on R2 buckets (enables presigned URL uploads from browsers)

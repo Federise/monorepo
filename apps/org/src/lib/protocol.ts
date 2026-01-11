@@ -29,6 +29,7 @@ export type RequestMessage =
   | { type: 'BLOB_GET'; id: string; key: string }
   | { type: 'BLOB_DELETE'; id: string; key: string }
   | { type: 'BLOB_LIST'; id: string }
+  | { type: 'BLOB_GET_UPLOAD_URL'; id: string; key: string; contentType: string; size: number; isPublic: boolean }
   | { type: 'TEST_GRANT_PERMISSIONS'; id: string; capabilities: Capability[] }
   | { type: 'TEST_CLEAR_PERMISSIONS'; id: string };
 
@@ -43,6 +44,7 @@ export type ResponseMessage =
   | { type: 'KV_OK'; id: string }
   | { type: 'BLOB_UPLOADED'; id: string; metadata: BlobMetadata }
   | { type: 'BLOB_DOWNLOAD_URL'; id: string; url: string; metadata: BlobMetadata }
+  | { type: 'BLOB_UPLOAD_URL'; id: string; uploadUrl: string; metadata: BlobMetadata }
   | { type: 'BLOB_LIST_RESULT'; id: string; blobs: BlobMetadata[] }
   | { type: 'BLOB_OK'; id: string }
   | { type: 'ERROR'; id: string; code: string; message: string }
@@ -112,6 +114,13 @@ export function isValidRequest(data: unknown): data is RequestMessage {
       return typeof msg.key === 'string';
     case 'BLOB_LIST':
       return true;
+    case 'BLOB_GET_UPLOAD_URL':
+      return (
+        typeof msg.key === 'string' &&
+        typeof msg.contentType === 'string' &&
+        typeof msg.size === 'number' &&
+        typeof msg.isPublic === 'boolean'
+      );
     case 'TEST_CLEAR_PERMISSIONS':
       return true;
     default:

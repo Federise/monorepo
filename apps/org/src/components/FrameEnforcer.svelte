@@ -9,7 +9,7 @@
   } from '../lib/protocol';
   import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
-  import { uploadBlob, getBlob, deleteBlob, listBlobs } from '../lib/blob-storage';
+  import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata } from '../lib/blob-storage';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured } from '../utils/auth';
 
   // Track connected clients by origin (used by handleSyn)
@@ -297,6 +297,40 @@
     });
   }
 
+  async function handleBlobGetUploadUrl(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'BLOB_GET_UPLOAD_URL' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'blob:write'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'blob:write',
+      });
+      return;
+    }
+
+    try {
+      const result = await getUploadUrlWithMetadata(origin, msg.key, msg.contentType, msg.size, msg.isPublic);
+
+      if (!result) {
+        // Presigned URLs not available - SDK should fall back to BLOB_UPLOAD
+        sendError(source, origin, msg.id, 'PRESIGN_NOT_AVAILABLE', 'Presigned uploads not configured');
+        return;
+      }
+
+      sendResponse(source, origin, {
+        type: 'BLOB_UPLOAD_URL',
+        id: msg.id,
+        uploadUrl: result.uploadUrl,
+        metadata: result.metadata,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'PRESIGN_FAILED', err instanceof Error ? err.message : 'Failed to get upload URL');
+    }
+  }
+
   async function handleTestGrantPermissions(
     source: MessageEventSource,
     origin: string,
@@ -377,6 +411,9 @@
         break;
       case 'BLOB_LIST':
         await handleBlobList(source, origin, message);
+        break;
+      case 'BLOB_GET_UPLOAD_URL':
+        await handleBlobGetUploadUrl(source, origin, message);
         break;
       case 'TEST_GRANT_PERMISSIONS':
         await handleTestGrantPermissions(source, origin, message);

@@ -64,6 +64,40 @@ export async function getPresignedUploadUrl(
 }
 
 /**
+ * Get a presigned URL for direct upload and return with metadata.
+ * Used by SDK for direct R2 uploads with progress tracking.
+ * Returns null if presigned URLs are not available.
+ */
+export async function getUploadUrlWithMetadata(
+  origin: string,
+  key: string,
+  contentType: string,
+  size: number,
+  isPublic: boolean
+): Promise<{ uploadUrl: string; metadata: BlobMetadata } | null> {
+  const presigned = await getPresignedUploadUrl(origin, key, contentType, size, isPublic);
+
+  if (!presigned) {
+    return null;
+  }
+
+  const namespace = await buildNamespace(origin);
+  const metadata: BlobMetadata = {
+    key,
+    namespace,
+    size,
+    contentType,
+    uploadedAt: new Date().toISOString(),
+    isPublic,
+  };
+
+  return {
+    uploadUrl: presigned.uploadUrl,
+    metadata,
+  };
+}
+
+/**
  * Upload a blob directly to R2 using presigned URL, with gateway fallback.
  */
 export async function uploadBlob(

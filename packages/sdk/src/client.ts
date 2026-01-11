@@ -5,6 +5,8 @@ import type {
   GrantResult,
   RequestPayload,
   ResponseMessage,
+  UploadOptions,
+  UploadProgress,
 } from './types';
 import {
   PROTOCOL_VERSION,
@@ -326,33 +328,92 @@ export class FederiseClient {
   blob = {
     /**
      * Upload a file to storage.
-     * The file is sent as an ArrayBuffer using transferable objects for efficiency.
+     * Attempts direct upload to R2 with progress tracking when available,
+     * falls back to iframe upload for compatibility.
      */
     upload: async (
       file: File,
-      options?: { isPublic?: boolean; key?: string }
+      options?: UploadOptions
     ): Promise<{ metadata: BlobMetadata }> => {
       this.ensureConnected();
       this.ensureCapability('blob:write');
 
       const key = options?.key ?? file.name;
       const isPublic = options?.isPublic ?? false;
+      const onProgress = options?.onProgress;
+      const contentType = file.type || 'application/octet-stream';
 
-      // Read file using FileReader for better reliability with large files
-      const arrayBuffer = await this.readFileAsArrayBuffer(file);
+      // Try to get presigned URL for direct upload first
+      // This is the preferred path as it supports large files (>2GB) without memory issues
+      try {
+        const presignResponse = await this.sendRequest({
+          type: 'BLOB_GET_UPLOAD_URL',
+          key,
+          contentType,
+          size: file.size,
+          isPublic,
+        });
+
+        if (presignResponse.type === 'BLOB_UPLOAD_URL') {
+          // Direct upload to R2 with progress - pass File directly to XHR
+          // XHR can stream File objects without loading into memory, avoiding:
+          // - Firefox's 2GB ArrayBuffer limit
+          // - Stale File reference issues from long read operations
+          await this.uploadFileWithXHR(file, presignResponse.uploadUrl, onProgress);
+          return { metadata: presignResponse.metadata };
+        }
+
+        if (presignResponse.type === 'PERMISSION_DENIED') {
+          throw new PermissionDeniedError(presignResponse.capability);
+        }
+
+        // Presign not available - fall through to iframe upload
+      } catch (err) {
+        // If it's a permission error, rethrow
+        if (err instanceof PermissionDeniedError) {
+          throw err;
+        }
+        // Otherwise fall through to iframe upload
+        console.debug('[Federise] Presigned upload not available, using iframe upload');
+      }
+
+      // Fallback: Upload through iframe (requires reading file into memory)
+      // This path has limitations for very large files (>2GB on Firefox)
+      if (onProgress) {
+        onProgress({ phase: 'reading', loaded: 0, total: file.size, percentage: 0 });
+      }
+
+      const fileData = await this.readFileInChunks(file, (bytesRead) => {
+        if (onProgress) {
+          onProgress({
+            phase: 'reading',
+            loaded: bytesRead,
+            total: file.size,
+            percentage: Math.round((bytesRead / file.size) * 100),
+          });
+        }
+      });
+
+      if (onProgress) {
+        onProgress({ phase: 'uploading', loaded: 0, total: file.size, percentage: 0 });
+      }
 
       const response = await this.sendRequest(
         {
           type: 'BLOB_UPLOAD',
           key,
-          contentType: file.type || 'application/octet-stream',
-          data: arrayBuffer,
+          contentType,
+          data: fileData,
           isPublic,
         },
-        [arrayBuffer] // Transfer ownership for efficiency
+        [fileData]
       );
 
       if (response.type === 'BLOB_UPLOADED') {
+        // Report completion
+        if (onProgress) {
+          onProgress({ phase: 'uploading', loaded: file.size, total: file.size, percentage: 100 });
+        }
         return { metadata: response.metadata };
       }
       if (response.type === 'PERMISSION_DENIED') {
@@ -487,58 +548,109 @@ export class FederiseClient {
   }
 
   /**
-   * Read a file as ArrayBuffer using FileReader for better reliability with large files.
-   * Includes retry logic for the common "file could not be read" error.
+   * Upload a File directly to a presigned URL using XHR for progress tracking.
+   * XHR can handle File objects natively and will stream them without loading
+   * the entire file into memory, avoiding browser ArrayBuffer size limits.
    */
-  private async readFileAsArrayBuffer(file: File, retries = 2): Promise<ArrayBuffer> {
-    const attemptRead = (): Promise<ArrayBuffer> => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
+  private uploadFileWithXHR(
+    file: File,
+    uploadUrl: string,
+    onProgress?: (progress: UploadProgress) => void
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const totalSize = file.size;
 
-        reader.onload = () => {
-          if (reader.result instanceof ArrayBuffer) {
-            resolve(reader.result);
-          } else {
-            reject(new FederiseError('Failed to read file as ArrayBuffer', 'FILE_READ_ERROR'));
-          }
-        };
+      // Report initial upload progress synchronously before any async operations
+      if (onProgress) {
+        onProgress({ phase: 'uploading', loaded: 0, total: totalSize, percentage: 0 });
+      }
 
-        reader.onerror = () => {
-          const error = reader.error;
-          reject(new FederiseError(
-            error?.message || 'Failed to read file',
-            'FILE_READ_ERROR'
-          ));
-        };
-
-        reader.onabort = () => {
-          reject(new FederiseError('File read was aborted', 'FILE_READ_ABORTED'));
-        };
-
-        reader.readAsArrayBuffer(file);
-      });
-    };
-
-    let lastError: Error | undefined;
-
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        return await attemptRead();
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-
-        // If it's not the last attempt, wait briefly and retry
-        if (attempt < retries) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable && onProgress) {
+          onProgress({
+            phase: 'uploading',
+            loaded: event.loaded,
+            total: event.total,
+            percentage: Math.round((event.loaded / event.total) * 100),
+          });
         }
+      });
+
+      xhr.upload.addEventListener('load', () => {
+        // Upload body sent successfully - report 100% for upload phase
+        if (onProgress) {
+          onProgress({ phase: 'uploading', loaded: totalSize, total: totalSize, percentage: 100 });
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new FederiseError(`Upload failed with status ${xhr.status}`, 'UPLOAD_FAILED'));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new FederiseError('Upload failed due to network error', 'UPLOAD_FAILED'));
+      });
+
+      xhr.addEventListener('abort', () => {
+        reject(new FederiseError('Upload was aborted', 'UPLOAD_ABORTED'));
+      });
+
+      xhr.open('PUT', uploadUrl);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      // Send the File directly - XHR streams it without loading into memory
+      xhr.send(file);
+    });
+  }
+
+  /**
+   * Read a file in chunks using File.slice() to avoid stale File reference issues.
+   * This is the recommended approach for large files - each slice creates a fresh
+   * reference that's read quickly before it can go stale.
+   */
+  private async readFileInChunks(
+    file: File,
+    onProgress?: (bytesRead: number) => void
+  ): Promise<ArrayBuffer> {
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+    const chunks: Uint8Array[] = [];
+    let bytesRead = 0;
+
+    while (bytesRead < file.size) {
+      const end = Math.min(bytesRead + CHUNK_SIZE, file.size);
+      const slice = file.slice(bytesRead, end);
+
+      try {
+        const buffer = await slice.arrayBuffer();
+        chunks.push(new Uint8Array(buffer));
+      } catch (err) {
+        throw new FederiseError(
+          `Failed to read file at offset ${bytesRead}. The file may have been modified or moved.`,
+          'FILE_READ_ERROR'
+        );
+      }
+
+      bytesRead = end;
+
+      if (onProgress) {
+        onProgress(bytesRead);
       }
     }
 
-    // All retries failed
-    throw new FederiseError(
-      `Failed to read file after ${retries + 1} attempts. This can happen with large files. Try again or use a smaller file. (${lastError?.message || 'Unknown error'})`,
-      'FILE_READ_ERROR'
-    );
+    // Combine chunks into single ArrayBuffer
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    return result.buffer;
   }
 
   private waitForPopupClose(popup: Window): Promise<void> {
