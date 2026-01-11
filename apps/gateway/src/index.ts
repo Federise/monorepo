@@ -32,8 +32,8 @@ app.use("*", async (c, next) => {
     bootstrapApiKey: c.env.BOOTSTRAP_API_KEY,
     corsOrigin: c.env.CORS_ORIGIN,
     publicDomain: c.env.PUBLIC_DOMAIN,
-    privateBucket: "federise-objects",
-    publicBucket: "federise-objects-public",
+    privateBucket: c.env.R2_PRIVATE_BUCKET || "federise-private",
+    publicBucket: c.env.R2_PUBLIC_BUCKET || "federise-public",
   });
 
   return next();
@@ -50,6 +50,15 @@ app.use("*", (c, next) => {
     maxAge: 86400,
     credentials: false,
   })(c, next);
+});
+
+// Private Network Access (PNA) support for local network requests
+app.use("*", async (c, next) => {
+  const isPNARequest = c.req.header("Access-Control-Request-Private-Network") === "true";
+  await next();
+  if (isPNARequest) {
+    c.res.headers.set("Access-Control-Allow-Private-Network", "true");
+  }
 });
 
 // Register blob download route BEFORE auth middleware (uses URL-based auth via obscurity)

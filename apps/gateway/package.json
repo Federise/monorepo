@@ -3,7 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "deno run -A scripts/deploy.ts",
+    "deploy:code": "deno run -A scripts/deploy.ts --code-only",
+    "deploy:status": "deno run -A scripts/deploy.ts --status",
+    "deploy:destroy": "deno run -A scripts/deploy.ts --destroy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "cf-typegen": "wrangler types",

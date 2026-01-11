@@ -8,4 +8,6 @@ declare interface Env {
   R2_ACCOUNT_ID?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
+  R2_PRIVATE_BUCKET?: string;
+  R2_PUBLIC_BUCKET?: string;
 }

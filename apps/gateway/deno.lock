@@ -1,0 +1,29 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/cli@*": "1.0.25"
+  },
+  "jsr": {
+    "@std/cli@1.0.25": {
+      "integrity": "1f85051b370c97a7a9dfc6ba626e7ed57a91bea8c081597276d1e78d929d8c91"
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@aws-sdk/client-s3@^3.958.0",
+        "npm:@aws-sdk/s3-request-presigner@^3.958.0",
+        "npm:@cloudflare/vitest-pool-workers@~0.6.4",
+        "npm:@types/node@22.13.0",
+        "npm:@types/service-worker-mock@^2.0.4",
+        "npm:chanfana@^2.6.3",
+        "npm:hono@^4.6.20",
+        "npm:tsx@^4.19.2",
+        "npm:typescript@^5.7.3",
+        "npm:vitest@^2.1.8",
+        "npm:wrangler@^4.56.0",
+        "npm:zod@^3.24.1"
+      ]
+    }
+  }
+}

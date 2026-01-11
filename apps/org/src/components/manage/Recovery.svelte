@@ -118,39 +118,42 @@
   </section>
 
   <section class="card">
-    <h2>Step 1: Generate Bootstrap Key</h2>
-    <p class="card-desc">Generate a new bootstrap key and add it to your Cloudflare Worker's BOOTSTRAP_API_KEY environment variable.</p>
+    <h2>Step 1: Bootstrap Key</h2>
+    <p class="card-desc">Enter your existing bootstrap key, or generate a new one if you need to update your gateway's BOOTSTRAP_API_KEY environment variable.</p>
 
-    {#if !bootstrapKey}
-      <button class="btn btn-primary" onclick={generateBootstrapKey}>
-        Generate Bootstrap Key
-      </button>
-    {:else}
-      <div class="form-group">
-        <label for="bootstrap-key">Bootstrap Key (add this to your Worker's BOOTSTRAP_API_KEY env variable)</label>
-        <div class="input-group">
-          <input
-            id="bootstrap-key"
-            type={showBootstrapKey ? 'text' : 'password'}
-            value={bootstrapKey}
-            readonly
-            class="input"
-          />
-          <button class="btn-icon" onclick={() => (showBootstrapKey = !showBootstrapKey)}>
-            {showBootstrapKey ? 'Hide' : 'Show'}
-          </button>
+    <div class="form-group">
+      <label for="bootstrap-key">Bootstrap Key</label>
+      <div class="input-group">
+        <input
+          id="bootstrap-key"
+          type={showBootstrapKey ? 'text' : 'password'}
+          bind:value={bootstrapKey}
+          placeholder="Enter existing key or generate new one"
+          class="input"
+        />
+        <button class="btn-icon" onclick={() => (showBootstrapKey = !showBootstrapKey)}>
+          {showBootstrapKey ? 'Hide' : 'Show'}
+        </button>
+        {#if bootstrapKey}
           <button class="btn-icon" onclick={() => copyToClipboard(bootstrapKey, 'Bootstrap key')}>
             Copy
           </button>
-        </div>
+        {/if}
       </div>
-      <div class="info-banner">
+    </div>
+
+    <button class="btn btn-secondary" onclick={generateBootstrapKey}>
+      Generate New Key
+    </button>
+
+    {#if bootstrapKey}
+      <div class="info-banner" style="margin-top: var(--space-lg);">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4" />
           <path d="M12 8h.01" />
         </svg>
-        <span>Copy this key and update your Cloudflare Worker's BOOTSTRAP_API_KEY environment variable before proceeding.</span>
+        <span>If you generated a new key, update your gateway's BOOTSTRAP_API_KEY environment variable before proceeding.</span>
       </div>
     {/if}
   </section>
@@ -226,17 +229,6 @@
             type="url"
             bind:value={newPrincipalUrl}
             placeholder="https://your-gateway.workers.dev"
-            class="input"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="recovery-bootstrap-key">Bootstrap Key</label>
-          <input
-            id="recovery-bootstrap-key"
-            type="text"
-            value={bootstrapKey}
-            readonly
             class="input"
           />
         </div>
@@ -405,6 +397,16 @@
 
   .btn-primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
+  }
+
+  .btn-secondary {
+    background: var(--surface-3);
+    border: 1px solid var(--border-normal);
+    color: var(--color-white);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .btn-icon {
