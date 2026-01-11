@@ -18,8 +18,7 @@ import { parseArgs } from "jsr:@std/cli/parse-args";
 const CONFIG = {
   workerName: "federise-gateway",
   kvNamespaceName: "federise-kv",
-  r2PrivateBucket: "federise-private",
-  r2PublicBucket: "federise-public",
+  r2Bucket: "federise-objects",
   stateFile: ".federise-state.json",
   templateFile: "wrangler.template.jsonc",
   outputFile: "wrangler.json",
@@ -29,11 +28,14 @@ const CONFIG = {
 interface DeploymentState {
   environment: string;
   kv_namespace_id: string;
-  r2_private_bucket: string;
-  r2_public_bucket: string;
+  r2_bucket: string;
   worker_name: string;
   bootstrap_api_key?: string;
+  signing_secret?: string;
   deployed_at?: string;
+  // Legacy fields (for migration)
+  r2_private_bucket?: string;
+  r2_public_bucket?: string;
 }
 
 // Colors for terminal output
@@ -290,6 +292,26 @@ function generateApiKey(): string {
     .join("");
 }
 
+// Set a Wrangler secret (pipes value to stdin)
+async function setWranglerSecret(name: string, value: string): Promise<boolean> {
+  const cmd = new Deno.Command("npx", {
+    args: ["wrangler", "secret", "put", name],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const process = cmd.spawn();
+
+  // Write the secret value to stdin
+  const writer = process.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(value + "\n"));
+  await writer.close();
+
+  const { code } = await process.output();
+  return code === 0;
+}
+
 // Generate wrangler.json from template
 async function generateWranglerConfig(state: DeploymentState): Promise<void> {
   let template: string;
@@ -306,13 +328,11 @@ async function generateWranglerConfig(state: DeploymentState): Promise<void> {
         observability: { enabled: true },
         kv_namespaces: [{ binding: "KV", id: "{{KV_NAMESPACE_ID}}" }],
         r2_buckets: [
-          { binding: "R2", bucket_name: "{{R2_PRIVATE_BUCKET}}" },
-          { binding: "R2_PUBLIC", bucket_name: "{{R2_PUBLIC_BUCKET}}" },
+          { binding: "R2", bucket_name: "{{R2_BUCKET}}" },
         ],
         vars: {
           BOOTSTRAP_API_KEY: "{{BOOTSTRAP_API_KEY}}",
-          R2_PRIVATE_BUCKET: "{{R2_PRIVATE_BUCKET}}",
-          R2_PUBLIC_BUCKET: "{{R2_PUBLIC_BUCKET}}",
+          R2_BUCKET: "{{R2_BUCKET}}",
         },
       },
       null,
@@ -324,8 +344,7 @@ async function generateWranglerConfig(state: DeploymentState): Promise<void> {
   const config = template
     .replace(/\{\{WORKER_NAME\}\}/g, state.worker_name)
     .replace(/\{\{KV_NAMESPACE_ID\}\}/g, state.kv_namespace_id)
-    .replace(/\{\{R2_PRIVATE_BUCKET\}\}/g, state.r2_private_bucket)
-    .replace(/\{\{R2_PUBLIC_BUCKET\}\}/g, state.r2_public_bucket)
+    .replace(/\{\{R2_BUCKET\}\}/g, state.r2_bucket)
     .replace(/\{\{BOOTSTRAP_API_KEY\}\}/g, state.bootstrap_api_key || "");
 
   await Deno.writeTextFile(CONFIG.outputFile, config);
@@ -357,9 +376,9 @@ async function showStatus(): Promise<void> {
   Environment:      ${state.environment}
   Worker:           ${state.worker_name}
   KV Namespace ID:  ${state.kv_namespace_id}
-  R2 Private:       ${state.r2_private_bucket}
-  R2 Public:        ${state.r2_public_bucket}
+  R2 Bucket:        ${state.r2_bucket}
   Bootstrap Key:    ${state.bootstrap_api_key ? state.bootstrap_api_key.slice(0, 8) + "..." : "Not set"}
+  Signing Secret:   ${state.signing_secret ? state.signing_secret.slice(0, 8) + "..." : "Not set"}
   Last Deployed:    ${state.deployed_at || "Never"}
 `);
 }
@@ -377,8 +396,7 @@ async function destroyResources(): Promise<void> {
   console.log(`\n${colors.red}WARNING: This will delete the following resources:${colors.reset}`);
   console.log(`  - Worker: ${state.worker_name}`);
   console.log(`  - KV Namespace: ${state.kv_namespace_id}`);
-  console.log(`  - R2 Bucket: ${state.r2_private_bucket}`);
-  console.log(`  - R2 Bucket: ${state.r2_public_bucket}`);
+  console.log(`  - R2 Bucket: ${state.r2_bucket}`);
 
   const confirm = prompt("\nType 'destroy' to confirm: ");
   if (confirm !== "destroy") {
@@ -394,10 +412,9 @@ async function destroyResources(): Promise<void> {
   log("Deleting KV namespace...");
   await wrangler(["kv", "namespace", "delete", "--namespace-id", state.kv_namespace_id, "--force"], { silent: true });
 
-  // Delete R2 buckets
-  log("Deleting R2 buckets...");
-  await wrangler(["r2", "bucket", "delete", state.r2_private_bucket], { silent: true });
-  await wrangler(["r2", "bucket", "delete", state.r2_public_bucket], { silent: true });
+  // Delete R2 bucket
+  log("Deleting R2 bucket...");
+  await wrangler(["r2", "bucket", "delete", state.r2_bucket], { silent: true });
 
   // Remove state file
   try {
@@ -436,10 +453,18 @@ async function deploy(codeOnly: boolean): Promise<void> {
     state = {
       environment: "production",
       kv_namespace_id: "",
-      r2_private_bucket: CONFIG.r2PrivateBucket,
-      r2_public_bucket: CONFIG.r2PublicBucket,
+      r2_bucket: CONFIG.r2Bucket,
       worker_name: CONFIG.workerName,
     };
+  } else {
+    // Migration: handle old state files that had r2_private_bucket/r2_public_bucket
+    if (!state.r2_bucket) {
+      logWarning("Migrating old state file to single-bucket configuration");
+      state.r2_bucket = CONFIG.r2Bucket;
+      // Clean up legacy fields
+      delete state.r2_private_bucket;
+      delete state.r2_public_bucket;
+    }
   }
 
   if (!codeOnly) {
@@ -462,36 +487,23 @@ async function deploy(codeOnly: boolean): Promise<void> {
       }
     }
 
-    // Provision R2 buckets
-    logStep("Provisioning R2 buckets");
+    // Provision R2 bucket
+    logStep("Provisioning R2 bucket");
 
-    // Private bucket - createR2Bucket handles "already exists" gracefully
-    if (await createR2Bucket(CONFIG.r2PrivateBucket)) {
-      logSuccess(`Private bucket ready: ${CONFIG.r2PrivateBucket}`);
+    // Single bucket - createR2Bucket handles "already exists" gracefully
+    if (await createR2Bucket(CONFIG.r2Bucket)) {
+      logSuccess(`Bucket ready: ${CONFIG.r2Bucket}`);
     } else {
-      logError(`Failed to provision private bucket: ${CONFIG.r2PrivateBucket}`);
+      logError(`Failed to provision bucket: ${CONFIG.r2Bucket}`);
       Deno.exit(1);
     }
 
-    // Public bucket - createR2Bucket handles "already exists" gracefully
-    if (await createR2Bucket(CONFIG.r2PublicBucket)) {
-      logSuccess(`Public bucket ready: ${CONFIG.r2PublicBucket}`);
-    } else {
-      logError(`Failed to provision public bucket: ${CONFIG.r2PublicBucket}`);
-      Deno.exit(1);
-    }
-
-    // Configure CORS on R2 buckets (enables presigned URL uploads from browsers)
+    // Configure CORS on R2 bucket (enables presigned URL uploads from browsers)
     logStep("Configuring R2 CORS for presigned uploads");
-    if (await configureR2Cors(CONFIG.r2PrivateBucket)) {
-      logSuccess(`Configured CORS on ${CONFIG.r2PrivateBucket}`);
+    if (await configureR2Cors(CONFIG.r2Bucket)) {
+      logSuccess(`Configured CORS on ${CONFIG.r2Bucket}`);
     } else {
-      logWarning(`Failed to configure CORS on ${CONFIG.r2PrivateBucket} (presigned uploads may not work)`);
-    }
-    if (await configureR2Cors(CONFIG.r2PublicBucket)) {
-      logSuccess(`Configured CORS on ${CONFIG.r2PublicBucket}`);
-    } else {
-      logWarning(`Failed to configure CORS on ${CONFIG.r2PublicBucket} (presigned uploads may not work)`);
+      logWarning(`Failed to configure CORS on ${CONFIG.r2Bucket} (presigned uploads may not work)`);
     }
 
     // Generate bootstrap API key on first deploy
@@ -501,6 +513,24 @@ async function deploy(codeOnly: boolean): Promise<void> {
       logSuccess("Generated new bootstrap API key");
       log(`\n${colors.yellow}    IMPORTANT: Save this key - it will only be shown once!${colors.reset}`);
       log(`    ${colors.green}${state!.bootstrap_api_key}${colors.reset}\n`);
+    }
+
+    // Generate signing secret if missing (first deploy or migration)
+    if (!state!.signing_secret) {
+      logStep("Generating signing secret for presigned URLs");
+      state!.signing_secret = generateApiKey();
+      logSuccess("Generated new signing secret");
+    }
+
+    // Always ensure signing secret is set as a Wrangler secret
+    logStep("Setting SIGNING_SECRET as Wrangler secret");
+    const secretSet = await setWranglerSecret("SIGNING_SECRET", state!.signing_secret);
+    if (secretSet) {
+      logSuccess("SIGNING_SECRET configured");
+    } else {
+      logWarning("Failed to set SIGNING_SECRET - you may need to set it manually:");
+      log(`    ${colors.cyan}npx wrangler secret put SIGNING_SECRET${colors.reset}`);
+      log(`    Then paste: ${colors.green}${state!.signing_secret}${colors.reset}\n`);
     }
   } else {
     // Code-only deployment - ensure state exists

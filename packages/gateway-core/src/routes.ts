@@ -19,7 +19,9 @@ import { BlobPresignUploadEndpoint } from "./endpoints/blob/presign-upload.js";
 import { BlobGetEndpoint } from "./endpoints/blob/get.js";
 import { BlobDeleteEndpoint } from "./endpoints/blob/delete.js";
 import { BlobListEndpoint } from "./endpoints/blob/list.js";
+import { BlobSetVisibilityEndpoint } from "./endpoints/blob/set-visibility.js";
 import { registerBlobDownloadRoute } from "./endpoints/blob/download.js";
+import { registerPublicBlobRoute } from "./endpoints/blob/public-download.js";
 
 /**
  * Register all gateway routes on a Hono app.
@@ -56,9 +58,10 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
   openapi.post("/blob/get", BlobGetEndpoint);
   openapi.post("/blob/delete", BlobDeleteEndpoint);
   openapi.post("/blob/list", BlobListEndpoint);
+  openapi.post("/blob/visibility", BlobSetVisibilityEndpoint);
 
   return openapi;
 }
 
 // Re-export for direct access
-export { registerBlobDownloadRoute };
+export { registerBlobDownloadRoute, registerPublicBlobRoute };

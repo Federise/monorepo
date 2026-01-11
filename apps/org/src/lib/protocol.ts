@@ -7,6 +7,9 @@ export type Capability =
   | 'blob:write'
   | 'notifications';
 
+// Blob visibility levels
+export type BlobVisibility = 'public' | 'presigned' | 'private';
+
 // Blob metadata returned from operations
 export interface BlobMetadata {
   key: string;
@@ -14,7 +17,9 @@ export interface BlobMetadata {
   size: number;
   contentType: string;
   uploadedAt: string;
-  isPublic: boolean;
+  visibility: BlobVisibility;
+  // Legacy field (deprecated, kept for backward compatibility)
+  isPublic?: boolean;
 }
 
 // Request messages from SDK to Frame
@@ -25,11 +30,12 @@ export type RequestMessage =
   | { type: 'KV_SET'; id: string; key: string; value: string }
   | { type: 'KV_DELETE'; id: string; key: string }
   | { type: 'KV_KEYS'; id: string; prefix?: string }
-  | { type: 'BLOB_UPLOAD'; id: string; key: string; contentType: string; data: ArrayBuffer; isPublic: boolean }
+  | { type: 'BLOB_UPLOAD'; id: string; key: string; contentType: string; data: ArrayBuffer; visibility?: BlobVisibility; isPublic?: boolean }
   | { type: 'BLOB_GET'; id: string; key: string }
   | { type: 'BLOB_DELETE'; id: string; key: string }
   | { type: 'BLOB_LIST'; id: string }
-  | { type: 'BLOB_GET_UPLOAD_URL'; id: string; key: string; contentType: string; size: number; isPublic: boolean }
+  | { type: 'BLOB_GET_UPLOAD_URL'; id: string; key: string; contentType: string; size: number; visibility?: BlobVisibility; isPublic?: boolean }
+  | { type: 'BLOB_SET_VISIBILITY'; id: string; key: string; visibility: BlobVisibility }
   | { type: 'TEST_GRANT_PERMISSIONS'; id: string; capabilities: Capability[] }
   | { type: 'TEST_CLEAR_PERMISSIONS'; id: string };
 
@@ -46,6 +52,7 @@ export type ResponseMessage =
   | { type: 'BLOB_DOWNLOAD_URL'; id: string; url: string; metadata: BlobMetadata }
   | { type: 'BLOB_UPLOAD_URL'; id: string; uploadUrl: string; metadata: BlobMetadata }
   | { type: 'BLOB_LIST_RESULT'; id: string; blobs: BlobMetadata[] }
+  | { type: 'BLOB_VISIBILITY_SET'; id: string; metadata: BlobMetadata }
   | { type: 'BLOB_OK'; id: string }
   | { type: 'ERROR'; id: string; code: string; message: string }
   | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }
@@ -107,7 +114,7 @@ export function isValidRequest(data: unknown): data is RequestMessage {
         typeof msg.key === 'string' &&
         typeof msg.contentType === 'string' &&
         msg.data instanceof ArrayBuffer &&
-        typeof msg.isPublic === 'boolean'
+        (typeof msg.visibility === 'string' || typeof msg.isPublic === 'boolean')
       );
     case 'BLOB_GET':
     case 'BLOB_DELETE':
@@ -119,7 +126,12 @@ export function isValidRequest(data: unknown): data is RequestMessage {
         typeof msg.key === 'string' &&
         typeof msg.contentType === 'string' &&
         typeof msg.size === 'number' &&
-        typeof msg.isPublic === 'boolean'
+        (typeof msg.visibility === 'string' || typeof msg.isPublic === 'boolean')
+      );
+    case 'BLOB_SET_VISIBILITY':
+      return (
+        typeof msg.key === 'string' &&
+        typeof msg.visibility === 'string'
       );
     case 'TEST_CLEAR_PERMISSIONS':
       return true;

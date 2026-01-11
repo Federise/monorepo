@@ -10,11 +10,28 @@ export * from "./context.js";
 // Crypto utilities
 export { generateApiKey, hashApiKey } from "./lib/crypto.js";
 
+// HMAC signing utilities for presigned URLs
+export {
+  signDownloadUrl,
+  verifyDownloadUrl,
+  generateSignedDownloadUrl,
+  type SignedUrlParams,
+} from "./lib/hmac.js";
+
+// Namespace aliasing utilities
+export {
+  generateAlias,
+  isFullNamespace,
+  resolveNamespace,
+  getAlias,
+  getOrCreateAlias,
+} from "./lib/namespace-alias.js";
+
 // Auth middleware
 export { createAuthMiddleware, type AuthMiddlewareOptions } from "./middleware/auth.js";
 
 // Routes
-export { registerGatewayRoutes, registerBlobDownloadRoute } from "./routes.js";
+export { registerGatewayRoutes, registerBlobDownloadRoute, registerPublicBlobRoute } from "./routes.js";
 
 // Individual endpoints (for apps that need direct access)
 export { PingEndpoint } from "./endpoints/ping.js";
@@ -33,3 +50,4 @@ export { BlobPresignUploadEndpoint } from "./endpoints/blob/presign-upload.js";
 export { BlobGetEndpoint } from "./endpoints/blob/get.js";
 export { BlobDeleteEndpoint } from "./endpoints/blob/delete.js";
 export { BlobListEndpoint } from "./endpoints/blob/list.js";
+export { BlobSetVisibilityEndpoint } from "./endpoints/blob/set-visibility.js";

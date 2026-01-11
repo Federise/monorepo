@@ -9,7 +9,7 @@
   } from '../lib/protocol';
   import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
-  import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata } from '../lib/blob-storage';
+  import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata, setBlobVisibility } from '../lib/blob-storage';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured } from '../utils/auth';
 
   // Track connected clients by origin (used by handleSyn)
@@ -216,7 +216,8 @@
 
     try {
       // Data is already an ArrayBuffer (transferred from SDK)
-      const metadata = await uploadBlob(origin, msg.key, msg.contentType, msg.data, msg.isPublic);
+      // Support both visibility and legacy isPublic
+      const metadata = await uploadBlob(origin, msg.key, msg.contentType, msg.data, msg.visibility, msg.isPublic);
       sendResponse(source, origin, {
         type: 'BLOB_UPLOADED',
         id: msg.id,
@@ -312,7 +313,8 @@
     }
 
     try {
-      const result = await getUploadUrlWithMetadata(origin, msg.key, msg.contentType, msg.size, msg.isPublic);
+      // Support both visibility and legacy isPublic
+      const result = await getUploadUrlWithMetadata(origin, msg.key, msg.contentType, msg.size, msg.visibility, msg.isPublic);
 
       if (!result) {
         // Presigned URLs not available - SDK should fall back to BLOB_UPLOAD
@@ -328,6 +330,32 @@
       });
     } catch (err) {
       sendError(source, origin, msg.id, 'PRESIGN_FAILED', err instanceof Error ? err.message : 'Failed to get upload URL');
+    }
+  }
+
+  async function handleBlobSetVisibility(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'BLOB_SET_VISIBILITY' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'blob:write'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'blob:write',
+      });
+      return;
+    }
+
+    try {
+      const metadata = await setBlobVisibility(origin, msg.key, msg.visibility);
+      sendResponse(source, origin, {
+        type: 'BLOB_VISIBILITY_SET',
+        id: msg.id,
+        metadata,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'VISIBILITY_FAILED', err instanceof Error ? err.message : 'Failed to set visibility');
     }
   }
 
@@ -414,6 +442,9 @@
         break;
       case 'BLOB_GET_UPLOAD_URL':
         await handleBlobGetUploadUrl(source, origin, message);
+        break;
+      case 'BLOB_SET_VISIBILITY':
+        await handleBlobSetVisibility(source, origin, message);
         break;
       case 'TEST_GRANT_PERMISSIONS':
         await handleTestGrantPermissions(source, origin, message);

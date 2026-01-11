@@ -7,6 +7,9 @@ export type Capability =
   | 'blob:write'
   | 'notifications';
 
+// Blob visibility levels
+export type BlobVisibility = 'public' | 'presigned' | 'private';
+
 // Blob metadata returned from operations
 export interface BlobMetadata {
   key: string;
@@ -14,7 +17,9 @@ export interface BlobMetadata {
   size: number;
   contentType: string;
   uploadedAt: string;
-  isPublic: boolean;
+  visibility: BlobVisibility;
+  // Legacy field (deprecated, kept for backward compatibility)
+  isPublic?: boolean;
 }
 
 // Upload progress information
@@ -31,6 +36,9 @@ export interface UploadProgress {
 
 // Upload options
 export interface UploadOptions {
+  /** Visibility level for the uploaded file */
+  visibility?: BlobVisibility;
+  /** @deprecated Use `visibility` instead. Maps to 'public' if true, 'private' otherwise */
   isPublic?: boolean;
   key?: string;
   onProgress?: (progress: UploadProgress) => void;
@@ -43,11 +51,12 @@ export type KVGetPayload = { type: 'KV_GET'; key: string };
 export type KVSetPayload = { type: 'KV_SET'; key: string; value: string };
 export type KVDeletePayload = { type: 'KV_DELETE'; key: string };
 export type KVKeysPayload = { type: 'KV_KEYS'; prefix?: string };
-export type BlobUploadPayload = { type: 'BLOB_UPLOAD'; key: string; contentType: string; data: ArrayBuffer; isPublic: boolean };
+export type BlobUploadPayload = { type: 'BLOB_UPLOAD'; key: string; contentType: string; data: ArrayBuffer; visibility?: BlobVisibility; isPublic?: boolean };
 export type BlobGetPayload = { type: 'BLOB_GET'; key: string };
 export type BlobDeletePayload = { type: 'BLOB_DELETE'; key: string };
 export type BlobListPayload = { type: 'BLOB_LIST' };
-export type BlobGetUploadUrlPayload = { type: 'BLOB_GET_UPLOAD_URL'; key: string; contentType: string; size: number; isPublic: boolean };
+export type BlobGetUploadUrlPayload = { type: 'BLOB_GET_UPLOAD_URL'; key: string; contentType: string; size: number; visibility?: BlobVisibility; isPublic?: boolean };
+export type BlobSetVisibilityPayload = { type: 'BLOB_SET_VISIBILITY'; key: string; visibility: BlobVisibility };
 export type TestGrantPermissionsPayload = { type: 'TEST_GRANT_PERMISSIONS'; capabilities: Capability[] };
 export type TestClearPermissionsPayload = { type: 'TEST_CLEAR_PERMISSIONS' };
 
@@ -63,6 +72,7 @@ export type RequestPayload =
   | BlobDeletePayload
   | BlobListPayload
   | BlobGetUploadUrlPayload
+  | BlobSetVisibilityPayload
   | TestGrantPermissionsPayload
   | TestClearPermissionsPayload;
 
@@ -82,6 +92,7 @@ export type ResponseMessage =
   | { type: 'BLOB_DOWNLOAD_URL'; id: string; url: string; metadata: BlobMetadata }
   | { type: 'BLOB_UPLOAD_URL'; id: string; uploadUrl: string; metadata: BlobMetadata }
   | { type: 'BLOB_LIST_RESULT'; id: string; blobs: BlobMetadata[] }
+  | { type: 'BLOB_VISIBILITY_SET'; id: string; metadata: BlobMetadata }
   | { type: 'BLOB_OK'; id: string }
   | { type: 'ERROR'; id: string; code: string; message: string }
   | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }

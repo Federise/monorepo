@@ -2,16 +2,20 @@ import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import {
   NamespaceValue,
+  BlobVisibility,
   ErrorResponse,
 } from "../../types.js";
 import type { AppContext } from "../../context.js";
+import { getOrCreateAlias } from "../../lib/namespace-alias.js";
 
 const PresignUploadRequest = z.object({
   namespace: NamespaceValue,
   key: z.string(),
   contentType: z.string(),
   size: z.number().int().positive(),
-  isPublic: z.boolean().default(false),
+  // Support both new visibility and legacy isPublic
+  visibility: BlobVisibility.optional(),
+  isPublic: z.boolean().optional(), // Legacy, maps to public/private
 });
 
 const PresignUploadResponse = z.object({
@@ -68,13 +72,17 @@ export class BlobPresignUploadEndpoint extends OpenAPIRoute {
       return c.json({ code: 400, message: "Invalid request body" }, 400);
     }
 
-    const { namespace, key, contentType, size, isPublic } = parsed.data;
-    const bucketName = isPublic ? config.publicBucket : config.privateBucket;
+    const { namespace, key, contentType, size, visibility: visibilityParam, isPublic } = parsed.data;
+
+    // Determine visibility: prefer explicit visibility, fall back to legacy isPublic
+    const visibility = visibilityParam ?? (isPublic ? "public" : "private");
+
     const r2Key = `${namespace}:${key}`;
 
     // Generate presigned PUT URL (valid for 1 hour)
+    // Use single bucket for all uploads
     const expiresIn = 3600;
-    const uploadUrl = await presigner.getSignedUploadUrl(bucketName, r2Key, {
+    const uploadUrl = await presigner.getSignedUploadUrl(config.bucket, r2Key, {
       contentType,
       contentLength: size,
       expiresIn,
@@ -88,11 +96,14 @@ export class BlobPresignUploadEndpoint extends OpenAPIRoute {
       size,
       contentType,
       uploadedAt: new Date().toISOString(),
-      isPublic,
+      visibility,
     };
 
     const kvKey = `__BLOB:${namespace}:${key}`;
     await kv.put(kvKey, JSON.stringify(metadata));
+
+    // Ensure namespace alias exists for shorter URLs
+    await getOrCreateAlias(kv, namespace);
 
     return c.json({ uploadUrl, expiresAt });
   }

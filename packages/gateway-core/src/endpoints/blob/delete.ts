@@ -35,7 +35,7 @@ export class BlobDeleteEndpoint extends OpenAPIRoute {
     const { namespace, key } = data.body;
     const kv = c.get("kv");
 
-    // Get metadata to determine which bucket
+    // Check if blob exists
     const kvKey = `__BLOB:${namespace}:${key}`;
     const metadataStr = await kv.get(kvKey);
 
@@ -43,12 +43,11 @@ export class BlobDeleteEndpoint extends OpenAPIRoute {
       return c.json({ code: 404, message: "Blob not found" }, 404);
     }
 
-    const metadata = JSON.parse(metadataStr);
     const r2Key = `${namespace}:${key}`;
 
-    // Delete from appropriate bucket
-    const bucket = metadata.isPublic ? c.get("r2Public") : c.get("r2");
-    await bucket.delete(r2Key);
+    // Delete from single bucket
+    const blob = c.get("blob");
+    await blob.delete(r2Key);
 
     // Delete metadata from KV
     await kv.delete(kvKey);

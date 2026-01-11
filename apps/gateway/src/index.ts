@@ -4,6 +4,7 @@ import {
   createAuthMiddleware,
   registerGatewayRoutes,
   registerBlobDownloadRoute,
+  registerPublicBlobRoute,
   type GatewayEnv,
 } from "@federise/gateway-core";
 import { CloudflareKVAdapter } from "./adapters/cloudflare-kv";
@@ -16,8 +17,7 @@ const app = new Hono<{ Bindings: Env; Variables: GatewayEnv }>();
 // Inject adapters into context from Cloudflare bindings
 app.use("*", async (c, next) => {
   c.set("kv", new CloudflareKVAdapter(c.env.KV));
-  c.set("r2", new CloudflareR2Adapter(c.env.R2));
-  c.set("r2Public", new CloudflareR2Adapter(c.env.R2_PUBLIC));
+  c.set("blob", new CloudflareR2Adapter(c.env.R2));
 
   // Create presigner if credentials are configured
   if (c.env.R2_ACCOUNT_ID && c.env.R2_ACCESS_KEY_ID && c.env.R2_SECRET_ACCESS_KEY) {
@@ -31,9 +31,9 @@ app.use("*", async (c, next) => {
   c.set("config", {
     bootstrapApiKey: c.env.BOOTSTRAP_API_KEY,
     corsOrigin: c.env.CORS_ORIGIN,
-    publicDomain: c.env.PUBLIC_DOMAIN,
-    privateBucket: c.env.R2_PRIVATE_BUCKET || "federise-private",
-    publicBucket: c.env.R2_PUBLIC_BUCKET || "federise-public",
+    signingSecret: c.env.SIGNING_SECRET,
+    bucket: c.env.R2_BUCKET || "federise-objects",
+    presignExpiresIn: c.env.PRESIGN_EXPIRES_IN ? parseInt(c.env.PRESIGN_EXPIRES_IN, 10) : 3600,
   });
 
   return next();
@@ -45,7 +45,7 @@ app.use("*", (c, next) => {
   return cors({
     origin,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public", "X-Blob-Visibility"],
     exposeHeaders: ["Content-Length", "Content-Disposition"],
     maxAge: 86400,
     credentials: false,
@@ -61,7 +61,10 @@ app.use("*", async (c, next) => {
   }
 });
 
-// Register blob download route BEFORE auth middleware (uses URL-based auth via obscurity)
+// Register public blob route BEFORE auth middleware (handles public/presigned access)
+registerPublicBlobRoute(app);
+
+// Register authenticated blob download route BEFORE auth middleware
 registerBlobDownloadRoute(app);
 
 // Auth middleware

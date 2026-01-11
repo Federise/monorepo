@@ -28,11 +28,13 @@ export interface GatewayConfig {
   s3AccessKeyId?: string;
   s3SecretAccessKey?: string;
   s3Region: string;
-  s3PrivateBucket: string;
-  s3PublicBucket: string;
+  s3Bucket: string;
 
-  // Optional: Public URL for blob downloads
-  publicDomain?: string;
+  // Signing secret for HMAC presigned download URLs
+  signingSecret?: string;
+
+  // Presigned URL expiration (seconds)
+  presignExpiresIn: number;
 }
 
 export function loadConfig(): GatewayConfig {
@@ -67,11 +69,13 @@ export function loadConfig(): GatewayConfig {
     s3AccessKeyId: Deno.env.get("S3_ACCESS_KEY_ID"),
     s3SecretAccessKey: Deno.env.get("S3_SECRET_ACCESS_KEY"),
     s3Region: Deno.env.get("S3_REGION") || "us-east-1",
-    s3PrivateBucket: Deno.env.get("S3_PRIVATE_BUCKET") || "federise-private",
-    s3PublicBucket: Deno.env.get("S3_PUBLIC_BUCKET") || "federise-public",
+    s3Bucket: Deno.env.get("S3_BUCKET") || "federise-objects",
 
-    // Optional
-    publicDomain: Deno.env.get("PUBLIC_DOMAIN"),
+    // Signing secret (optional - auto-generated if not set)
+    signingSecret: Deno.env.get("SIGNING_SECRET"),
+
+    // Presigned URL expiration
+    presignExpiresIn: parseInt(Deno.env.get("PRESIGN_EXPIRES_IN") || "3600", 10),
   };
 
   // Validate S3 config if in S3 mode

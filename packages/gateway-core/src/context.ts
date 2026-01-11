@@ -7,9 +7,12 @@ import type { IKVStore, IBlobStore, IPresigner } from "./adapters/index.js";
 export interface GatewayConfig {
   bootstrapApiKey?: string;
   corsOrigin?: string;
-  publicDomain?: string;
-  privateBucket: string;
-  publicBucket: string;
+  /** Secret key for HMAC signing of presigned download URLs */
+  signingSecret: string;
+  /** Single bucket name for all blob storage */
+  bucket: string;
+  /** Default expiry for presigned URLs in seconds (default: 3600) */
+  presignExpiresIn?: number;
 }
 
 /**
@@ -17,8 +20,9 @@ export interface GatewayConfig {
  */
 export interface GatewayEnv {
   kv: IKVStore;
-  r2: IBlobStore;
-  r2Public: IBlobStore;
+  /** Single blob store for all files */
+  blob: IBlobStore;
+  /** Presigner for direct S3-compatible uploads (optional) */
   presigner?: IPresigner;
   config: GatewayConfig;
 }
@@ -36,17 +40,10 @@ export function getKV(c: AppContext): IKVStore {
 }
 
 /**
- * Helper to get private blob store from context
+ * Helper to get blob store from context
  */
-export function getR2(c: AppContext): IBlobStore {
-  return c.get("r2");
-}
-
-/**
- * Helper to get public blob store from context
- */
-export function getR2Public(c: AppContext): IBlobStore {
-  return c.get("r2Public");
+export function getBlob(c: AppContext): IBlobStore {
+  return c.get("blob");
 }
 
 /**

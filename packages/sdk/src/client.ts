@@ -1,5 +1,6 @@
 import type {
   BlobMetadata,
+  BlobVisibility,
   Capability,
   FederiseClientOptions,
   GrantResult,
@@ -339,7 +340,8 @@ export class FederiseClient {
       this.ensureCapability('blob:write');
 
       const key = options?.key ?? file.name;
-      const isPublic = options?.isPublic ?? false;
+      // Support both visibility and legacy isPublic
+      const visibility: BlobVisibility = options?.visibility ?? (options?.isPublic ? 'public' : 'private');
       const onProgress = options?.onProgress;
       const contentType = file.type || 'application/octet-stream';
 
@@ -351,7 +353,7 @@ export class FederiseClient {
           key,
           contentType,
           size: file.size,
-          isPublic,
+          visibility,
         });
 
         if (presignResponse.type === 'BLOB_UPLOAD_URL') {
@@ -404,7 +406,7 @@ export class FederiseClient {
           key,
           contentType,
           data: fileData,
-          isPublic,
+          visibility,
         },
         [fileData]
       );
@@ -481,6 +483,30 @@ export class FederiseClient {
 
       if (response.type === 'BLOB_LIST_RESULT') {
         return response.blobs;
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Change the visibility of an existing file.
+     * @param key - The file key
+     * @param visibility - The new visibility level ('public', 'presigned', or 'private')
+     */
+    setVisibility: async (key: string, visibility: BlobVisibility): Promise<BlobMetadata> => {
+      this.ensureConnected();
+      this.ensureCapability('blob:write');
+
+      const response = await this.sendRequest({ type: 'BLOB_SET_VISIBILITY', key, visibility });
+
+      if (response.type === 'BLOB_VISIBILITY_SET') {
+        return response.metadata;
       }
       if (response.type === 'PERMISSION_DENIED') {
         throw new PermissionDeniedError(response.capability);

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getClient } from '../../stores/federise.svelte';
-  import type { BlobMetadata, UploadProgress } from '@federise/sdk';
+  import type { BlobMetadata, BlobVisibility, UploadProgress } from '@federise/sdk';
 
   let files = $state<BlobMetadata[]>([]);
   let isLoading = $state(true);
@@ -18,8 +18,11 @@
   let previewContent = $state<string | null>(null);
   let previewLoading = $state(false);
 
-  // Upload settings
-  let uploadPublic = $state(false);
+  // Visibility change in progress
+  let changingVisibility = $state<string | null>(null);
+
+  // Copy link feedback
+  let copiedKey = $state<string | null>(null);
 
   let fileInput: HTMLInputElement;
 
@@ -59,7 +62,7 @@
     try {
       for (const file of selectedFiles) {
         await client.blob.upload(file, {
-          isPublic: uploadPublic,
+          visibility: 'private',
           onProgress: (progress) => {
             uploadProgress = progress;
           },
@@ -73,6 +76,54 @@
       uploadProgress = null;
       input.value = '';
     }
+  }
+
+  async function toggleVisibility(file: BlobMetadata) {
+    const client = getClient();
+    if (!client) return;
+
+    const currentVisibility = getVisibilityFromFile(file);
+    const newVisibility: BlobVisibility = currentVisibility === 'public' ? 'private' : 'public';
+
+    changingVisibility = file.key;
+
+    try {
+      const updatedMetadata = await client.blob.setVisibility(file.key, newVisibility);
+      // Update the file in the list
+      files = files.map(f => f.key === file.key ? updatedMetadata : f);
+      // Clear cached URL since visibility changed
+      delete downloadUrls[file.key];
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to change visibility';
+    } finally {
+      changingVisibility = null;
+    }
+  }
+
+  async function copyLink(file: BlobMetadata) {
+    const client = getClient();
+    if (!client) return;
+
+    try {
+      // Get the appropriate URL - public files get public URLs, private get presigned
+      const { url } = await client.blob.get(file.key);
+      await navigator.clipboard.writeText(url);
+
+      // Show feedback
+      copiedKey = file.key;
+      setTimeout(() => {
+        copiedKey = null;
+      }, 2000);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to copy link';
+    }
+  }
+
+  function getVisibilityFromFile(file: BlobMetadata): BlobVisibility {
+    // Handle both new visibility and legacy isPublic
+    if (file.visibility) return file.visibility;
+    if (file.isPublic) return 'public';
+    return 'private';
   }
 
   async function getDownloadUrl(file: BlobMetadata): Promise<string | null> {
@@ -227,21 +278,6 @@
   <div class="files-panel card">
     <div class="panel-header">
       <h2>Files</h2>
-      <!-- svelte-ignore a11y_label_has_associated_control -->
-      <label class="toggle-label">
-        <span class="toggle-text">{uploadPublic ? 'Public' : 'Private'}</span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={uploadPublic}
-          class="toggle-switch"
-          class:active={uploadPublic}
-          onclick={() => uploadPublic = !uploadPublic}
-          disabled={isUploading}
-        >
-          <span class="toggle-thumb"></span>
-        </button>
-      </label>
       <button
         class="btn btn-primary btn-sm"
         onclick={() => fileInput.click()}
@@ -320,9 +356,19 @@
               <span class="file-name">{file.key}</span>
               <span class="file-meta">
                 {formatSize(file.size)} &middot; {formatDate(file.uploadedAt)}
-                {#if file.isPublic}
-                  <span class="public-badge">Public</span>
-                {/if}
+                <button
+                  class="visibility-toggle"
+                  class:public={getVisibilityFromFile(file) === 'public'}
+                  onclick={() => toggleVisibility(file)}
+                  disabled={changingVisibility === file.key}
+                  title={getVisibilityFromFile(file) === 'public' ? 'Click to make private' : 'Click to make public'}
+                >
+                  {#if changingVisibility === file.key}
+                    <span class="toggle-spinner"></span>
+                  {:else}
+                    {getVisibilityFromFile(file) === 'public' ? 'Public' : 'Private'}
+                  {/if}
+                </button>
               </span>
             </div>
             <div class="file-actions">
@@ -338,6 +384,23 @@
                   </svg>
                 </button>
               {/if}
+              <button
+                class="action-btn"
+                class:copied={copiedKey === file.key}
+                onclick={() => copyLink(file)}
+                title={copiedKey === file.key ? 'Copied!' : (getVisibilityFromFile(file) === 'public' ? 'Copy public link' : 'Copy presigned link')}
+              >
+                {#if copiedKey === file.key}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                {:else}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                {/if}
+              </button>
               <a
                 class="action-btn"
                 href={downloadUrls[file.key] || '#'}
@@ -473,57 +536,6 @@
     font-weight: 600;
   }
 
-  .toggle-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-  }
-
-  .toggle-text {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    min-width: 3.5rem;
-    text-align: right;
-  }
-
-  .toggle-switch {
-    position: relative;
-    width: 36px;
-    height: 20px;
-    background: var(--color-border);
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    padding: 0;
-  }
-
-  .toggle-switch:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .toggle-switch.active {
-    background: var(--color-primary);
-  }
-
-  .toggle-thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    background: white;
-    border-radius: 50%;
-    transition: transform 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  }
-
-  .toggle-switch.active .toggle-thumb {
-    transform: translateX(16px);
-  }
 
   .btn-sm {
     padding: 0.375rem 0.75rem;
@@ -639,13 +651,46 @@
     gap: 0.5rem;
   }
 
-  .public-badge {
-    background: var(--color-primary);
-    color: white;
+  .visibility-toggle {
     padding: 0.125rem 0.375rem;
     border-radius: 4px;
     font-size: 0.65rem;
     font-weight: 500;
+    border: none;
+    cursor: pointer;
+    background-color: var(--color-text-muted);
+    color: white;
+    transition: background-color 0.15s ease;
+    min-width: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .visibility-toggle.public {
+    background-color: #10b981;
+  }
+
+  .visibility-toggle:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  .visibility-toggle:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .toggle-spinner {
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .action-btn.copied {
+    color: #10b981;
   }
 
   .file-actions {

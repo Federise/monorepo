@@ -1,6 +1,6 @@
 import { createGatewayClient, withAuth } from '../api/client';
 import { getGatewayConfig } from '../utils/auth';
-import type { BlobMetadata } from './protocol';
+import type { BlobMetadata, BlobVisibility } from './protocol';
 
 /**
  * Get the gateway client and auth config.
@@ -29,6 +29,15 @@ async function buildNamespace(origin: string): Promise<string> {
 }
 
 /**
+ * Helper to convert legacy isPublic to visibility.
+ */
+function resolveVisibility(visibility?: BlobVisibility, isPublic?: boolean): BlobVisibility {
+  if (visibility) return visibility;
+  if (isPublic === true) return 'public';
+  return 'private';
+}
+
+/**
  * Get a presigned URL for direct upload to R2.
  * Returns null if presigned URLs are not available (R2 credentials not configured).
  */
@@ -37,14 +46,14 @@ export async function getPresignedUploadUrl(
   key: string,
   contentType: string,
   size: number,
-  isPublic: boolean
+  visibility: BlobVisibility = 'private'
 ): Promise<{ uploadUrl: string; expiresAt: string } | null> {
   const { client, apiKey } = getClient();
   const namespace = await buildNamespace(origin);
 
   const { data, error } = await client.POST('/blob/presign-upload', {
     ...withAuth(apiKey),
-    body: { namespace, key, contentType, size, isPublic },
+    body: { namespace, key, contentType, size, visibility },
   });
 
   if (error) {
@@ -73,9 +82,11 @@ export async function getUploadUrlWithMetadata(
   key: string,
   contentType: string,
   size: number,
-  isPublic: boolean
+  visibility: BlobVisibility = 'private',
+  isPublic?: boolean
 ): Promise<{ uploadUrl: string; metadata: BlobMetadata } | null> {
-  const presigned = await getPresignedUploadUrl(origin, key, contentType, size, isPublic);
+  const resolvedVisibility = resolveVisibility(visibility, isPublic);
+  const presigned = await getPresignedUploadUrl(origin, key, contentType, size, resolvedVisibility);
 
   if (!presigned) {
     return null;
@@ -88,7 +99,7 @@ export async function getUploadUrlWithMetadata(
     size,
     contentType,
     uploadedAt: new Date().toISOString(),
-    isPublic,
+    visibility: resolvedVisibility,
   };
 
   return {
@@ -105,12 +116,14 @@ export async function uploadBlob(
   key: string,
   contentType: string,
   data: ArrayBuffer,
-  isPublic: boolean
+  visibility: BlobVisibility = 'private',
+  isPublic?: boolean
 ): Promise<BlobMetadata> {
+  const resolvedVisibility = resolveVisibility(visibility, isPublic);
   const size = data.byteLength;
 
   // Try to get presigned URL for direct R2 upload
-  const presigned = await getPresignedUploadUrl(origin, key, contentType, size, isPublic);
+  const presigned = await getPresignedUploadUrl(origin, key, contentType, size, resolvedVisibility);
 
   if (presigned) {
     // Direct upload to R2
@@ -136,7 +149,7 @@ export async function uploadBlob(
       size,
       contentType,
       uploadedAt: new Date().toISOString(),
-      isPublic,
+      visibility: resolvedVisibility,
     };
   }
 
@@ -151,7 +164,7 @@ export async function uploadBlob(
       'Content-Type': contentType,
       'X-Blob-Namespace': namespace,
       'X-Blob-Key': key,
-      'X-Blob-Public': isPublic ? 'true' : 'false',
+      'X-Blob-Visibility': resolvedVisibility,
     },
     body: data,
   });
@@ -233,4 +246,28 @@ export async function listBlobs(origin: string): Promise<BlobMetadata[]> {
   }
 
   return (data?.blobs as BlobMetadata[]) ?? [];
+}
+
+/**
+ * Change the visibility of an existing blob.
+ */
+export async function setBlobVisibility(
+  origin: string,
+  key: string,
+  visibility: BlobVisibility
+): Promise<BlobMetadata> {
+  const { client, apiKey } = getClient();
+  const namespace = await buildNamespace(origin);
+
+  const { data, error } = await client.POST('/blob/visibility', {
+    ...withAuth(apiKey),
+    body: { namespace, key, visibility },
+  });
+
+  if (error) {
+    console.error('[Blob] Failed to set visibility:', error);
+    throw new Error('Failed to set blob visibility');
+  }
+
+  return data?.metadata as BlobMetadata;
 }

@@ -6,6 +6,7 @@ import {
   createAuthMiddleware,
   registerGatewayRoutes,
   registerBlobDownloadRoute,
+  registerPublicBlobRoute,
   type GatewayEnv,
   type IBlobStore,
   type IPresigner,
@@ -56,10 +57,11 @@ if (!existingPermissions) {
 }
 
 // Initialize blob storage based on mode
-let privateBlobStore: IBlobStore;
-let publicBlobStore: IBlobStore;
+let blobStore: IBlobStore;
 let presigner: IPresigner | undefined;
-let signingSecret: string | undefined;
+
+// Get or generate signing secret
+const signingSecret = config.signingSecret || await getOrCreateSigningSecret(config.dataDir);
 
 // Default base URL for presigned URLs
 const defaultBaseUrl = config.presignBaseUrl || `http://localhost:${config.port}`;
@@ -67,15 +69,9 @@ const defaultBaseUrl = config.presignBaseUrl || `http://localhost:${config.port}
 if (config.blobStorageMode === "filesystem") {
   console.log(`Blob storage: filesystem (${config.blobPath})`);
 
-  privateBlobStore = new FilesystemBlobStore({
-    basePath: `${config.blobPath}/private`,
+  blobStore = new FilesystemBlobStore({
+    basePath: config.blobPath!,
   });
-
-  publicBlobStore = new FilesystemBlobStore({
-    basePath: `${config.blobPath}/public`,
-  });
-
-  signingSecret = config.bootstrapApiKey || await getOrCreateSigningSecret(config.dataDir);
 
   presigner = new FilesystemPresigner({
     baseUrl: defaultBaseUrl,
@@ -93,14 +89,9 @@ if (config.blobStorageMode === "filesystem") {
     region: config.s3Region,
   };
 
-  privateBlobStore = new S3BlobStore({
+  blobStore = new S3BlobStore({
     ...s3Config,
-    bucket: config.s3PrivateBucket,
-  });
-
-  publicBlobStore = new S3BlobStore({
-    ...s3Config,
-    bucket: config.s3PublicBucket,
+    bucket: config.s3Bucket,
   });
 
   presigner = new S3Presigner(s3Config);
@@ -112,15 +103,14 @@ const app = new Hono<{ Variables: GatewayEnv }>();
 // Inject adapters into context
 app.use("*", async (c, next) => {
   c.set("kv", kvStore);
-  c.set("r2", privateBlobStore);
-  c.set("r2Public", publicBlobStore);
+  c.set("blob", blobStore);
   c.set("presigner", presigner);
   c.set("config", {
     bootstrapApiKey: config.bootstrapApiKey,
     corsOrigin: config.corsOrigin,
-    publicDomain: config.publicDomain,
-    privateBucket: config.s3PrivateBucket,
-    publicBucket: config.s3PublicBucket,
+    signingSecret,
+    bucket: config.s3Bucket,
+    presignExpiresIn: config.presignExpiresIn,
   });
   return next();
 });
@@ -129,7 +119,7 @@ app.use("*", async (c, next) => {
 app.use("*", cors({
   origin: config.corsOrigin,
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public"],
+  allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public", "X-Blob-Visibility"],
   exposeHeaders: ["Content-Length", "Content-Disposition"],
   maxAge: 86400,
 }));
@@ -143,11 +133,14 @@ app.use("*", async (c, next) => {
   }
 });
 
-// Register blob download route BEFORE auth middleware
+// Register public blob route BEFORE auth middleware (handles public/presigned access)
+registerPublicBlobRoute(app);
+
+// Register blob download route BEFORE auth middleware (authenticated download)
 registerBlobDownloadRoute(app);
 
-// Register presigned routes BEFORE auth middleware (filesystem mode only)
-if (config.blobStorageMode === "filesystem" && signingSecret) {
+// Register presigned routes BEFORE auth middleware (filesystem mode only - for uploads)
+if (config.blobStorageMode === "filesystem") {
   registerPresignedRoutes(app, signingSecret);
 }
 

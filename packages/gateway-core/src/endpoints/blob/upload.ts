@@ -2,9 +2,12 @@ import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import {
   BlobMetadata,
+  BlobVisibility,
   ErrorResponse,
 } from "../../types.js";
 import type { AppContext } from "../../context.js";
+import type { BlobVisibility as BlobVisibilityType } from "../../types.js";
+import { getOrCreateAlias } from "../../lib/namespace-alias.js";
 
 // Response after successful upload
 const BlobUploadResponse = z.object({
@@ -35,8 +38,22 @@ export class BlobUploadEndpoint extends OpenAPIRoute {
   async handle(c: AppContext) {
     const namespace = c.req.header("x-blob-namespace");
     const key = c.req.header("x-blob-key");
-    const isPublic = c.req.header("x-blob-public") === "true";
     const contentType = c.req.header("content-type") || "application/octet-stream";
+
+    // Support both new visibility header and legacy isPublic header
+    const visibilityHeader = c.req.header("x-blob-visibility");
+    const isPublicHeader = c.req.header("x-blob-public");
+
+    let visibility: BlobVisibilityType = "private";
+    if (visibilityHeader) {
+      const parsed = BlobVisibility.safeParse(visibilityHeader);
+      if (parsed.success) {
+        visibility = parsed.data;
+      }
+    } else if (isPublicHeader === "true") {
+      // Legacy support: isPublic=true maps to "public"
+      visibility = "public";
+    }
 
     if (!namespace || !key) {
       return c.json({ code: 400, message: "Missing x-blob-namespace or x-blob-key header" }, 400);
@@ -51,11 +68,11 @@ export class BlobUploadEndpoint extends OpenAPIRoute {
     }
 
     const kv = c.get("kv");
-    const bucket = isPublic ? c.get("r2Public") : c.get("r2");
+    const blob = c.get("blob"); // Single bucket
     const r2Key = `${namespace}:${key}`;
 
     // Upload to blob storage
-    await bucket.put(r2Key, body, {
+    await blob.put(r2Key, body, {
       httpMetadata: {
         contentType,
       },
@@ -68,11 +85,14 @@ export class BlobUploadEndpoint extends OpenAPIRoute {
       size,
       contentType,
       uploadedAt: new Date().toISOString(),
-      isPublic,
+      visibility,
     };
 
     const kvKey = `__BLOB:${namespace}:${key}`;
     await kv.put(kvKey, JSON.stringify(metadata));
+
+    // Ensure namespace alias exists for shorter URLs
+    await getOrCreateAlias(kv, namespace);
 
     return c.json({ metadata });
   }

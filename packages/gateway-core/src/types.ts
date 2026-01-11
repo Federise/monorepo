@@ -94,6 +94,9 @@ export const KVDumpResponse = z.object({
   namespaces: z.array(KVDumpEntry),
 });
 
+// Blob visibility levels
+export const BlobVisibility = z.enum(["public", "presigned", "private"]);
+
 // Blob schemas
 export const BlobMetadata = z.object({
   key: z.string(),
@@ -101,7 +104,7 @@ export const BlobMetadata = z.object({
   size: z.number().int().positive(),
   contentType: z.string(),
   uploadedAt: z.string().datetime(),
-  isPublic: z.boolean(),
+  visibility: BlobVisibility,
 });
 
 export const BlobUploadResponse = z.object({
@@ -112,8 +115,10 @@ export const BlobPresignUploadRequest = z.object({
   namespace: NamespaceValue,
   key: z.string(),
   contentType: z.string(),
-  contentLength: z.number().int().positive(),
-  isPublic: z.boolean().optional().default(false),
+  size: z.number().int().positive(),
+  visibility: BlobVisibility.optional().default("private"),
+  // Legacy support
+  isPublic: z.boolean().optional(),
 });
 
 export const BlobPresignUploadResponse = z.object({
@@ -146,6 +151,16 @@ export const BlobListResponse = z.object({
   blobs: z.array(BlobMetadata),
 });
 
+export const BlobSetVisibilityRequest = z.object({
+  namespace: NamespaceValue,
+  key: z.string(),
+  visibility: BlobVisibility,
+});
+
+export const BlobSetVisibilityResponse = z.object({
+  metadata: BlobMetadata,
+});
+
 // Error response
 export const ErrorResponse = z.object({
   code: z.number().int(),
@@ -155,8 +170,7 @@ export const ErrorResponse = z.object({
 // Admin schemas
 export const AdminCheckResponse = z.object({
   kv: z.boolean(),
-  r2_private: z.boolean(),
-  r2_public: z.boolean(),
+  blob: z.boolean(),
   presigned_ready: z.boolean(),
 });
 
@@ -170,9 +184,11 @@ export type GetRequest = z.infer<typeof GetRequest>;
 export type SetRequest = z.infer<typeof SetRequest>;
 export type BulkGetRequest = z.infer<typeof BulkGetRequest>;
 export type BulkSetRequest = z.infer<typeof BulkSetRequest>;
+export type BlobVisibility = z.infer<typeof BlobVisibility>;
 export type BlobMetadata = z.infer<typeof BlobMetadata>;
 export type BlobPresignUploadRequest = z.infer<typeof BlobPresignUploadRequest>;
 export type BlobGetRequest = z.infer<typeof BlobGetRequest>;
 export type BlobDeleteRequest = z.infer<typeof BlobDeleteRequest>;
 export type BlobListRequest = z.infer<typeof BlobListRequest>;
+export type BlobSetVisibilityRequest = z.infer<typeof BlobSetVisibilityRequest>;
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
