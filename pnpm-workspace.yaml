@@ -1,4 +1,5 @@
 packages:
   - 'apps/*'
   - 'apps/org/tests'
+  - 'apps/org/service-worker'
   - 'packages/*'

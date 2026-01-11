@@ -30,12 +30,25 @@ let unpartitionedStorage: Storage | null = null;
 // ============================================================================
 
 /**
- * Set a cookie with cross-origin iframe support
+ * Set a cookie with cross-origin iframe support.
+ *
+ * For HTTPS (production): Uses SameSite=None + Secure for cross-origin iframe access.
+ * For HTTP (localhost dev): Uses SameSite=Lax without Secure.
+ *   - Secure flag requires HTTPS, so it can't be used on localhost
+ *   - SameSite=None requires Secure, so we fall back to Lax
+ *   - Different localhost ports are considered same-site, so Lax works for local dev
  */
 function setCookie(name: string, value: string, days: number = 365): void {
   const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  // SameSite=None + Secure required for cross-origin iframe access
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=None; Secure`;
+  const isSecure = window.location.protocol === 'https:';
+
+  if (isSecure) {
+    // Production: SameSite=None + Secure for cross-origin iframe access
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=None; Secure`;
+  } else {
+    // Local dev: SameSite=Lax works because localhost ports are same-site
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  }
 }
 
 /**
@@ -56,7 +69,13 @@ function getCookie(name: string): string | null {
  * Delete a cookie
  */
 function deleteCookie(name: string): void {
-  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=None; Secure`;
+  const isSecure = window.location.protocol === 'https:';
+
+  if (isSecure) {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=None; Secure`;
+  } else {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  }
 }
 
 // ============================================================================
@@ -149,8 +168,9 @@ export async function requestStorageAccess(): Promise<boolean> {
 
 /**
  * Get the gateway API key
- * - In iframe with storage access: read from cookies (or localStorage handle if available)
- * - In top-level: read from localStorage
+ * - If we have unpartitioned localStorage handle: use it
+ * - In iframe: try cookies first (works on localhost same-site), then localStorage
+ * - In top-level: use localStorage
  */
 export function getGatewayApiKey(): string | null {
   // If we have the unpartitioned localStorage handle, prefer it
@@ -158,12 +178,18 @@ export function getGatewayApiKey(): string | null {
     return unpartitionedStorage.getItem(STORAGE_KEY_API);
   }
 
-  // In iframe context with storage access, read from cookies
-  if (isIframe() && hasStorageAccess) {
-    return getCookie(COOKIE_KEY_API);
+  // In iframe context, try cookies first
+  // On localhost (same-site), cookies are accessible without Storage Access API
+  // On production with Storage Access granted, cookies are also accessible
+  if (isIframe()) {
+    const cookieValue = getCookie(COOKIE_KEY_API);
+    if (cookieValue) {
+      return cookieValue;
+    }
+    // Fall through to try localStorage (for backward compat or if cookies not set)
   }
 
-  // Top-level context or no storage access yet, try localStorage
+  // Top-level context or iframe fallback: try localStorage
   return localStorage.getItem(STORAGE_KEY_API);
 }
 
@@ -175,8 +201,12 @@ export function getGatewayUrl(): string | null {
     return unpartitionedStorage.getItem(STORAGE_KEY_URL);
   }
 
-  if (isIframe() && hasStorageAccess) {
-    return getCookie(COOKIE_KEY_URL);
+  // In iframe context, try cookies first (same logic as getGatewayApiKey)
+  if (isIframe()) {
+    const cookieValue = getCookie(COOKIE_KEY_URL);
+    if (cookieValue) {
+      return cookieValue;
+    }
   }
 
   return localStorage.getItem(STORAGE_KEY_URL);

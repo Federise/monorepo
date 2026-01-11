@@ -4,10 +4,11 @@
   "exports": "./src/main.ts",
   "unstable": ["kv", "sloppy-imports"],
   "tasks": {
-    "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --env --watch src/main.ts",
-    "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --env src/main.ts",
+    "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --env-file --watch src/main.ts",
+    "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --env-file src/main.ts",
     "test": "deno test --allow-net --allow-env test/",
     "test:watch": "deno test --allow-net --allow-env --watch test/",
+    "test:browser": "deno run --allow-net --allow-read test/browser-test/serve.ts",
     "compile": "deno compile --allow-net --allow-env --allow-read --allow-write --allow-sys --output federise-gateway src/main.ts",
     "compile:linux": "deno compile --allow-net --allow-env --allow-read --allow-write --target x86_64-unknown-linux-gnu --output federise-gateway-linux src/main.ts",
     "compile:macos": "deno compile --allow-net --allow-env --allow-read --allow-write --target x86_64-apple-darwin --output federise-gateway-macos src/main.ts",

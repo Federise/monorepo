@@ -23,10 +23,15 @@ function getClient() {
 async function loadPermissionsTable(): Promise<PermissionsTable> {
   const { client, apiKey } = getClient();
 
-  const { data, error } = await client.POST('/kv/get', {
+  const { data, error, response } = await client.POST('/kv/get', {
     ...withAuth(apiKey),
     body: { namespace: KV_NAMESPACE, key: KV_KEY },
   });
+
+  // 404 means no permissions have been set yet - return empty table
+  if (response.status === 404) {
+    return {};
+  }
 
   if (error) {
     throw new Error('Failed to load permissions from KV');
@@ -64,11 +69,25 @@ async function savePermissionsTable(table: PermissionsTable): Promise<void> {
 }
 
 /**
- * Get permissions for a specific origin.
+ * Create an empty permission record for an origin.
+ * Used when no permissions have been granted yet.
  */
-export async function getPermissions(origin: string): Promise<PermissionRecord | null> {
+function createEmptyPermissionRecord(origin: string): PermissionRecord {
+  return {
+    origin,
+    capabilities: [],
+    grantedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Get permissions for a specific origin.
+ * Returns an empty permission record (with no capabilities) if none exist.
+ * This ensures we always return a valid record, never null.
+ */
+export async function getPermissions(origin: string): Promise<PermissionRecord> {
   const table = await loadPermissionsTable();
-  return table[origin] ?? null;
+  return table[origin] ?? createEmptyPermissionRecord(origin);
 }
 
 /**
@@ -85,7 +104,6 @@ export async function setPermissions(origin: string, record: PermissionRecord): 
  */
 export async function hasCapability(origin: string, capability: Capability): Promise<boolean> {
   const record = await getPermissions(origin);
-  if (!record) return false;
 
   // Check expiration
   if (record.expiresAt && new Date(record.expiresAt) < new Date()) {
@@ -100,8 +118,7 @@ export async function hasCapability(origin: string, capability: Capability): Pro
  */
 export async function grantCapabilities(origin: string, capabilities: Capability[]): Promise<PermissionRecord> {
   const existing = await getPermissions(origin);
-  const existingCaps = existing?.capabilities ?? [];
-  const merged = [...new Set([...existingCaps, ...capabilities])];
+  const merged = [...new Set([...existing.capabilities, ...capabilities])];
 
   const record: PermissionRecord = {
     origin,
@@ -127,14 +144,16 @@ export async function revokePermissions(origin: string): Promise<void> {
  */
 export async function revokeCapability(origin: string, capability: Capability): Promise<void> {
   const record = await getPermissions(origin);
-  if (!record) return;
 
-  record.capabilities = record.capabilities.filter((c) => c !== capability);
+  // If no capabilities, nothing to revoke
+  if (record.capabilities.length === 0) return;
 
-  if (record.capabilities.length === 0) {
+  const updatedCapabilities = record.capabilities.filter((c) => c !== capability);
+
+  if (updatedCapabilities.length === 0) {
     await revokePermissions(origin);
   } else {
-    await setPermissions(origin, record);
+    await setPermissions(origin, { ...record, capabilities: updatedCapabilities });
   }
 }
 

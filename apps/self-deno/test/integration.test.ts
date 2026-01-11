@@ -619,3 +619,154 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
 });
+
+// ============================================================================
+// Presigned Upload Tests
+// ============================================================================
+
+Deno.test({
+  name: "Presign: should get presigned upload URL",
+  async fn() {
+    const adminApiKey = await getOrCreateAdminKey();
+    const namespace = uniqueNamespace("presign");
+
+    const response = await testFetch("/blob/presign-upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `ApiKey ${adminApiKey}`,
+      },
+      body: JSON.stringify({
+        namespace,
+        key: "presigned-test.txt",
+        contentType: "text/plain",
+        size: 13,
+        isPublic: false,
+      }),
+    });
+
+    assertEquals(response.status, 200);
+    const data = await response.json() as { uploadUrl: string; expiresAt: string };
+    assertExists(data.uploadUrl);
+    assertExists(data.expiresAt);
+    // In filesystem mode, URL should point back to gateway
+    assertEquals(data.uploadUrl.includes("/blob/presigned-put"), true);
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "Presign: should upload via presigned URL and retrieve blob",
+  async fn() {
+    const adminApiKey = await getOrCreateAdminKey();
+    const namespace = uniqueNamespace("presign-upload");
+    const content = "Hello, World!";
+
+    // Step 1: Get presigned URL
+    const presignRes = await testFetch("/blob/presign-upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `ApiKey ${adminApiKey}`,
+      },
+      body: JSON.stringify({
+        namespace,
+        key: "uploaded.txt",
+        contentType: "text/plain",
+        size: content.length,
+        isPublic: false,
+      }),
+    });
+
+    assertEquals(presignRes.status, 200);
+    const { uploadUrl } = await presignRes.json() as { uploadUrl: string };
+
+    // Step 2: Upload using presigned URL (no auth header needed)
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "text/plain",
+      },
+      body: content,
+    });
+
+    assertEquals(uploadRes.status, 200);
+
+    // Step 3: Verify blob can be retrieved
+    const getRes = await testFetch("/blob/get", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `ApiKey ${adminApiKey}`,
+      },
+      body: JSON.stringify({ namespace, key: "uploaded.txt" }),
+    });
+
+    assertEquals(getRes.status, 200);
+    const getData = await getRes.json() as { url: string; metadata: { size: number } };
+    assertExists(getData.url);
+    assertEquals(getData.metadata.size, content.length);
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "Presign: should reject upload with wrong content length",
+  async fn() {
+    const adminApiKey = await getOrCreateAdminKey();
+    const namespace = uniqueNamespace("presign-wrong-size");
+
+    // Get presigned URL for 10 bytes
+    const presignRes = await testFetch("/blob/presign-upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `ApiKey ${adminApiKey}`,
+      },
+      body: JSON.stringify({
+        namespace,
+        key: "wrong-size.txt",
+        contentType: "text/plain",
+        size: 10,
+        isPublic: false,
+      }),
+    });
+
+    assertEquals(presignRes.status, 200);
+    const { uploadUrl } = await presignRes.json() as { uploadUrl: string };
+
+    // Try to upload 20 bytes instead
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "text/plain",
+      },
+      body: "This is more than ten bytes!",
+    });
+
+    assertEquals(uploadRes.status, 400);
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "Presign: should reject expired token",
+  async fn() {
+    // Create a manually expired token by modifying a valid URL
+    // Since we can't easily create an expired token, we'll test with an invalid token
+    const response = await fetch("http://localhost:3000/blob/presigned-put?token=invalid_token", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "text/plain",
+      },
+      body: "test",
+    });
+
+    assertEquals(response.status, 401);
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});

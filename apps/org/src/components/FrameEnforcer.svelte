@@ -58,6 +58,7 @@
     }
 
     try {
+      // getPermissions always returns a valid record (with empty capabilities if none granted)
       const permissions = await getPermissions(origin);
       connectedClients.set(origin, source);
 
@@ -65,7 +66,7 @@
         type: 'ACK',
         id: msg.id,
         version: PROTOCOL_VERSION,
-        capabilities: permissions?.capabilities,
+        capabilities: permissions.capabilities, // Always an array, never undefined
       });
     } catch (err) {
       console.error('[FrameEnforcer] Error in handleSyn:', err);
@@ -85,7 +86,7 @@
     msg: Extract<RequestMessage, { type: 'REQUEST_CAPABILITIES' }>
   ): Promise<void> {
     const permissions = await getPermissions(origin);
-    const granted = permissions?.capabilities ?? [];
+    const granted = permissions.capabilities; // Always an array
     const requested = msg.capabilities;
 
     const alreadyGranted = requested.filter((c) => granted.includes(c));
@@ -422,17 +423,22 @@
       return;
     }
 
-    // In iframe context, check if we already have storage access
-    // This also updates the internal auth state so isGatewayConfigured() can read cookies
-    const hasAccess = await checkStorageAccess();
+    // In iframe context, check storage access (sets internal state for production cross-origin cases)
+    await checkStorageAccess();
 
-    if (hasAccess && isGatewayConfigured()) {
-      // We have storage access and gateway is configured - ready to go
+    // Check if gateway is configured (tries cookies first, works on localhost)
+    // This handles the localhost case where Storage Access might report false
+    // but cookies are actually accessible because localhost ports are same-site
+    if (isGatewayConfigured()) {
+      // Gateway is configured - ready to go
       setupMessageHandlers();
       return;
     }
 
-    // Either no storage access or gateway not configured - show modal
+    // Gateway not configured - could be:
+    // 1. User hasn't set up gateway yet (needs to visit org app directly)
+    // 2. Cross-origin production case where we need Storage Access for cookies
+    // Show modal to either grant storage access or inform user
     needsStorageAccess = true;
     window.parent.postMessage({ type: '__STORAGE_ACCESS_REQUIRED__' }, '*');
   });

@@ -6,6 +6,7 @@ import {
   getKV,
   getR2,
   getR2Public,
+  getPresigner,
 } from "@federise/gateway-core";
 
 const AdminCheckResponse = z.object({
@@ -46,12 +47,13 @@ export class AdminCheckEndpoint extends OpenAPIRoute {
     const kv = getKV(c);
     const r2 = getR2(c);
     const r2Public = getR2Public(c);
+    const presigner = getPresigner(c);
 
     const results = {
       kv: { ok: false, error: undefined as string | undefined },
       r2_private: { ok: false, error: undefined as string | undefined },
       r2_public: { ok: false, error: undefined as string | undefined },
-      presigned_ready: true, // Always true for self-hosted (S3 credentials are required)
+      presigned_ready: presigner !== undefined, // True if presigner is configured (S3 mode)
       principals_exist: false,
     };
 
