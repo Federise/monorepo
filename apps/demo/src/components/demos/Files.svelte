@@ -8,6 +8,9 @@
   let isUploading = $state(false);
   let error = $state<string | null>(null);
 
+  // Download URLs cache (for right-click copy link)
+  let downloadUrls = $state<Record<string, string>>({});
+
   // Preview state
   let previewFile = $state<BlobMetadata | null>(null);
   let previewUrl = $state<string | null>(null);
@@ -61,15 +64,38 @@
     }
   }
 
-  async function downloadFile(file: BlobMetadata) {
+  async function getDownloadUrl(file: BlobMetadata): Promise<string | null> {
     const client = getClient();
-    if (!client) return;
+    if (!client) return null;
 
     try {
       const { url } = await client.blob.get(file.key);
-      window.open(url, '_blank');
+      downloadUrls[file.key] = url;
+      return url;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to download file';
+      error = err instanceof Error ? err.message : 'Failed to get download URL';
+      return null;
+    }
+  }
+
+  async function downloadFile(event: MouseEvent, file: BlobMetadata) {
+    event.preventDefault();
+
+    const url = downloadUrls[file.key] || await getDownloadUrl(file);
+    if (!url) return;
+
+    // Create a temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.key;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  async function prepareDownloadLink(file: BlobMetadata): Promise<void> {
+    if (!downloadUrls[file.key]) {
+      await getDownloadUrl(file);
     }
   }
 
@@ -269,9 +295,13 @@
                   </svg>
                 </button>
               {/if}
-              <button
+              <a
                 class="action-btn"
-                onclick={() => downloadFile(file)}
+                href={downloadUrls[file.key] || '#'}
+                download={file.key}
+                onclick={(e) => downloadFile(e, file)}
+                onmouseenter={() => prepareDownloadLink(file)}
+                onfocus={() => prepareDownloadLink(file)}
                 title="Download"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -279,7 +309,7 @@
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-              </button>
+              </a>
               <button
                 class="action-btn danger"
                 onclick={() => deleteFile(file)}
@@ -309,13 +339,19 @@
           <span class="preview-meta">{previewFile.contentType} &middot; {formatSize(previewFile.size)}</span>
         </div>
         <div class="preview-actions">
-          <button class="action-btn" onclick={() => downloadFile(previewFile!)} title="Download">
+          <a
+            class="action-btn"
+            href={previewUrl || downloadUrls[previewFile.key] || '#'}
+            download={previewFile.key}
+            onclick={(e) => downloadFile(e, previewFile!)}
+            title="Download"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-          </button>
+          </a>
           <button class="action-btn" onclick={closePreview} title="Close">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -491,6 +527,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    text-decoration: none;
   }
 
   .action-btn:hover {

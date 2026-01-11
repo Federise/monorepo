@@ -338,8 +338,8 @@ export class FederiseClient {
       const key = options?.key ?? file.name;
       const isPublic = options?.isPublic ?? false;
 
-      // Get ArrayBuffer from file
-      const arrayBuffer = await file.arrayBuffer();
+      // Read file using FileReader for better reliability with large files
+      const arrayBuffer = await this.readFileAsArrayBuffer(file);
 
       const response = await this.sendRequest(
         {
@@ -484,6 +484,61 @@ export class FederiseClient {
     if (!this.grantedCapabilities.includes(capability)) {
       throw new PermissionDeniedError(capability);
     }
+  }
+
+  /**
+   * Read a file as ArrayBuffer using FileReader for better reliability with large files.
+   * Includes retry logic for the common "file could not be read" error.
+   */
+  private async readFileAsArrayBuffer(file: File, retries = 2): Promise<ArrayBuffer> {
+    const attemptRead = (): Promise<ArrayBuffer> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          if (reader.result instanceof ArrayBuffer) {
+            resolve(reader.result);
+          } else {
+            reject(new FederiseError('Failed to read file as ArrayBuffer', 'FILE_READ_ERROR'));
+          }
+        };
+
+        reader.onerror = () => {
+          const error = reader.error;
+          reject(new FederiseError(
+            error?.message || 'Failed to read file',
+            'FILE_READ_ERROR'
+          ));
+        };
+
+        reader.onabort = () => {
+          reject(new FederiseError('File read was aborted', 'FILE_READ_ABORTED'));
+        };
+
+        reader.readAsArrayBuffer(file);
+      });
+    };
+
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await attemptRead();
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+
+        // If it's not the last attempt, wait briefly and retry
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+    }
+
+    // All retries failed
+    throw new FederiseError(
+      `Failed to read file after ${retries + 1} attempts. This can happen with large files. Try again or use a smaller file. (${lastError?.message || 'Unknown error'})`,
+      'FILE_READ_ERROR'
+    );
   }
 
   private waitForPopupClose(popup: Window): Promise<void> {

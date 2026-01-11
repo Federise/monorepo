@@ -76,7 +76,7 @@
     const now = new Date().toISOString();
     const note: Note = {
       id: crypto.randomUUID(),
-      title: 'Untitled Note',
+      title: '',
       content: '',
       createdAt: now,
       updatedAt: now,
@@ -246,6 +246,19 @@
         </div>
         {#if isSaving}
           <span class="save-status">Saving...</span>
+        {:else if hasUnsavedChanges}
+          <button
+            class="save-btn"
+            onclick={saveNote}
+            title="Save (Ctrl+S)"
+            aria-label="Save note"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+          </button>
         {/if}
       </div>
       <textarea
@@ -486,6 +499,23 @@
   .save-status {
     font-size: 0.75rem;
     color: var(--color-text-muted);
+  }
+
+  .save-btn {
+    padding: 0.375rem;
+    background: transparent;
+    border: none;
+    color: var(--color-primary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+  }
+
+  .save-btn:hover {
+    background: var(--color-surface-hover);
   }
 
   .content-input {
