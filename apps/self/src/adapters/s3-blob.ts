@@ -23,7 +23,7 @@ export interface S3BlobStoreConfig {
 }
 
 /**
- * S3-compatible Blob Store implementation
+ * S3-compatible Blob Store implementation for Deno
  *
  * Works with MinIO, AWS S3, Cloudflare R2 (via S3 API), and other
  * S3-compatible object storage services.
@@ -82,11 +82,11 @@ export class S3BlobStore implements IBlobStore {
     body: ArrayBuffer | ReadableStream<Uint8Array>,
     options?: BlobPutOptions
   ): Promise<void> {
-    // Convert ReadableStream to Buffer if needed
-    let bodyContent: Buffer | ArrayBuffer;
+    // Convert to Uint8Array for S3 SDK
+    let bodyContent: Uint8Array;
 
     if (body instanceof ArrayBuffer) {
-      bodyContent = body;
+      bodyContent = new Uint8Array(body);
     } else {
       // ReadableStream - collect all chunks
       const chunks: Uint8Array[] = [];
@@ -105,14 +105,14 @@ export class S3BlobStore implements IBlobStore {
         result.set(chunk, offset);
         offset += chunk.length;
       }
-      bodyContent = result.buffer;
+      bodyContent = result;
     }
 
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
-        Body: Buffer.from(bodyContent),
+        Body: bodyContent,
         ContentType: options?.httpMetadata?.contentType,
       })
     );

@@ -1,18 +1,1 @@
-# Dependencies
-node_modules/
-
-# Build output
-dist/
-
-# Environment files
-.env
-.env.local
-
-# Data directory
 data/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo

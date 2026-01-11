@@ -15,7 +15,7 @@ export interface S3PresignerConfig {
 }
 
 /**
- * S3-compatible Presigner implementation
+ * S3-compatible Presigner implementation for Deno
  *
  * Generates presigned URLs for direct client uploads/downloads
  * to S3-compatible storage (MinIO, AWS S3, etc.)

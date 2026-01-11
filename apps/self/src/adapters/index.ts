@@ -1,5 +1,5 @@
-export { SQLiteKVStore } from "./sqlite-kv.js";
-export { S3BlobStore, type S3BlobStoreConfig } from "./s3-blob.js";
-export { S3Presigner, type S3PresignerConfig } from "./s3-presigner.js";
-export { MemoryKVStore } from "./memory-kv.js";
-export { MemoryBlobStore } from "./memory-blob.js";
+export { DenoKVStore } from "./deno-kv.ts";
+export { S3BlobStore, type S3BlobStoreConfig } from "./s3-blob.ts";
+export { S3Presigner, type S3PresignerConfig } from "./s3-presigner.ts";
+export { FilesystemBlobStore, type FilesystemBlobStoreConfig } from "./filesystem-blob.ts";
+export { FilesystemPresigner, type FilesystemPresignerConfig } from "./filesystem-presigner.ts";
