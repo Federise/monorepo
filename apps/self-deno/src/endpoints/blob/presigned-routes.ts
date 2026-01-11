@@ -66,7 +66,7 @@ export function registerPresignedRoutes(
     });
 
     // Return success (S3-compatible empty response)
-    return new Response(null, { status: 200 });
+    return c.body(null, 200);
   });
 
   // Presigned GET - handles direct downloads with a signed token
@@ -93,14 +93,10 @@ export function registerPresignedRoutes(
       return c.json({ code: 404, message: "Blob not found" }, 404);
     }
 
-    // Stream the response
-    const headers = new Headers();
-    headers.set("Content-Type", object.contentType || "application/octet-stream");
-    headers.set("Content-Length", String(object.size));
+    // Stream the response with proper headers
+    c.header("Content-Type", object.contentType || "application/octet-stream");
+    c.header("Content-Length", String(object.size));
 
-    return new Response(object.body, {
-      status: 200,
-      headers,
-    });
+    return c.body(object.body, 200);
   });
 }

@@ -8,6 +8,12 @@
   let isUploading = $state(false);
   let error = $state<string | null>(null);
 
+  // Preview state
+  let previewFile = $state<BlobMetadata | null>(null);
+  let previewUrl = $state<string | null>(null);
+  let previewContent = $state<string | null>(null);
+  let previewLoading = $state(false);
+
   let fileInput: HTMLInputElement;
 
   onMount(() => {
@@ -106,7 +112,79 @@
     if (contentType.includes('zip') || contentType.includes('archive')) return 'archive';
     return 'file';
   }
+
+  function isPreviewable(contentType: string): boolean {
+    return isImage(contentType) || isVideo(contentType) || isAudio(contentType) || isText(contentType);
+  }
+
+  function isImage(contentType: string): boolean {
+    return contentType.startsWith('image/');
+  }
+
+  function isVideo(contentType: string): boolean {
+    return contentType.startsWith('video/');
+  }
+
+  function isAudio(contentType: string): boolean {
+    return contentType.startsWith('audio/');
+  }
+
+  function isText(contentType: string): boolean {
+    const textTypes = [
+      'text/',
+      'application/json',
+      'application/javascript',
+      'application/typescript',
+      'application/xml',
+      'application/yaml',
+      'application/x-yaml',
+    ];
+    return textTypes.some((t) => contentType.startsWith(t) || contentType.includes(t));
+  }
+
+  async function openPreview(file: BlobMetadata) {
+    const client = getClient();
+    if (!client) return;
+
+    previewFile = file;
+    previewLoading = true;
+    previewUrl = null;
+    previewContent = null;
+
+    try {
+      const { url } = await client.blob.get(file.key);
+
+      if (isText(file.contentType)) {
+        // Fetch text content
+        const response = await fetch(url);
+        previewContent = await response.text();
+      } else {
+        // Use URL directly for media
+        previewUrl = url;
+      }
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load preview';
+      closePreview();
+    } finally {
+      previewLoading = false;
+    }
+  }
+
+  function closePreview() {
+    previewFile = null;
+    previewUrl = null;
+    previewContent = null;
+    previewLoading = false;
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && previewFile) {
+      closePreview();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="files-app">
   <div class="files-panel card">
@@ -179,6 +257,18 @@
               </span>
             </div>
             <div class="file-actions">
+              {#if isPreviewable(file.contentType)}
+                <button
+                  class="action-btn"
+                  onclick={() => openPreview(file)}
+                  title="Preview"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              {/if}
               <button
                 class="action-btn"
                 onclick={() => downloadFile(file)}
@@ -207,6 +297,67 @@
     {/if}
   </div>
 </div>
+
+{#if previewFile}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="preview-overlay" onclick={closePreview} onkeydown={(e) => e.key === 'Escape' && closePreview()} role="dialog" aria-modal="true" aria-label="File preview" tabindex="-1">
+    <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
+    <div class="preview-modal" role="document" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+      <div class="preview-header">
+        <div class="preview-title">
+          <span class="preview-filename">{previewFile.key}</span>
+          <span class="preview-meta">{previewFile.contentType} &middot; {formatSize(previewFile.size)}</span>
+        </div>
+        <div class="preview-actions">
+          <button class="action-btn" onclick={() => downloadFile(previewFile!)} title="Download">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </button>
+          <button class="action-btn" onclick={closePreview} title="Close">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="preview-content">
+        {#if previewLoading}
+          <div class="preview-loading">
+            <div class="spinner"></div>
+            <p>Loading preview...</p>
+          </div>
+        {:else if previewUrl && isImage(previewFile.contentType)}
+          <img src={previewUrl} alt={previewFile.key} class="preview-image" />
+        {:else if previewUrl && isVideo(previewFile.contentType)}
+          <video src={previewUrl} controls class="preview-video">
+            <track kind="captions" />
+            Your browser does not support the video tag.
+          </video>
+        {:else if previewUrl && isAudio(previewFile.contentType)}
+          <div class="preview-audio-container">
+            <div class="audio-icon">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            </div>
+            <audio src={previewUrl} controls class="preview-audio">
+              Your browser does not support the audio tag.
+            </audio>
+          </div>
+        {:else if previewContent !== null}
+          <pre class="preview-text"><code>{previewContent}</code></pre>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if error}
   <div class="error-toast">
@@ -422,6 +573,143 @@
     }
   }
 
+  /* Preview Modal */
+  .preview-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .preview-modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg, 12px);
+    max-width: 90vw;
+    max-height: 90vh;
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+    flex-shrink: 0;
+  }
+
+  .preview-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+
+  .preview-filename {
+    font-weight: 600;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .preview-meta {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .preview-actions {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .preview-content {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    background: var(--color-background, #111);
+  }
+
+  .preview-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    color: var(--color-text-muted);
+  }
+
+  .preview-image {
+    max-width: 100%;
+    max-height: calc(90vh - 60px);
+    object-fit: contain;
+  }
+
+  .preview-video {
+    max-width: 100%;
+    max-height: calc(90vh - 60px);
+    outline: none;
+  }
+
+  .preview-audio-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    padding: 3rem;
+  }
+
+  .audio-icon {
+    color: var(--color-text-muted);
+    opacity: 0.5;
+  }
+
+  .preview-audio {
+    width: 100%;
+    min-width: 300px;
+    max-width: 500px;
+  }
+
+  .preview-text {
+    width: 100%;
+    max-width: 800px;
+    max-height: calc(90vh - 60px);
+    margin: 0;
+    padding: 1rem;
+    overflow: auto;
+    background: var(--color-background, #0a0a0a);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .preview-text code {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    color: var(--color-text);
+  }
+
   /* Mobile styles */
   @media (max-width: 768px) {
     .files-app {
@@ -434,6 +722,28 @@
 
     .files-list li {
       padding: 0.75rem 1rem;
+    }
+
+    .preview-modal {
+      max-width: 100vw;
+      max-height: 100vh;
+      width: 100vw;
+      height: 100vh;
+      border-radius: 0;
+    }
+
+    .preview-overlay {
+      padding: 0;
+    }
+
+    .preview-image,
+    .preview-video {
+      max-height: calc(100vh - 60px);
+    }
+
+    .preview-text {
+      max-height: calc(100vh - 60px);
+      max-width: 100%;
     }
   }
 </style>

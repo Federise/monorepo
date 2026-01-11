@@ -1,12 +1,30 @@
 export type BlobStorageMode = "filesystem" | "s3";
+export type TlsMode = "off" | "auto" | "acme" | "custom";
 
 export interface GatewayConfig {
   // Server
   port: number;
   corsOrigin: string;
 
-  // Authentication
-  bootstrapApiKey: string;
+  // TLS mode:
+  // - "off": No TLS (HTTP only)
+  // - "auto": Auto-generate self-signed certs (for development)
+  // - "acme": Use Let's Encrypt (requires DOMAIN to be set)
+  // - "custom": Use provided TLS_CERT and TLS_KEY paths
+  tlsMode: TlsMode;
+  tlsCert?: string; // Path to certificate file (PEM) - for custom mode
+  tlsKey?: string; // Path to private key file (PEM) - for custom mode
+
+  // Let's Encrypt / ACME configuration
+  domain?: string; // Domain for Let's Encrypt certificate
+  acmeEmail?: string; // Contact email for Let's Encrypt
+  acmeStaging?: boolean; // Use Let's Encrypt staging environment
+
+  // Data directory for generated certs, KV, etc.
+  dataDir: string;
+
+  // Authentication (optional - if not set, gateway runs in open mode)
+  bootstrapApiKey?: string;
 
   // Deno KV (KV storage)
   kvPath?: string;
@@ -49,13 +67,61 @@ export function loadConfig(): GatewayConfig {
   // Default to filesystem if no S3 config, otherwise s3
   const blobStorageMode: BlobStorageMode = explicitMode || (hasS3Config ? "s3" : "filesystem");
 
+  // Determine TLS mode
+  const tlsModeEnv = Deno.env.get("TLS_MODE");
+  const tlsAuto = Deno.env.get("TLS_AUTO") === "true";
+  const domain = Deno.env.get("DOMAIN");
+  const tlsCert = Deno.env.get("TLS_CERT");
+  const tlsKey = Deno.env.get("TLS_KEY");
+
+  let tlsMode: TlsMode;
+  if (tlsModeEnv) {
+    tlsMode = tlsModeEnv as TlsMode;
+  } else if (domain) {
+    // If domain is set, default to ACME
+    tlsMode = "acme";
+  } else if (tlsCert && tlsKey) {
+    // If cert and key paths are provided, use custom
+    tlsMode = "custom";
+  } else if (tlsAuto) {
+    // Legacy TLS_AUTO support
+    tlsMode = "auto";
+  } else {
+    // Default to off
+    tlsMode = "off";
+  }
+
+  // Determine default port based on TLS mode
+  const portEnv = Deno.env.get("PORT");
+  let defaultPort: number;
+  if (tlsMode === "acme" || tlsMode === "custom") {
+    defaultPort = 443;
+  } else if (tlsMode === "auto") {
+    defaultPort = 3000; // Development with self-signed
+  } else {
+    defaultPort = 3000; // HTTP mode
+  }
+
   const config: GatewayConfig = {
     // Server
-    port: parseInt(Deno.env.get("PORT") || "3000", 10),
+    port: portEnv ? parseInt(portEnv, 10) : defaultPort,
     corsOrigin: Deno.env.get("CORS_ORIGIN") || "*",
 
-    // Authentication
-    bootstrapApiKey: requireEnv("BOOTSTRAP_API_KEY"),
+    // Data directory
+    dataDir: Deno.env.get("DATA_DIR") || "./data",
+
+    // TLS
+    tlsMode,
+    tlsCert,
+    tlsKey,
+
+    // ACME / Let's Encrypt
+    domain,
+    acmeEmail: Deno.env.get("ACME_EMAIL"),
+    acmeStaging: Deno.env.get("ACME_STAGING") === "true",
+
+    // Authentication (optional)
+    bootstrapApiKey: Deno.env.get("BOOTSTRAP_API_KEY"),
 
     // Deno KV (optional path, defaults to Deno's default location)
     kvPath: Deno.env.get("KV_PATH") || undefined,
@@ -87,6 +153,19 @@ export function loadConfig(): GatewayConfig {
     }
     if (!config.s3SecretAccessKey) {
       throw new Error("S3_SECRET_ACCESS_KEY is required when BLOB_STORAGE=s3");
+    }
+  }
+
+  // Validate TLS config
+  if (tlsMode === "acme" && !config.domain) {
+    throw new Error("DOMAIN is required when TLS_MODE=acme");
+  }
+  if (tlsMode === "custom") {
+    if (!config.tlsCert) {
+      throw new Error("TLS_CERT is required when TLS_MODE=custom");
+    }
+    if (!config.tlsKey) {
+      throw new Error("TLS_KEY is required when TLS_MODE=custom");
     }
   }
 

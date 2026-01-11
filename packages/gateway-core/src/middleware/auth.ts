@@ -25,6 +25,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
       return;
     }
 
+    const config = getConfig(c);
     const auth = c.req.header("authorization");
 
     if (!auth || !auth.match(/^ApiKey [a-zA-Z0-9_-]+$/)) {
@@ -32,7 +33,6 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
     }
 
     const apiKey = auth.replace("ApiKey ", "");
-    const config = getConfig(c);
     const kv = getKV(c);
 
     // Check if using bootstrap key
