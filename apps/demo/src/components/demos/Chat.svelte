@@ -6,15 +6,15 @@
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
 
-  // Convert channel name to URL-safe slug
+  // Convert channel name to URL-safe snake_case slug
   function slugify(name: string): string {
     return name
       .toLowerCase()
       .trim()
-      .replace(/[^\w\s-]/g, '') // Remove special chars
-      .replace(/\s+/g, '-')     // Replace spaces with hyphens
-      .replace(/-+/g, '-')      // Collapse multiple hyphens
-      .replace(/^-|-$/g, '');   // Trim hyphens from ends
+      .replace(/[^\w\s]/g, '')  // Remove special chars (keep underscores)
+      .replace(/\s+/g, '_')     // Replace spaces with underscores
+      .replace(/_+/g, '_')      // Collapse multiple underscores
+      .replace(/^_|_$/g, '');   // Trim underscores from ends
   }
 
   interface Channel extends LogMeta {
