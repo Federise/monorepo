@@ -5,6 +5,7 @@ import {
   registerGatewayRoutes,
   registerBlobDownloadRoute,
   registerPublicBlobRoute,
+  registerTokenLogRoutes,
   type GatewayEnv,
 } from "@federise/gateway-core";
 import { CloudflareKVAdapter } from "./adapters/cloudflare-kv";
@@ -67,6 +68,9 @@ registerPublicBlobRoute(app);
 
 // Register authenticated blob download route BEFORE auth middleware
 registerBlobDownloadRoute(app);
+
+// Register token-based log routes BEFORE auth middleware (handles recipient access via token)
+registerTokenLogRoutes(app);
 
 // Auth middleware
 app.use("*", createAuthMiddleware());
