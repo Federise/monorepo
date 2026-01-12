@@ -46,7 +46,7 @@ app.use("*", (c, next) => {
   return cors({
     origin,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public", "X-Blob-Visibility"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public", "X-Blob-Visibility", "X-Log-Token"],
     exposeHeaders: ["Content-Length", "Content-Disposition"],
     maxAge: 86400,
     credentials: false,
