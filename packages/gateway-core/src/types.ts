@@ -234,12 +234,23 @@ export const LogTokenCreateResponse = z.object({
   expiresAt: z.string().datetime(),
 });
 
-// Log capability token structure (for parsing, not API response)
-export const LogCapabilityToken = z.object({
+// Log capability token structure V1 (legacy JSON format)
+export const LogCapabilityTokenV1 = z.object({
   l: z.string(), // logId
   g: z.string(), // gatewayUrl
   p: z.array(z.enum(["r", "w"])), // permissions
   a: z.string(), // authorId
+  e: z.number(), // expiresAt (unix timestamp)
+  s: z.string(), // signature
+});
+
+// Log capability token structure V2 (compact binary format, no gatewayUrl)
+// Binary layout: version(1) + logId(8) + permissions(1) + authorId(4) + expiresAt(4) + signature(16) = 34 bytes
+export const LogCapabilityTokenV2 = z.object({
+  v: z.literal(2), // version
+  l: z.string(), // logId (8 bytes hex = 16 chars)
+  p: z.number(), // permissions bitmap (1=read, 2=write, 3=both)
+  a: z.string(), // authorId (4 bytes hex = 8 chars)
   e: z.number(), // expiresAt (unix timestamp)
   s: z.string(), // signature
 });
@@ -281,4 +292,7 @@ export type LogReadRequest = z.infer<typeof LogReadRequest>;
 export type LogReadResponse = z.infer<typeof LogReadResponse>;
 export type LogTokenCreateRequest = z.infer<typeof LogTokenCreateRequest>;
 export type LogTokenCreateResponse = z.infer<typeof LogTokenCreateResponse>;
-export type LogCapabilityToken = z.infer<typeof LogCapabilityToken>;
+export type LogCapabilityTokenV1 = z.infer<typeof LogCapabilityTokenV1>;
+export type LogCapabilityTokenV2 = z.infer<typeof LogCapabilityTokenV2>;
+// Union type for backwards compatibility
+export type LogCapabilityToken = LogCapabilityTokenV1 | LogCapabilityTokenV2;

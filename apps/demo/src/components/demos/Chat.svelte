@@ -5,6 +5,8 @@
 
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
+  // Gateway URL for share links - recipients need this to access the gateway directly
+  const GATEWAY_URL = 'https://federise-gateway.damen.workers.dev';
 
   interface Channel extends LogMeta {
     secret?: string;
@@ -181,7 +183,9 @@
 
       const baseUrl = window.location.origin;
       const slug = generateSlug();
-      shareUrl = `${baseUrl}/channel/${slug}#${result.token}`;
+      // Include gateway URL in query param for V2 tokens (token no longer contains it)
+      const gatewayParam = encodeURIComponent(GATEWAY_URL);
+      shareUrl = `${baseUrl}/channel/${slug}?g=${gatewayParam}#${result.token}`;
       showShareModal = true;
     } catch (err) {
       console.error('Failed to create share link:', err);

@@ -33,7 +33,8 @@ export class LogCreateEndpoint extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const kv = c.get("kv");
 
-    const logId = crypto.randomUUID();
+    // Use shorter logId (16 hex chars = 8 bytes) for compact tokens
+    const logId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const secret = generateApiKey();
     const createdAt = new Date().toISOString();
 

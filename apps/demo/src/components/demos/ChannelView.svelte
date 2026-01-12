@@ -3,12 +3,21 @@
   import { onMount, onDestroy } from 'svelte';
 
   const USERNAME_KEY = 'federise-demo:chatUsername';
+  // Default gateway URL for legacy V1 tokens that don't have gateway in query param
+  const DEFAULT_GATEWAY_URL = 'https://federise-gateway.damen.workers.dev';
 
   interface Props {
     token: string;
   }
 
   let { token }: Props = $props();
+
+  // Extract gateway URL from query params (for V2 tokens)
+  function getGatewayUrl(): string {
+    const params = new URLSearchParams(window.location.search);
+    const gatewayParam = params.get('g');
+    return gatewayParam ? decodeURIComponent(gatewayParam) : DEFAULT_GATEWAY_URL;
+  }
 
   let client = $state<LogClient | null>(null);
   let messages = $state<LogEvent[]>([]);
@@ -30,7 +39,8 @@
 
   function initClient() {
     try {
-      client = new LogClient({ token });
+      // Pass gateway URL for V2 tokens (V1 tokens have it embedded)
+      client = new LogClient({ token, gatewayUrl: getGatewayUrl() });
       error = null;
     } catch (err) {
       error = 'Invalid share link. The link may be expired or corrupted.';

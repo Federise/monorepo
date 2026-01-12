@@ -57,18 +57,13 @@ export class LogTokenCreateEndpoint extends OpenAPIRoute {
       return c.json({ code: 403, message: "Not the log owner" }, 403);
     }
 
-    // Generate unique author ID for this token
-    const authorId = crypto.randomUUID().slice(0, 8);
+    // Generate unique author ID for this token (8 hex chars)
+    const authorId = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 
-    // Determine gateway URL from request
-    const url = new URL(c.req.url);
-    const gatewayUrl = `${url.protocol}//${url.host}`;
-
-    // Create the capability token
+    // Create the capability token (V2 compact format, no gatewayUrl)
     const { token, expiresAt } = await createLogToken(
       {
         logId,
-        gatewayUrl,
         permissions: data.body.permissions,
         authorId,
         expiresInSeconds: data.body.expiresInSeconds ?? 604800, // 7 days default
