@@ -333,9 +333,8 @@
 
 {#if showUsernameModal}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="modal-overlay" onclick={() => showUsernameModal = false} role="presentation">
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
+  <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) showUsernameModal = false; }} role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
       <h3>Set Username</h3>
       <p>Choose a display name for your messages:</p>
       <input
@@ -467,16 +466,22 @@
     gap: 0.375rem;
     padding: 0.5rem;
     border-top: 1px solid var(--color-border);
+    overflow: hidden;
   }
 
   .create-channel input {
     flex: 1;
+    min-width: 0;
     padding: 0.375rem 0.5rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     background: var(--color-surface);
     color: var(--color-text);
     font-size: 0.8rem;
+  }
+
+  .create-channel button {
+    flex-shrink: 0;
   }
 
   .btn-sm {
