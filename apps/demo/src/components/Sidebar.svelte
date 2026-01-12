@@ -8,7 +8,7 @@
   } from '../stores/federise.svelte';
 
   interface Props {
-    currentView: 'notes' | 'files' | 'settings';
+    currentView: 'notes' | 'files' | 'chat' | 'settings';
     mobileMenuOpen?: boolean;
   }
 
@@ -29,7 +29,7 @@
     }
   }
 
-  function navigate(view: 'notes' | 'files' | 'settings') {
+  function navigate(view: 'notes' | 'files' | 'chat' | 'settings') {
     currentView = view;
     mobileMenuOpen = false;
   }
@@ -71,6 +71,16 @@
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
       </svg>
       Files
+    </button>
+    <button
+      class="nav-item"
+      class:active={currentView === 'chat'}
+      onclick={() => navigate('chat')}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+      Chat
     </button>
   </nav>
 

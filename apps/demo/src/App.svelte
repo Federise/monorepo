@@ -3,16 +3,37 @@
   import Settings from './components/Settings.svelte';
   import Notes from './components/demos/Notes.svelte';
   import Files from './components/demos/Files.svelte';
-  import { connectionState, hasKVPermissions, hasBlobPermissions, initialized, initializeConnection } from './stores/federise.svelte';
+  import Chat from './components/demos/Chat.svelte';
+  import ChannelView from './components/demos/ChannelView.svelte';
+  import { connectionState, hasKVPermissions, hasBlobPermissions, hasLogPermissions, initialized, initializeConnection } from './stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
 
-  type View = 'notes' | 'files' | 'settings';
+  type View = 'notes' | 'files' | 'chat' | 'channel' | 'settings';
+
+  // Channel view state (from URL path)
+  let channelToken = $state<string | null>(null);
+
+  function getViewFromPath(): { view: View; token: string | null } {
+    const path = window.location.pathname;
+    const hash = window.location.hash.slice(1);
+
+    // Check for /channel/{slug}#{token} pattern
+    const channelMatch = path.match(/^\/channel\/([^/]+)$/);
+    if (channelMatch && hash) {
+      return { view: 'channel', token: hash };
+    }
+
+    // Fall back to hash-based routing
+    if (hash === 'settings') return { view: 'settings', token: null };
+    if (hash === 'files') return { view: 'files', token: null };
+    if (hash === 'chat') return { view: 'chat', token: null };
+    return { view: 'notes', token: null };
+  }
 
   function getViewFromHash(): View {
-    const hash = window.location.hash.slice(1);
-    if (hash === 'settings') return 'settings';
-    if (hash === 'files') return 'files';
-    return 'notes';
+    const { view, token } = getViewFromPath();
+    channelToken = token;
+    return view;
   }
 
   let currentView = $state<View>(getViewFromHash());
@@ -23,7 +44,10 @@
   }
 
   $effect(() => {
-    window.location.hash = currentView;
+    // Don't update hash for channel view (it uses path-based routing)
+    if (currentView !== 'channel') {
+      window.location.hash = currentView;
+    }
   });
 
   onMount(() => {
@@ -107,6 +131,27 @@
             {/if}
           </div>
         {/if}
+      {:else if currentView === 'chat'}
+        {#if connectionState.value === 'connected' && hasLogPermissions()}
+          <Chat />
+        {:else}
+          <div class="card connect-prompt">
+            <div class="prompt-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
+            <h2>Chat Demo</h2>
+            <p>Connect to Federise and grant log permissions to create and share channels.</p>
+            {#if connectionState.value === 'disconnected'}
+              <p class="hint">Click "Connect" in the sidebar to get started.</p>
+            {:else if connectionState.value === 'connected'}
+              <p class="hint">Click "Grant Permissions" to enable chat.</p>
+            {/if}
+          </div>
+        {/if}
+      {:else if currentView === 'channel' && channelToken}
+        <ChannelView token={channelToken} />
       {/if}
     </main>
   </div>

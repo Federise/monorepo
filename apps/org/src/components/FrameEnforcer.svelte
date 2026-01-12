@@ -10,6 +10,7 @@
   import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
   import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata, setBlobVisibility } from '../lib/blob-storage';
+  import { createLog, listLogs, appendLog, readLog, createLogToken } from '../lib/log-storage';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured } from '../utils/auth';
 
   // Track connected clients by origin (used by handleSyn)
@@ -359,6 +360,139 @@
     }
   }
 
+  async function handleLogCreate(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'LOG_CREATE' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'log:create'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'log:create',
+      });
+      return;
+    }
+
+    try {
+      const result = await createLog(origin, msg.name);
+      sendResponse(source, origin, {
+        type: 'LOG_CREATED',
+        id: msg.id,
+        metadata: result.metadata,
+        secret: result.secret,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'LOG_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create log');
+    }
+  }
+
+  async function handleLogList(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'LOG_LIST' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'log:create'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'log:create',
+      });
+      return;
+    }
+
+    try {
+      const logs = await listLogs(origin);
+      sendResponse(source, origin, {
+        type: 'LOG_LIST_RESULT',
+        id: msg.id,
+        logs,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'LOG_LIST_FAILED', err instanceof Error ? err.message : 'Failed to list logs');
+    }
+  }
+
+  async function handleLogAppend(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'LOG_APPEND' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'log:create'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'log:create',
+      });
+      return;
+    }
+
+    try {
+      const event = await appendLog(origin, msg.logId, msg.content);
+      sendResponse(source, origin, {
+        type: 'LOG_APPENDED',
+        id: msg.id,
+        event,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'LOG_APPEND_FAILED', err instanceof Error ? err.message : 'Failed to append to log');
+    }
+  }
+
+  async function handleLogRead(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'LOG_READ' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'log:create'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'log:create',
+      });
+      return;
+    }
+
+    try {
+      const result = await readLog(origin, msg.logId, msg.afterSeq, msg.limit);
+      sendResponse(source, origin, {
+        type: 'LOG_READ_RESULT',
+        id: msg.id,
+        events: result.events,
+        hasMore: result.hasMore,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'LOG_READ_FAILED', err instanceof Error ? err.message : 'Failed to read log');
+    }
+  }
+
+  async function handleLogTokenCreate(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'LOG_TOKEN_CREATE' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'log:create'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'log:create',
+      });
+      return;
+    }
+
+    try {
+      const result = await createLogToken(origin, msg.logId, msg.permissions, msg.expiresInSeconds);
+      sendResponse(source, origin, {
+        type: 'LOG_TOKEN_CREATED',
+        id: msg.id,
+        token: result.token,
+        expiresAt: result.expiresAt,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'LOG_TOKEN_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create token');
+    }
+  }
+
   async function handleTestGrantPermissions(
     source: MessageEventSource,
     origin: string,
@@ -445,6 +579,21 @@
         break;
       case 'BLOB_SET_VISIBILITY':
         await handleBlobSetVisibility(source, origin, message);
+        break;
+      case 'LOG_CREATE':
+        await handleLogCreate(source, origin, message);
+        break;
+      case 'LOG_LIST':
+        await handleLogList(source, origin, message);
+        break;
+      case 'LOG_APPEND':
+        await handleLogAppend(source, origin, message);
+        break;
+      case 'LOG_READ':
+        await handleLogRead(source, origin, message);
+        break;
+      case 'LOG_TOKEN_CREATE':
+        await handleLogTokenCreate(source, origin, message);
         break;
       case 'TEST_GRANT_PERMISSIONS':
         await handleTestGrantPermissions(source, origin, message);

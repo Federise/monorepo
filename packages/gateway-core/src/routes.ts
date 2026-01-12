@@ -22,6 +22,13 @@ import { BlobListEndpoint } from "./endpoints/blob/list.js";
 import { BlobSetVisibilityEndpoint } from "./endpoints/blob/set-visibility.js";
 import { registerBlobDownloadRoute } from "./endpoints/blob/download.js";
 import { registerPublicBlobRoute } from "./endpoints/blob/public-download.js";
+import {
+  LogCreateEndpoint,
+  LogListEndpoint,
+  LogAppendEndpoint,
+  LogReadEndpoint,
+  LogTokenCreateEndpoint,
+} from "./endpoints/log/index.js";
 
 /**
  * Register all gateway routes on a Hono app.
@@ -59,6 +66,13 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
   openapi.post("/blob/delete", BlobDeleteEndpoint);
   openapi.post("/blob/list", BlobListEndpoint);
   openapi.post("/blob/visibility", BlobSetVisibilityEndpoint);
+
+  // Log routes
+  openapi.post("/log/create", LogCreateEndpoint);
+  openapi.post("/log/list", LogListEndpoint);
+  openapi.post("/log/append", LogAppendEndpoint);
+  openapi.post("/log/read", LogReadEndpoint);
+  openapi.post("/log/token/create", LogTokenCreateEndpoint);
 
   return openapi;
 }

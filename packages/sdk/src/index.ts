@@ -1,6 +1,9 @@
 // Main client
 export { FederiseClient } from './client';
 
+// Log client for direct gateway access (recipients)
+export { LogClient, type LogClientOptions } from './log-client';
+
 // Types
 export type {
   BlobMetadata,
@@ -8,6 +11,10 @@ export type {
   Capability,
   FederiseClientOptions,
   GrantResult,
+  LogEvent,
+  LogMeta,
+  LogCreateResult,
+  LogReadResult,
   RequestMessage,
   RequestPayload,
   ResponseMessage,

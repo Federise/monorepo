@@ -167,6 +167,83 @@ export const ErrorResponse = z.object({
   message: z.string(),
 });
 
+// Log schemas
+export const LogMeta = z.object({
+  logId: z.string(),
+  name: z.string(),
+  ownerNamespace: NamespaceValue,
+  createdAt: z.string().datetime(),
+});
+
+export const LogEvent = z.object({
+  id: z.string(),
+  seq: z.number().int(),
+  authorId: z.string(),
+  content: z.string(),
+  createdAt: z.string().datetime(),
+});
+
+export const LogCreateRequest = z.object({
+  namespace: NamespaceValue,
+  name: z.string().min(1).max(100),
+});
+
+export const LogCreateResponse = z.object({
+  metadata: LogMeta,
+  secret: z.string(),
+});
+
+export const LogListRequest = z.object({
+  namespace: NamespaceValue,
+});
+
+export const LogListResponse = z.object({
+  logs: z.array(LogMeta),
+});
+
+export const LogAppendRequest = z.object({
+  logId: z.string(),
+  content: z.string().max(10000),
+  authorId: z.string().optional(), // Required for token auth, derived from API key auth
+});
+
+export const LogAppendResponse = z.object({
+  event: LogEvent,
+});
+
+export const LogReadRequest = z.object({
+  logId: z.string(),
+  afterSeq: z.number().int().optional(),
+  limit: z.number().int().min(1).max(100).default(50),
+});
+
+export const LogReadResponse = z.object({
+  events: z.array(LogEvent),
+  hasMore: z.boolean(),
+});
+
+export const LogTokenCreateRequest = z.object({
+  namespace: NamespaceValue,
+  logId: z.string(),
+  permissions: z.array(z.enum(["read", "write"])),
+  expiresInSeconds: z.number().int().positive().default(604800), // 7 days
+});
+
+export const LogTokenCreateResponse = z.object({
+  token: z.string(),
+  expiresAt: z.string().datetime(),
+});
+
+// Log capability token structure (for parsing, not API response)
+export const LogCapabilityToken = z.object({
+  l: z.string(), // logId
+  g: z.string(), // gatewayUrl
+  p: z.array(z.enum(["r", "w"])), // permissions
+  a: z.string(), // authorId
+  e: z.number(), // expiresAt (unix timestamp)
+  s: z.string(), // signature
+});
+
 // Admin schemas
 export const AdminCheckResponse = z.object({
   kv: z.boolean(),
@@ -192,3 +269,16 @@ export type BlobDeleteRequest = z.infer<typeof BlobDeleteRequest>;
 export type BlobListRequest = z.infer<typeof BlobListRequest>;
 export type BlobSetVisibilityRequest = z.infer<typeof BlobSetVisibilityRequest>;
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
+export type LogMeta = z.infer<typeof LogMeta>;
+export type LogEvent = z.infer<typeof LogEvent>;
+export type LogCreateRequest = z.infer<typeof LogCreateRequest>;
+export type LogCreateResponse = z.infer<typeof LogCreateResponse>;
+export type LogListRequest = z.infer<typeof LogListRequest>;
+export type LogListResponse = z.infer<typeof LogListResponse>;
+export type LogAppendRequest = z.infer<typeof LogAppendRequest>;
+export type LogAppendResponse = z.infer<typeof LogAppendResponse>;
+export type LogReadRequest = z.infer<typeof LogReadRequest>;
+export type LogReadResponse = z.infer<typeof LogReadResponse>;
+export type LogTokenCreateRequest = z.infer<typeof LogTokenCreateRequest>;
+export type LogTokenCreateResponse = z.infer<typeof LogTokenCreateResponse>;
+export type LogCapabilityToken = z.infer<typeof LogCapabilityToken>;

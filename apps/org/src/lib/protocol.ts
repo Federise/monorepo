@@ -36,6 +36,7 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   'kv:delete': 'Delete your stored data',
   'blob:read': 'Read your files',
   'blob:write': 'Upload files',
+  'log:create': 'Create and manage chat channels',
   'notifications': 'Send you notifications',
 };
 
@@ -84,6 +85,16 @@ export function isValidRequest(data: unknown): data is RequestMessage {
       );
     case 'TEST_CLEAR_PERMISSIONS':
       return true;
+    case 'LOG_CREATE':
+      return typeof msg.name === 'string';
+    case 'LOG_LIST':
+      return true;
+    case 'LOG_APPEND':
+      return typeof msg.logId === 'string' && typeof msg.content === 'string';
+    case 'LOG_READ':
+      return typeof msg.logId === 'string';
+    case 'LOG_TOKEN_CREATE':
+      return typeof msg.logId === 'string' && Array.isArray(msg.permissions);
     default:
       return false;
   }

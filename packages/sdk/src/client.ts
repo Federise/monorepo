@@ -519,6 +519,139 @@ export class FederiseClient {
     },
   };
 
+  // Log namespace
+  log = {
+    /**
+     * Create a new log.
+     * Returns metadata and secret for generating share tokens.
+     */
+    create: async (name: string): Promise<{ metadata: import('./types').LogMeta; secret: string }> => {
+      this.ensureConnected();
+      this.ensureCapability('log:create');
+
+      const response = await this.sendRequest({ type: 'LOG_CREATE', name });
+
+      if (response.type === 'LOG_CREATED') {
+        return { metadata: response.metadata, secret: response.secret };
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * List logs owned by this origin.
+     */
+    list: async (): Promise<import('./types').LogMeta[]> => {
+      this.ensureConnected();
+      this.ensureCapability('log:create');
+
+      const response = await this.sendRequest({ type: 'LOG_LIST' });
+
+      if (response.type === 'LOG_LIST_RESULT') {
+        return response.logs;
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Append an event to a log.
+     */
+    append: async (logId: string, content: string): Promise<import('./types').LogEvent> => {
+      this.ensureConnected();
+      this.ensureCapability('log:create');
+
+      const response = await this.sendRequest({ type: 'LOG_APPEND', logId, content });
+
+      if (response.type === 'LOG_APPENDED') {
+        return response.event;
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Read events from a log.
+     * @param logId - The log ID
+     * @param afterSeq - Only return events after this sequence number (for polling)
+     * @param limit - Maximum number of events to return
+     */
+    read: async (
+      logId: string,
+      afterSeq?: number,
+      limit?: number
+    ): Promise<{ events: import('./types').LogEvent[]; hasMore: boolean }> => {
+      this.ensureConnected();
+      this.ensureCapability('log:create');
+
+      const response = await this.sendRequest({ type: 'LOG_READ', logId, afterSeq, limit });
+
+      if (response.type === 'LOG_READ_RESULT') {
+        return { events: response.events, hasMore: response.hasMore };
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Create a capability token for sharing a log.
+     * @param logId - The log ID
+     * @param permissions - Permissions to grant ('read' and/or 'write')
+     * @param expiresInSeconds - Token expiry time (default 7 days)
+     */
+    createToken: async (
+      logId: string,
+      permissions: ('read' | 'write')[],
+      expiresInSeconds?: number
+    ): Promise<{ token: string; expiresAt: string }> => {
+      this.ensureConnected();
+      this.ensureCapability('log:create');
+
+      const response = await this.sendRequest({
+        type: 'LOG_TOKEN_CREATE',
+        logId,
+        permissions,
+        expiresInSeconds,
+      });
+
+      if (response.type === 'LOG_TOKEN_CREATED') {
+        return { token: response.token, expiresAt: response.expiresAt };
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+  };
+
   private handleMessage(event: MessageEvent): void {
     // Verify source is our iframe
     if (event.source !== this.iframe?.contentWindow) {
