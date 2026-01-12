@@ -1,27 +1,24 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import type { GatewayEnv } from "../../context.js";
 import { verifyLogToken } from "../../lib/log-token.js";
 
-type AppContext = Context<{ Variables: GatewayEnv }>;
-
 /**
- * Register log routes that support token-based authentication.
+ * Register middleware for token-based log authentication.
  *
- * These routes are registered BEFORE the auth middleware to allow
+ * These middleware run BEFORE the auth middleware to allow
  * recipients to access logs using capability tokens without API keys.
  *
- * Routes:
- * - POST /log/read - Read events from a log
- * - POST /log/append - Append an event to a log
+ * If X-Log-Token header is present, the request is handled here.
+ * If not, the request passes through to the normal auth middleware.
  */
 export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
   // Log read with token auth
-  app.post("/log/read", async (c: AppContext) => {
+  app.use("/log/read", async (c, next) => {
     const tokenHeader = c.req.header("X-Log-Token");
 
-    // If no token, let the request pass through to auth middleware
+    // If no token, pass through to auth middleware
     if (!tokenHeader) {
-      return;
+      return next();
     }
 
     const kv = c.get("kv");
@@ -87,12 +84,12 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
   });
 
   // Log append with token auth
-  app.post("/log/append", async (c: AppContext) => {
+  app.use("/log/append", async (c, next) => {
     const tokenHeader = c.req.header("X-Log-Token");
 
-    // If no token, let the request pass through to auth middleware
+    // If no token, pass through to auth middleware
     if (!tokenHeader) {
-      return;
+      return next();
     }
 
     const kv = c.get("kv");
