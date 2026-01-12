@@ -332,8 +332,7 @@
 {/if}
 
 {#if showUsernameModal}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) showUsernameModal = false; }} role="presentation">
+  <div class="modal-overlay" role="presentation">
     <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
       <h3>Set Username</h3>
       <p>Choose a display name for your messages:</p>

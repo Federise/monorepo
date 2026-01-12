@@ -160,7 +160,8 @@
 <style>
   .app-layout {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .main-wrapper {
@@ -168,7 +169,8 @@
     margin-left: 240px;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .mobile-header {
@@ -179,6 +181,7 @@
     flex: 1;
     padding: 2rem;
     max-width: 1000px;
+    overflow: auto;
   }
 
   .connect-prompt {
