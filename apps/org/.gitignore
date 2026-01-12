@@ -33,3 +33,6 @@ pnpm-debug.log*
 public/sw.js
 public/sw.js.map
 service-worker/src/sw-manifest.json
+
+# Generated Cloudflare Workers types (regenerate with: pnpm cf-typegen)
+worker-configuration.d.ts

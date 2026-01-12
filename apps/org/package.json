@@ -16,7 +16,6 @@
     "check:svelte": "svelte-check --tsconfig ./tsconfig.json",
     "deploy": "pnpm build && wrangler deploy",
     "cf-typegen": "wrangler types",
-    "generate:api": "openapi-typescript ../gateway/openapi.json -o ./src/api/schema.ts",
     "test:frame": "cd tests && pnpm dev",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check ."
@@ -25,6 +24,7 @@
     "@astrojs/check": "^0.9.6",
     "@astrojs/cloudflare": "^12.6.12",
     "@astrojs/svelte": "^7.2.4",
+    "@federise/sdk": "workspace:*",
     "astro": "^5.16.6",
     "openapi-fetch": "^0.13.3",
     "svelte": "^5.2.9",
@@ -32,7 +32,6 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
-    "openapi-typescript": "^7.4.4",
     "prettier": "^3.4.2",
     "prettier-plugin-astro": "^0.14.1",
     "prettier-plugin-svelte": "^3.3.2",

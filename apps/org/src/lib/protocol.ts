@@ -1,62 +1,14 @@
-// Capability types that can be requested/granted
-export type Capability =
-  | 'kv:read'
-  | 'kv:write'
-  | 'kv:delete'
-  | 'blob:read'
-  | 'blob:write'
-  | 'notifications';
+// Re-export shared types from SDK (single source of truth)
+export type {
+  Capability,
+  BlobVisibility,
+  BlobMetadata,
+  RequestMessage,
+  ResponseMessage,
+} from '@federise/sdk';
+export { PROTOCOL_VERSION } from '@federise/sdk';
 
-// Blob visibility levels
-export type BlobVisibility = 'public' | 'presigned' | 'private';
-
-// Blob metadata returned from operations
-export interface BlobMetadata {
-  key: string;
-  namespace: string;
-  size: number;
-  contentType: string;
-  uploadedAt: string;
-  visibility: BlobVisibility;
-  // Legacy field (deprecated, kept for backward compatibility)
-  isPublic?: boolean;
-}
-
-// Request messages from SDK to Frame
-export type RequestMessage =
-  | { type: 'SYN'; id: string; version: string }
-  | { type: 'REQUEST_CAPABILITIES'; id: string; capabilities: Capability[] }
-  | { type: 'KV_GET'; id: string; key: string }
-  | { type: 'KV_SET'; id: string; key: string; value: string }
-  | { type: 'KV_DELETE'; id: string; key: string }
-  | { type: 'KV_KEYS'; id: string; prefix?: string }
-  | { type: 'BLOB_UPLOAD'; id: string; key: string; contentType: string; data: ArrayBuffer; visibility?: BlobVisibility; isPublic?: boolean }
-  | { type: 'BLOB_GET'; id: string; key: string }
-  | { type: 'BLOB_DELETE'; id: string; key: string }
-  | { type: 'BLOB_LIST'; id: string }
-  | { type: 'BLOB_GET_UPLOAD_URL'; id: string; key: string; contentType: string; size: number; visibility?: BlobVisibility; isPublic?: boolean }
-  | { type: 'BLOB_SET_VISIBILITY'; id: string; key: string; visibility: BlobVisibility }
-  | { type: 'TEST_GRANT_PERMISSIONS'; id: string; capabilities: Capability[] }
-  | { type: 'TEST_CLEAR_PERMISSIONS'; id: string };
-
-// Response messages from Frame to SDK
-export type ResponseMessage =
-  | { type: 'ACK'; id: string; version: string; capabilities?: Capability[] }
-  | { type: 'AUTH_REQUIRED'; id: string; url: string; granted?: Capability[] }
-  | { type: 'PERMISSION_DENIED'; id: string; capability: Capability }
-  | { type: 'CAPABILITIES_GRANTED'; id: string; granted: Capability[] }
-  | { type: 'KV_RESULT'; id: string; value: string | null }
-  | { type: 'KV_KEYS_RESULT'; id: string; keys: string[] }
-  | { type: 'KV_OK'; id: string }
-  | { type: 'BLOB_UPLOADED'; id: string; metadata: BlobMetadata }
-  | { type: 'BLOB_DOWNLOAD_URL'; id: string; url: string; metadata: BlobMetadata }
-  | { type: 'BLOB_UPLOAD_URL'; id: string; uploadUrl: string; metadata: BlobMetadata }
-  | { type: 'BLOB_LIST_RESULT'; id: string; blobs: BlobMetadata[] }
-  | { type: 'BLOB_VISIBILITY_SET'; id: string; metadata: BlobMetadata }
-  | { type: 'BLOB_OK'; id: string }
-  | { type: 'ERROR'; id: string; code: string; message: string }
-  | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }
-  | { type: 'TEST_PERMISSIONS_CLEARED'; id: string };
+import type { Capability, RequestMessage } from '@federise/sdk';
 
 // Frame status messages (no id, broadcast style)
 export type FrameStatusMessage =
@@ -76,9 +28,6 @@ export interface PermissionRecord {
 export interface PermissionsTable {
   [origin: string]: PermissionRecord;
 }
-
-// Protocol version
-export const PROTOCOL_VERSION = '1.0.0';
 
 // Capability labels for display
 export const CAPABILITY_LABELS: Record<Capability, string> = {

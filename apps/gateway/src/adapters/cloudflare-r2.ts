@@ -2,6 +2,7 @@ import type {
   IBlobStore,
   BlobObject,
   BlobPutOptions,
+  BlobGetOptions,
   BlobListOptions,
   BlobListResult,
 } from "@federise/gateway-core";
@@ -12,14 +13,24 @@ import type {
 export class CloudflareR2Adapter implements IBlobStore {
   constructor(private bucket: R2Bucket) {}
 
-  async get(key: string): Promise<BlobObject | null> {
-    const object = await this.bucket.get(key);
+  async get(key: string, options?: BlobGetOptions): Promise<BlobObject | null> {
+    // Build R2 get options for range requests
+    const r2Options: R2GetOptions = {};
+    if (options?.range) {
+      r2Options.range = {
+        offset: options.range.offset,
+        length: options.range.length,
+      };
+    }
+
+    const object = await this.bucket.get(key, r2Options);
     if (!object) return null;
 
     return {
       body: object.body,
       size: object.size,
       contentType: object.httpMetadata?.contentType,
+      etag: object.etag,
     };
   }
 
