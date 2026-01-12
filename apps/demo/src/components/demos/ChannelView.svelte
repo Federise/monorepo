@@ -3,21 +3,12 @@
   import { onMount, onDestroy } from 'svelte';
 
   const USERNAME_KEY = 'federise-demo:chatUsername';
-  // Default gateway URL for legacy V1 tokens that don't have gateway in query param
-  const DEFAULT_GATEWAY_URL = 'https://federise-gateway.damen.workers.dev';
 
   interface Props {
     token: string;
   }
 
   let { token }: Props = $props();
-
-  // Extract gateway URL from query params (for V2 tokens)
-  function getGatewayUrl(): string {
-    const params = new URLSearchParams(window.location.search);
-    const gatewayParam = params.get('g');
-    return gatewayParam ? decodeURIComponent(gatewayParam) : DEFAULT_GATEWAY_URL;
-  }
 
   let client = $state<LogClient | null>(null);
   let messages = $state<LogEvent[]>([]);
@@ -30,17 +21,24 @@
   let showUsernameModal = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Get channel name from URL path
+  // Get channel name from URL path (URL decoded)
   function getChannelName(): string {
     const path = window.location.pathname;
     const match = path.match(/^\/channel\/([^/]+)$/);
-    return match ? match[1] : 'Shared Channel';
+    if (match) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
+      }
+    }
+    return 'Shared Channel';
   }
 
   function initClient() {
     try {
-      // Pass gateway URL for V2 tokens (V1 tokens have it embedded)
-      client = new LogClient({ token, gatewayUrl: getGatewayUrl() });
+      // LogClient uses default gateway URL - no need to pass it
+      client = new LogClient({ token });
       error = null;
     } catch (err) {
       error = 'Invalid share link. The link may be expired or corrupted.';

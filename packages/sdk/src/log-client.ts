@@ -12,10 +12,13 @@
 
 import type { LogEvent } from './types';
 
+// Default gateway URL for production
+const DEFAULT_GATEWAY_URL = 'https://federise-gateway.damen.workers.dev';
+
 export interface LogClientOptions {
   /** The capability token from the share URL fragment */
   token: string;
-  /** Gateway URL - required for V2 tokens, optional for V1 tokens (extracted from token) */
+  /** Gateway URL - defaults to production gateway, can be overridden */
   gatewayUrl?: string;
 }
 
@@ -187,9 +190,8 @@ export class LogClient {
    * Decode V2 (binary) token - compact format.
    */
   private decodeV2Token(token: string, gatewayUrl?: string): DecodedToken {
-    if (!gatewayUrl) {
-      throw new Error('gatewayUrl is required for V2 tokens');
-    }
+    // Use default gateway if not provided
+    const resolvedGatewayUrl = gatewayUrl || DEFAULT_GATEWAY_URL;
 
     const bytes = this.base64UrlDecodeBytes(token);
 
@@ -222,7 +224,7 @@ export class LogClient {
 
     return {
       logId,
-      gatewayUrl,
+      gatewayUrl: resolvedGatewayUrl,
       permissions,
       authorId,
       expiresAt,

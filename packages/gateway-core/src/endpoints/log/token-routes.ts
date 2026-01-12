@@ -14,6 +14,11 @@ import { verifyLogToken } from "../../lib/log-token.js";
 export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
   // Log read with token auth
   app.use("/log/read", async (c, next) => {
+    // Skip OPTIONS preflight requests - let CORS middleware handle them
+    if (c.req.method === "OPTIONS") {
+      return next();
+    }
+
     const tokenHeader = c.req.header("X-Log-Token");
 
     // If no token, pass through to auth middleware
@@ -85,6 +90,11 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
 
   // Log append with token auth
   app.use("/log/append", async (c, next) => {
+    // Skip OPTIONS preflight requests - let CORS middleware handle them
+    if (c.req.method === "OPTIONS") {
+      return next();
+    }
+
     const tokenHeader = c.req.header("X-Log-Token");
 
     // If no token, pass through to auth middleware

@@ -5,8 +5,6 @@
 
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
-  // Gateway URL for share links - recipients need this to access the gateway directly
-  const GATEWAY_URL = 'https://federise-gateway.damen.workers.dev';
 
   interface Channel extends LogMeta {
     secret?: string;
@@ -26,16 +24,6 @@
   let showShareModal = $state(false);
   let showUsernameModal = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
-
-  // Generate a short random slug
-  function generateSlug(): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let slug = '';
-    for (let i = 0; i < 8; i++) {
-      slug += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return slug;
-  }
 
   // Get display name for an author
   function getAuthorName(authorId: string): string {
@@ -182,10 +170,9 @@
       );
 
       const baseUrl = window.location.origin;
-      const slug = generateSlug();
-      // Include gateway URL in query param for V2 tokens (token no longer contains it)
-      const gatewayParam = encodeURIComponent(GATEWAY_URL);
-      shareUrl = `${baseUrl}/channel/${slug}?g=${gatewayParam}#${result.token}`;
+      // Use channel name in URL path (URL encoded) - cleaner than random slug
+      const channelPath = encodeURIComponent(selectedChannel.name);
+      shareUrl = `${baseUrl}/channel/${channelPath}#${result.token}`;
       showShareModal = true;
     } catch (err) {
       console.error('Failed to create share link:', err);
