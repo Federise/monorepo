@@ -41,4 +41,10 @@ export interface IPresigner {
     key: string,
     options: PresignDownloadOptions
   ): Promise<string>;
+
+  /**
+   * Get a direct public URL (no signing). Used with custom domains.
+   * Optional - returns null if not supported/configured.
+   */
+  getPublicUrl?(bucket: string, key: string): string | null;
 }

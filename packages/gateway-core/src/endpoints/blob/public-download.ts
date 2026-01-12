@@ -102,8 +102,21 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
 
     const r2Key = `${namespace}:${key}`;
 
-    // If presigner is configured, redirect to presigned R2 URL
+    // If presigner is configured, redirect to storage URL
     if (presigner) {
+      // For public files, try direct custom domain URL first (cleaner, no signing needed)
+      if (visibility === "public" && presigner.getPublicUrl) {
+        const publicUrl = presigner.getPublicUrl(config.bucket, r2Key);
+        if (publicUrl) {
+          const headers = new Headers();
+          addObservabilityHeaders(headers, { requestId, action: "redirect", visibility });
+          headers.set("Cache-Control", "public, max-age=31536000, immutable");
+          headers.set("Location", publicUrl);
+          return new Response(null, { status: 302, headers });
+        }
+      }
+
+      // Fall back to presigned URL
       const expiresIn = visibility === "public"
         ? PUBLIC_PRESIGN_EXPIRY  // 7 days for public (max allowed)
         : config.presignExpiresIn || 3600;  // configurable for presigned
@@ -115,7 +128,6 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
           { expiresIn }
         );
 
-        // Build redirect response with observability and caching headers
         const headers = new Headers();
         addObservabilityHeaders(headers, {
           requestId,
@@ -124,8 +136,6 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
           presignExpiry: expiresIn,
         });
 
-        // Cache the redirect response for public files
-        // This reduces worker invocations on repeat access
         if (visibility === "public") {
           headers.set("Cache-Control", `public, max-age=${expiresIn}`);
         } else {

@@ -25,6 +25,7 @@ app.use("*", async (c, next) => {
       accountId: c.env.R2_ACCOUNT_ID,
       accessKeyId: c.env.R2_ACCESS_KEY_ID,
       secretAccessKey: c.env.R2_SECRET_ACCESS_KEY,
+      customDomain: c.env.R2_CUSTOM_DOMAIN,
     }));
   }
 

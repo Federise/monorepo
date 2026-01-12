@@ -10,6 +10,8 @@ export interface CloudflarePresignerConfig {
   accountId: string;
   accessKeyId: string;
   secretAccessKey: string;
+  /** Custom domain connected to R2 bucket (e.g., "cdn.example.com") */
+  customDomain?: string;
 }
 
 /**
@@ -17,8 +19,10 @@ export interface CloudflarePresignerConfig {
  */
 export class CloudflarePresigner implements IPresigner {
   private client: S3Client;
+  private customDomain?: string;
 
   constructor(config: CloudflarePresignerConfig) {
+    this.customDomain = config.customDomain;
     this.client = new S3Client({
       region: "auto",
       endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
@@ -59,5 +63,11 @@ export class CloudflarePresigner implements IPresigner {
     return getSignedUrl(this.client, command, {
       expiresIn: options.expiresIn,
     });
+  }
+
+  /** Get direct public URL via custom domain. Returns null if not configured. */
+  getPublicUrl(bucket: string, key: string): string | null {
+    if (!this.customDomain) return null;
+    return `https://${this.customDomain}/${key}`;
   }
 }
