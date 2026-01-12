@@ -3,18 +3,20 @@
  *
  * Creates and verifies self-contained capability tokens for log access.
  *
+ * V3 Format (ultra-compact, ~34 chars):
+ *   version(1) + logId(6) + permissions(1) + authorId(2) + expiresAt(3) + signature(12) = 25 bytes
+ *   Base64url encoded = ~34 characters
+ *
  * V2 Format (compact binary, ~46 chars):
  *   version(1) + logId(8) + permissions(1) + authorId(4) + expiresAt(4) + signature(16) = 34 bytes
- *   Base64url encoded = ~46 characters
  *
  * V1 Format (legacy JSON, ~200+ chars):
  *   JSON object with keys: l, g, p, a, e, s
- *   Base64url encoded JSON
  *
  * Recipients can use these tokens to access logs directly without a Federise account.
  */
 
-import type { LogCapabilityTokenV1, LogCapabilityTokenV2 } from "../types.js";
+import type { LogCapabilityTokenV1 } from "../types.js";
 
 export interface CreateTokenParams {
   logId: string;
@@ -34,9 +36,12 @@ export interface VerifiedToken {
 const PERM_READ = 0x01;
 const PERM_WRITE = 0x02;
 
+// V3 epoch: 2024-01-01 00:00:00 UTC (in seconds)
+const V3_EPOCH = 1704067200;
+
 /**
- * Create a compact V2 capability token for log access.
- * The token is a binary-packed structure, base64url encoded.
+ * Create a compact V3 capability token for log access.
+ * V3 is the most compact format at ~34 characters.
  */
 export async function createLogToken(
   params: CreateTokenParams,
@@ -49,43 +54,50 @@ export async function createLogToken(
   if (params.permissions.includes("read")) permByte |= PERM_READ;
   if (params.permissions.includes("write")) permByte |= PERM_WRITE;
 
-  // Ensure logId is 16 hex chars (8 bytes) - pad or truncate
-  const logIdHex = params.logId.replace(/-/g, "").slice(0, 16).padEnd(16, "0");
+  // Ensure logId is 12 hex chars (6 bytes) for V3
+  const logIdHex = params.logId.replace(/-/g, "").slice(0, 12).padEnd(12, "0");
 
-  // Ensure authorId is 8 hex chars (4 bytes)
-  const authorIdHex = params.authorId.replace(/-/g, "").slice(0, 8).padEnd(8, "0");
+  // Ensure authorId is 4 hex chars (2 bytes) for V3
+  const authorIdHex = params.authorId.replace(/-/g, "").slice(0, 4).padEnd(4, "0");
 
-  // Build binary payload (without signature): version(1) + logId(8) + perm(1) + authorId(4) + expiry(4) = 18 bytes
-  const payload = new Uint8Array(18);
-  payload[0] = 0x02; // Version 2
+  // Convert expiresAt to hours since V3 epoch (fits in 3 bytes for ~1900 years)
+  const hoursFromEpoch = Math.floor((expiresAt - V3_EPOCH) / 3600);
+  if (hoursFromEpoch < 0 || hoursFromEpoch > 0xFFFFFF) {
+    throw new Error("Expiry time out of range for V3 token");
+  }
 
-  // LogId (8 bytes from hex)
-  for (let i = 0; i < 8; i++) {
+  // Build binary payload (without signature): version(1) + logId(6) + perm(1) + authorId(2) + expiry(3) = 13 bytes
+  const payload = new Uint8Array(13);
+  payload[0] = 0x03; // Version 3
+
+  // LogId (6 bytes from hex)
+  for (let i = 0; i < 6; i++) {
     payload[1 + i] = parseInt(logIdHex.slice(i * 2, i * 2 + 2), 16);
   }
 
   // Permissions (1 byte)
-  payload[9] = permByte;
+  payload[7] = permByte;
 
-  // AuthorId (4 bytes from hex)
-  for (let i = 0; i < 4; i++) {
-    payload[10 + i] = parseInt(authorIdHex.slice(i * 2, i * 2 + 2), 16);
+  // AuthorId (2 bytes from hex)
+  for (let i = 0; i < 2; i++) {
+    payload[8 + i] = parseInt(authorIdHex.slice(i * 2, i * 2 + 2), 16);
   }
 
-  // ExpiresAt (4 bytes, big-endian uint32)
-  const view = new DataView(payload.buffer);
-  view.setUint32(14, expiresAt, false); // big-endian
+  // ExpiresAt (3 bytes, big-endian uint24 - hours since V3 epoch)
+  payload[10] = (hoursFromEpoch >> 16) & 0xFF;
+  payload[11] = (hoursFromEpoch >> 8) & 0xFF;
+  payload[12] = hoursFromEpoch & 0xFF;
 
   // Sign the payload
   const signature = await signBinary(payload, secret);
 
-  // Truncate signature to 16 bytes
-  const truncatedSig = signature.slice(0, 16);
+  // Truncate signature to 12 bytes for V3
+  const truncatedSig = signature.slice(0, 12);
 
-  // Combine payload + truncated signature
-  const token = new Uint8Array(34);
+  // Combine payload + truncated signature = 25 bytes
+  const token = new Uint8Array(25);
   token.set(payload, 0);
-  token.set(truncatedSig, 18);
+  token.set(truncatedSig, 13);
 
   // Encode as base64url
   const tokenString = base64UrlEncode(token);
@@ -94,7 +106,7 @@ export async function createLogToken(
 }
 
 /**
- * Verify and decode a capability token (supports both V1 and V2 formats).
+ * Verify and decode a capability token (supports V1, V2, and V3 formats).
  * Returns the decoded token data if valid, null if invalid or expired.
  */
 export async function verifyLogToken(
@@ -102,12 +114,75 @@ export async function verifyLogToken(
   secret: string
 ): Promise<VerifiedToken | null> {
   try {
-    // Detect format: V1 JSON starts with "ey" (base64 of "{"), V2 binary doesn't
+    // Detect format: V1 JSON starts with "ey" (base64 of "{")
     if (tokenString.startsWith("ey")) {
       return verifyV1Token(tokenString, secret);
-    } else {
-      return verifyV2Token(tokenString, secret);
     }
+
+    // Binary format - check version byte
+    const bytes = base64UrlDecodeBytes(tokenString);
+    if (bytes.length === 25 && bytes[0] === 0x03) {
+      return verifyV3Token(bytes, secret);
+    } else if (bytes.length === 34 && bytes[0] === 0x02) {
+      return verifyV2Token(bytes, secret);
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify V3 (ultra-compact binary) token.
+ */
+async function verifyV3Token(
+  bytes: Uint8Array,
+  secret: string
+): Promise<VerifiedToken | null> {
+  try {
+    // Extract payload (first 13 bytes)
+    const payload = bytes.slice(0, 13);
+    const providedSig = bytes.slice(13, 25);
+
+    // Verify signature
+    const expectedSig = await signBinary(payload, secret);
+    const truncatedExpected = expectedSig.slice(0, 12);
+
+    if (!timingSafeEqualBytes(providedSig, truncatedExpected)) {
+      return null;
+    }
+
+    // Parse logId (6 bytes = 12 hex chars)
+    const logIdBytes = bytes.slice(1, 7);
+    const logId = Array.from(logIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+
+    // Parse permissions
+    const permByte = bytes[7];
+    const permissions: ("read" | "write")[] = [];
+    if (permByte & PERM_READ) permissions.push("read");
+    if (permByte & PERM_WRITE) permissions.push("write");
+
+    // Parse authorId (2 bytes = 4 hex chars)
+    const authorIdBytes = bytes.slice(8, 10);
+    const authorId = Array.from(authorIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+
+    // Parse expiresAt (3 bytes, big-endian uint24 - hours since V3 epoch)
+    const hoursFromEpoch = (bytes[10] << 16) | (bytes[11] << 8) | bytes[12];
+    const expiresAt = V3_EPOCH + (hoursFromEpoch * 3600);
+
+    // Check expiry
+    const now = Math.floor(Date.now() / 1000);
+    if (expiresAt < now) {
+      return null;
+    }
+
+    return {
+      logId,
+      permissions,
+      authorId,
+      expiresAt,
+    };
   } catch {
     return null;
   }
@@ -117,21 +192,10 @@ export async function verifyLogToken(
  * Verify V2 (compact binary) token.
  */
 async function verifyV2Token(
-  tokenString: string,
+  bytes: Uint8Array,
   secret: string
 ): Promise<VerifiedToken | null> {
   try {
-    const bytes = base64UrlDecodeBytes(tokenString);
-
-    if (bytes.length !== 34) {
-      return null;
-    }
-
-    // Check version
-    if (bytes[0] !== 0x02) {
-      return null;
-    }
-
     // Extract payload (first 18 bytes)
     const payload = bytes.slice(0, 18);
     const providedSig = bytes.slice(18, 34);
@@ -144,18 +208,21 @@ async function verifyV2Token(
       return null;
     }
 
-    // Parse payload
+    // Parse logId (8 bytes = 16 hex chars)
     const logIdBytes = bytes.slice(1, 9);
-    const logIdHex = Array.from(logIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+    const logId = Array.from(logIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
 
+    // Parse permissions
     const permByte = bytes[9];
     const permissions: ("read" | "write")[] = [];
     if (permByte & PERM_READ) permissions.push("read");
     if (permByte & PERM_WRITE) permissions.push("write");
 
+    // Parse authorId (4 bytes = 8 hex chars)
     const authorIdBytes = bytes.slice(10, 14);
-    const authorIdHex = Array.from(authorIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+    const authorId = Array.from(authorIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
 
+    // Parse expiresAt (4 bytes, big-endian uint32)
     const view = new DataView(bytes.buffer, bytes.byteOffset);
     const expiresAt = view.getUint32(14, false); // big-endian
 
@@ -166,9 +233,9 @@ async function verifyV2Token(
     }
 
     return {
-      logId: logIdHex,
+      logId,
       permissions,
-      authorId: authorIdHex,
+      authorId,
       expiresAt,
     };
   } catch {
@@ -221,7 +288,7 @@ async function verifyV1Token(
  * Parse a token without verifying signature (for extracting logId to look up secret).
  * Returns null if token is malformed.
  */
-export function parseLogToken(tokenString: string): { logId: string; version: 1 | 2 } | null {
+export function parseLogToken(tokenString: string): { logId: string; version: 1 | 2 | 3 } | null {
   try {
     // V1 JSON format
     if (tokenString.startsWith("ey")) {
@@ -230,15 +297,24 @@ export function parseLogToken(tokenString: string): { logId: string; version: 1 
       return { logId: token.l, version: 1 };
     }
 
-    // V2 binary format
+    // Binary format
     const bytes = base64UrlDecodeBytes(tokenString);
-    if (bytes.length !== 34 || bytes[0] !== 0x02) {
-      return null;
+
+    // V3 format
+    if (bytes.length === 25 && bytes[0] === 0x03) {
+      const logIdBytes = bytes.slice(1, 7);
+      const logId = Array.from(logIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+      return { logId, version: 3 };
     }
 
-    const logIdBytes = bytes.slice(1, 9);
-    const logIdHex = Array.from(logIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
-    return { logId: logIdHex, version: 2 };
+    // V2 format
+    if (bytes.length === 34 && bytes[0] === 0x02) {
+      const logIdBytes = bytes.slice(1, 9);
+      const logId = Array.from(logIdBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+      return { logId, version: 2 };
+    }
+
+    return null;
   } catch {
     return null;
   }

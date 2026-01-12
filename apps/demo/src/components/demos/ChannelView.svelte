@@ -21,18 +21,11 @@
   let showUsernameModal = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Get channel name from URL path (URL decoded)
+  // Get channel name from URL path (already URL-safe slug)
   function getChannelName(): string {
     const path = window.location.pathname;
     const match = path.match(/^\/channel\/([^/]+)$/);
-    if (match) {
-      try {
-        return decodeURIComponent(match[1]);
-      } catch {
-        return match[1];
-      }
-    }
-    return 'Shared Channel';
+    return match ? match[1] : 'shared-channel';
   }
 
   function initClient() {

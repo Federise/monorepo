@@ -6,6 +6,17 @@
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
 
+  // Convert channel name to URL-safe slug
+  function slugify(name: string): string {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '') // Remove special chars
+      .replace(/\s+/g, '-')     // Replace spaces with hyphens
+      .replace(/-+/g, '-')      // Collapse multiple hyphens
+      .replace(/^-|-$/g, '');   // Trim hyphens from ends
+  }
+
   interface Channel extends LogMeta {
     secret?: string;
   }
@@ -63,9 +74,13 @@
     const client = getClient();
     if (!client) return;
 
+    // Slugify the channel name for URL-safe usage
+    const slug = slugify(newChannelName);
+    if (!slug) return;
+
     isCreating = true;
     try {
-      const result = await client.log.create(newChannelName.trim());
+      const result = await client.log.create(slug);
       channels = [...channels, { ...result.metadata, secret: result.secret }];
       newChannelName = '';
       selectChannel({ ...result.metadata, secret: result.secret });
@@ -170,9 +185,8 @@
       );
 
       const baseUrl = window.location.origin;
-      // Use channel name in URL path (URL encoded) - cleaner than random slug
-      const channelPath = encodeURIComponent(selectedChannel.name);
-      shareUrl = `${baseUrl}/channel/${channelPath}#${result.token}`;
+      // Channel name is already URL-safe (slugified on creation)
+      shareUrl = `${baseUrl}/channel/${selectedChannel.name}#${result.token}`;
       showShareModal = true;
     } catch (err) {
       console.error('Failed to create share link:', err);

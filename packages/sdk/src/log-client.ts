@@ -6,14 +6,22 @@
  * need a Federise account - they just need the share link.
  *
  * Token Formats:
- * - V2 (compact): ~46 chars, requires gatewayUrl to be passed separately
- * - V1 (legacy): ~200+ chars, contains gatewayUrl in token (backwards compat)
+ * - V3 (ultra-compact): ~34 chars, newest format
+ * - V2 (compact): ~46 chars
+ * - V1 (legacy): ~200+ chars, contains gatewayUrl in token
  */
 
 import type { LogEvent } from './types';
 
 // Default gateway URL for production
 const DEFAULT_GATEWAY_URL = 'https://federise-gateway.damen.workers.dev';
+
+// V3 epoch: 2024-01-01 00:00:00 UTC (in seconds)
+const V3_EPOCH = 1704067200;
+
+// Permission bitmap values (must match gateway)
+const PERM_READ = 0x01;
+const PERM_WRITE = 0x02;
 
 export interface LogClientOptions {
   /** The capability token from the share URL fragment */
@@ -30,10 +38,6 @@ interface DecodedToken {
   expiresAt: number;
   rawToken: string;
 }
-
-// Permission bitmap values (must match gateway)
-const PERM_READ = 0x01;
-const PERM_WRITE = 0x02;
 
 /**
  * Client for accessing logs directly via capability token.
@@ -149,16 +153,25 @@ export class LogClient {
 
   /**
    * Decode and validate a capability token.
-   * Supports both V1 (JSON) and V2 (binary) formats.
+   * Supports V1 (JSON), V2 (binary), and V3 (ultra-compact) formats.
    */
   private decodeToken(token: string, gatewayUrl?: string): DecodedToken {
     try {
       // V1 JSON format starts with "ey" (base64 of "{")
       if (token.startsWith('ey')) {
         return this.decodeV1Token(token, gatewayUrl);
-      } else {
-        return this.decodeV2Token(token, gatewayUrl);
       }
+
+      // Binary formats - check length and version
+      const bytes = this.base64UrlDecodeBytes(token);
+
+      if (bytes.length === 25 && bytes[0] === 0x03) {
+        return this.decodeV3Token(bytes, token, gatewayUrl);
+      } else if (bytes.length === 34 && bytes[0] === 0x02) {
+        return this.decodeV2Token(bytes, token, gatewayUrl);
+      }
+
+      throw new Error('Unknown token format');
     } catch (err) {
       throw new Error('Invalid capability token');
     }
@@ -178,7 +191,7 @@ export class LogClient {
 
     return {
       logId: data.l,
-      gatewayUrl: gatewayUrlOverride || data.g,
+      gatewayUrl: gatewayUrlOverride || data.g || DEFAULT_GATEWAY_URL,
       permissions,
       authorId: data.a,
       expiresAt: data.e,
@@ -189,20 +202,8 @@ export class LogClient {
   /**
    * Decode V2 (binary) token - compact format.
    */
-  private decodeV2Token(token: string, gatewayUrl?: string): DecodedToken {
-    // Use default gateway if not provided
+  private decodeV2Token(bytes: Uint8Array, token: string, gatewayUrl?: string): DecodedToken {
     const resolvedGatewayUrl = gatewayUrl || DEFAULT_GATEWAY_URL;
-
-    const bytes = this.base64UrlDecodeBytes(token);
-
-    if (bytes.length !== 34) {
-      throw new Error('Invalid V2 token length');
-    }
-
-    // Check version
-    if (bytes[0] !== 0x02) {
-      throw new Error('Invalid token version');
-    }
 
     // Parse logId (8 bytes = 16 hex chars)
     const logIdBytes = bytes.slice(1, 9);
@@ -232,8 +233,41 @@ export class LogClient {
     };
   }
 
+  /**
+   * Decode V3 (ultra-compact binary) token.
+   */
+  private decodeV3Token(bytes: Uint8Array, token: string, gatewayUrl?: string): DecodedToken {
+    const resolvedGatewayUrl = gatewayUrl || DEFAULT_GATEWAY_URL;
+
+    // Parse logId (6 bytes = 12 hex chars)
+    const logIdBytes = bytes.slice(1, 7);
+    const logId = Array.from(logIdBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // Parse permissions
+    const permByte = bytes[7];
+    const permissions: ('read' | 'write')[] = [];
+    if (permByte & PERM_READ) permissions.push('read');
+    if (permByte & PERM_WRITE) permissions.push('write');
+
+    // Parse authorId (2 bytes = 4 hex chars)
+    const authorIdBytes = bytes.slice(8, 10);
+    const authorId = Array.from(authorIdBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // Parse expiresAt (3 bytes, big-endian uint24 - hours since V3 epoch)
+    const hoursFromEpoch = (bytes[10] << 16) | (bytes[11] << 8) | bytes[12];
+    const expiresAt = V3_EPOCH + (hoursFromEpoch * 3600);
+
+    return {
+      logId,
+      gatewayUrl: resolvedGatewayUrl,
+      permissions,
+      authorId,
+      expiresAt,
+      rawToken: token,
+    };
+  }
+
   private base64UrlDecode(str: string): string {
-    // Add padding if needed
     let padded = str.replace(/-/g, '+').replace(/_/g, '/');
     const padding = padded.length % 4;
     if (padding) {
