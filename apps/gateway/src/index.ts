@@ -54,6 +54,9 @@ app.use("*", (c, next) => {
   })(c, next);
 });
 
+// Handle all OPTIONS preflight requests (CORS middleware sets headers, this returns 204)
+app.options("*", (c) => c.body(null, 204));
+
 // Private Network Access (PNA) support for local network requests
 app.use("*", async (c, next) => {
   const isPNARequest = c.req.header("Access-Control-Request-Private-Network") === "true";
