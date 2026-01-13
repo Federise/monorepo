@@ -35,6 +35,30 @@
     return null;
   }
 
+  // Parse a chat message to extract author and text
+  function parseChatMessage(content: string): { author: string; text: string } | null {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.type === '__chat__' && typeof parsed.author === 'string' && typeof parsed.text === 'string') {
+        return { author: parsed.author, text: parsed.text };
+      }
+    } catch {
+      // Not JSON, treat as plain text
+    }
+    return null;
+  }
+
+  // Get display content for a message
+  function getMessageDisplay(message: LogEvent): { author: string; text: string; isOwn: boolean } {
+    const parsed = parseChatMessage(message.content);
+    const isOwn = message.authorId === client?.authorId;
+    if (parsed) {
+      return { ...parsed, isOwn };
+    }
+    // Fallback for plain text messages
+    return { author: message.authorId.slice(0, 8), text: message.content, isOwn };
+  }
+
   // Filter messages to exclude meta entries
   function getDisplayMessages(): LogEvent[] {
     return messages.filter(m => !parseMetaMessage(m.content));
@@ -111,7 +135,13 @@
 
     isSending = true;
     try {
-      const event = await client.append(newMessage.trim());
+      // Include username in message content
+      const messageContent = JSON.stringify({
+        type: '__chat__',
+        author: username || 'Anonymous',
+        text: newMessage.trim(),
+      });
+      const event = await client.append(messageContent);
       messages = [...messages, event];
       newMessage = '';
       error = null;
@@ -217,9 +247,10 @@
         </div>
       {:else}
         {#each getDisplayMessages() as message}
-          <div class="message" class:own={message.authorId === client?.authorId}>
-            <span class="author">{message.authorId === client?.authorId ? (username || 'You') : message.authorId.slice(0, 8)}</span>
-            <span class="content">{message.content}</span>
+          {@const display = getMessageDisplay(message)}
+          <div class="message" class:own={display.isOwn}>
+            <span class="author">{display.author}</span>
+            <span class="content">{display.text}</span>
             <span class="time">{new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
           </div>
         {/each}

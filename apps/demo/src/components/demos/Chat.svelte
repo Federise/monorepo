@@ -16,6 +16,29 @@
     }
   }
 
+  // Parse a chat message to extract author and text
+  function parseChatMessage(content: string): { author: string; text: string } | null {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.type === '__chat__' && typeof parsed.author === 'string' && typeof parsed.text === 'string') {
+        return { author: parsed.author, text: parsed.text };
+      }
+    } catch {
+      // Not JSON, treat as plain text (backward compatibility)
+    }
+    return null;
+  }
+
+  // Get display content for a message
+  function getMessageDisplay(message: LogEvent): { author: string; text: string } {
+    const parsed = parseChatMessage(message.content);
+    if (parsed) {
+      return parsed;
+    }
+    // Fallback for plain text messages
+    return { author: message.authorId.slice(0, 8), text: message.content };
+  }
+
   interface Channel extends LogMeta {
     secret?: string;
   }
@@ -168,7 +191,13 @@
 
     isSending = true;
     try {
-      const event = await client.log.append(selectedChannel.logId, newMessage.trim());
+      // Include username in message content
+      const messageContent = JSON.stringify({
+        type: '__chat__',
+        author: username || 'Anonymous',
+        text: newMessage.trim(),
+      });
+      const event = await client.log.append(selectedChannel.logId, messageContent);
       messages = [...messages, event];
       newMessage = '';
     } catch (err) {
@@ -319,9 +348,10 @@
           </div>
         {:else}
           {#each messages.filter(m => !isMetaMessage(m.content)) as message}
+            {@const display = getMessageDisplay(message)}
             <div class="message">
-              <span class="author">{message.authorId.slice(0, 8)}</span>
-              <span class="content">{message.content}</span>
+              <span class="author">{display.author}</span>
+              <span class="content">{display.text}</span>
               <span class="time">{new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
           {/each}
