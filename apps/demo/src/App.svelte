@@ -12,26 +12,43 @@
 
   // Channel view state (from URL path)
   let channelToken = $state<string | null>(null);
+  let channelGatewayUrl = $state<string | null>(null);
 
-  function getViewFromPath(): { view: View; token: string | null } {
+  function getViewFromPath(): { view: View; token: string | null; gatewayUrl: string | null } {
     const path = window.location.pathname;
     const hash = window.location.hash.slice(1);
 
-    // Check for /channel#token pattern (token contains everything needed)
+    // Check for /channel#token@gatewayUrl pattern
     if (path === '/channel' && hash) {
-      return { view: 'channel', token: hash };
+      // Parse token and gateway URL from hash
+      // Format: <token>@<base64urlGatewayUrl>
+      const atIndex = hash.lastIndexOf('@');
+      if (atIndex !== -1) {
+        const token = hash.slice(0, atIndex);
+        const base64Gateway = hash.slice(atIndex + 1);
+        // Decode base64url: restore standard base64 chars and add padding
+        const base64 = base64Gateway
+          .replace(/-/g, '+')
+          .replace(/_/g, '/')
+          .padEnd(base64Gateway.length + (4 - base64Gateway.length % 4) % 4, '=');
+        const gatewayUrl = atob(base64);
+        return { view: 'channel', token, gatewayUrl };
+      }
+      // Fallback: no gateway URL in hash (legacy format)
+      return { view: 'channel', token: hash, gatewayUrl: null };
     }
 
     // Fall back to hash-based routing
-    if (hash === 'settings') return { view: 'settings', token: null };
-    if (hash === 'files') return { view: 'files', token: null };
-    if (hash === 'chat') return { view: 'chat', token: null };
-    return { view: 'notes', token: null };
+    if (hash === 'settings') return { view: 'settings', token: null, gatewayUrl: null };
+    if (hash === 'files') return { view: 'files', token: null, gatewayUrl: null };
+    if (hash === 'chat') return { view: 'chat', token: null, gatewayUrl: null };
+    return { view: 'notes', token: null, gatewayUrl: null };
   }
 
   function getViewFromHash(): View {
-    const { view, token } = getViewFromPath();
+    const { view, token, gatewayUrl } = getViewFromPath();
     channelToken = token;
+    channelGatewayUrl = gatewayUrl;
     return view;
   }
 
@@ -60,7 +77,7 @@
 </script>
 
 {#if currentView === 'channel' && channelToken}
-  <ChannelView token={channelToken} />
+  <ChannelView token={channelToken} gatewayUrl={channelGatewayUrl} />
 {:else}
   <div class="app-layout">
     <Sidebar bind:currentView bind:mobileMenuOpen />

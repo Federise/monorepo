@@ -627,7 +627,7 @@ export class FederiseClient {
       logId: string,
       permissions: ('read' | 'write')[],
       expiresInSeconds?: number
-    ): Promise<{ token: string; expiresAt: string }> => {
+    ): Promise<{ token: string; expiresAt: string; gatewayUrl: string }> => {
       this.ensureConnected();
       this.ensureCapability('log:create');
 
@@ -639,7 +639,7 @@ export class FederiseClient {
       });
 
       if (response.type === 'LOG_TOKEN_CREATED') {
-        return { token: response.token, expiresAt: response.expiresAt };
+        return { token: response.token, expiresAt: response.expiresAt, gatewayUrl: response.gatewayUrl };
       }
       if (response.type === 'PERMISSION_DENIED') {
         throw new PermissionDeniedError(response.capability);

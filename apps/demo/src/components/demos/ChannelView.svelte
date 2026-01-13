@@ -6,9 +6,10 @@
 
   interface Props {
     token: string;
+    gatewayUrl: string | null;
   }
 
-  let { token }: Props = $props();
+  let { token, gatewayUrl }: Props = $props();
 
   let client = $state<LogClient | null>(null);
   let messages = $state<LogEvent[]>([]);
@@ -66,8 +67,8 @@
 
   function initClient() {
     try {
-      // LogClient uses default gateway URL - no need to pass it
-      client = new LogClient({ token });
+      // Pass gateway URL from share link (required for connecting to correct gateway)
+      client = new LogClient({ token, gatewayUrl: gatewayUrl || undefined });
       error = null;
     } catch (err) {
       error = 'Invalid share link. The link may be expired or corrupted.';

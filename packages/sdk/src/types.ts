@@ -139,7 +139,7 @@ export type ResponseMessage =
   | { type: 'LOG_APPENDED'; id: string; event: LogEvent }
   | { type: 'LOG_READ_RESULT'; id: string; events: LogEvent[]; hasMore: boolean }
   | { type: 'LOG_DELETED'; id: string }
-  | { type: 'LOG_TOKEN_CREATED'; id: string; token: string; expiresAt: string }
+  | { type: 'LOG_TOKEN_CREATED'; id: string; token: string; expiresAt: string; gatewayUrl: string }
   | { type: 'ERROR'; id: string; code: string; message: string }
   | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }
   | { type: 'TEST_PERMISSIONS_CLEARED'; id: string };

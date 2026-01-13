@@ -71,6 +71,15 @@
     return authorId.slice(0, 8);
   }
 
+  // Convert a string to kebab-case
+  function toKebabCase(str: string): string {
+    return str
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
   async function loadChannels() {
     const client = getClient();
     if (!client) return;
@@ -98,7 +107,7 @@
     const client = getClient();
     if (!client) return;
 
-    const channelName = newChannelName.trim();
+    const channelName = toKebabCase(newChannelName);
 
     isCreating = true;
     try {
@@ -221,8 +230,13 @@
       );
 
       const baseUrl = window.location.origin;
-      // Token contains everything needed - no channel name in URL
-      shareUrl = `${baseUrl}/channel#${result.token}`;
+      // Include both token and gateway URL in the share link
+      // Format: #<token>@<base64urlGatewayUrl>
+      const base64Gateway = btoa(result.gatewayUrl)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      shareUrl = `${baseUrl}/channel#${result.token}@${base64Gateway}`;
       showShareModal = true;
     } catch (err) {
       console.error('Failed to create share link:', err);

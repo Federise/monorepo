@@ -11,7 +11,7 @@
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
   import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata, setBlobVisibility } from '../lib/blob-storage';
   import { createLog, listLogs, appendLog, readLog, deleteLog, createLogToken } from '../lib/log-storage';
-  import { checkStorageAccess, requestStorageAccess, isGatewayConfigured } from '../utils/auth';
+  import { checkStorageAccess, requestStorageAccess, isGatewayConfigured, getGatewayConfig } from '../utils/auth';
 
   // Track connected clients by origin (used by handleSyn)
   const connectedClients = new Map<string, MessageEventSource>();
@@ -507,11 +507,14 @@
 
     try {
       const result = await createLogToken(origin, msg.logId, msg.permissions, msg.expiresInSeconds);
+      await requestStorageAccess();
+      const { url: gatewayUrl } = getGatewayConfig();
       sendResponse(source, origin, {
         type: 'LOG_TOKEN_CREATED',
         id: msg.id,
         token: result.token,
         expiresAt: result.expiresAt,
+        gatewayUrl: gatewayUrl || '',
       });
     } catch (err) {
       sendError(source, origin, msg.id, 'LOG_TOKEN_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create token');

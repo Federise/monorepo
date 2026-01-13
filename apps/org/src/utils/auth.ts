@@ -168,17 +168,21 @@ export async function requestStorageAccess(): Promise<boolean> {
 
 /**
  * Get the gateway API key
- * - If we have unpartitioned localStorage handle: use it
- * - In iframe: try cookies first (works on localhost same-site), then localStorage
+ * - If we have unpartitioned localStorage handle: try it first
+ * - In iframe: try cookies (works on localhost same-site and with Storage Access)
  * - In top-level: use localStorage
  */
 export function getGatewayApiKey(): string | null {
-  // If we have the unpartitioned localStorage handle, prefer it
+  // If we have the unpartitioned localStorage handle, try it first
   if (unpartitionedStorage) {
-    return unpartitionedStorage.getItem(STORAGE_KEY_API);
+    const value = unpartitionedStorage.getItem(STORAGE_KEY_API);
+    if (value) {
+      return value;
+    }
+    // Fall through to try cookies if unpartitioned storage doesn't have the value
   }
 
-  // In iframe context, try cookies first
+  // In iframe context, try cookies
   // On localhost (same-site), cookies are accessible without Storage Access API
   // On production with Storage Access granted, cookies are also accessible
   if (isIframe()) {
@@ -197,11 +201,16 @@ export function getGatewayApiKey(): string | null {
  * Get the gateway URL
  */
 export function getGatewayUrl(): string | null {
+  // If we have the unpartitioned localStorage handle, try it first
   if (unpartitionedStorage) {
-    return unpartitionedStorage.getItem(STORAGE_KEY_URL);
+    const value = unpartitionedStorage.getItem(STORAGE_KEY_URL);
+    if (value) {
+      return value;
+    }
+    // Fall through to try cookies if unpartitioned storage doesn't have the value
   }
 
-  // In iframe context, try cookies first (same logic as getGatewayApiKey)
+  // In iframe context, try cookies (same logic as getGatewayApiKey)
   if (isIframe()) {
     const cookieValue = getCookie(COOKIE_KEY_URL);
     if (cookieValue) {
