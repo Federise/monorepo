@@ -12,6 +12,7 @@
 
   let client = $state<LogClient | null>(null);
   let messages = $state<LogEvent[]>([]);
+  let channelName = $state<string>('Channel');
   let newMessage = $state('');
   let username = $state(localStorage.getItem(USERNAME_KEY) || '');
   let isSending = $state(false);
@@ -21,11 +22,22 @@
   let showUsernameModal = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Get channel name from URL path (already URL-safe slug)
-  function getChannelName(): string {
-    const path = window.location.pathname;
-    const match = path.match(/^\/channel\/([^/]+)$/);
-    return match ? match[1] : 'shared-channel';
+  // Check if a message is a meta entry and extract channel name if present
+  function parseMetaMessage(content: string): { type: string; name?: string } | null {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.type === '__meta__') {
+        return parsed;
+      }
+    } catch {
+      // Not JSON, regular message
+    }
+    return null;
+  }
+
+  // Filter messages to exclude meta entries
+  function getDisplayMessages(): LogEvent[] {
+    return messages.filter(m => !parseMetaMessage(m.content));
   }
 
   function initClient() {
@@ -48,6 +60,14 @@
         messages = [...messages, ...result.events];
       } else {
         messages = result.events;
+        // Extract channel name from first meta message
+        for (const msg of result.events) {
+          const meta = parseMetaMessage(msg.content);
+          if (meta?.name) {
+            channelName = meta.name;
+            break;
+          }
+        }
       }
       error = null;
     } catch (err) {
@@ -162,7 +182,7 @@
     <div class="channel-header">
       <div class="channel-info">
         <span class="channel-icon">#</span>
-        <span class="channel-name">{getChannelName()}</span>
+        <span class="channel-name">{channelName}</span>
         {#if client?.canWrite}
           <span class="badge">Read & Write</span>
         {:else}
@@ -191,12 +211,12 @@
           <div class="spinner"></div>
           <p>Loading messages...</p>
         </div>
-      {:else if messages.length === 0}
+      {:else if getDisplayMessages().length === 0}
         <div class="empty-state">
           <p>No messages yet. {client?.canWrite ? 'Start the conversation!' : 'Waiting for messages...'}</p>
         </div>
       {:else}
-        {#each messages as message}
+        {#each getDisplayMessages() as message}
           <div class="message" class:own={message.authorId === client?.authorId}>
             <span class="author">{message.authorId === client?.authorId ? (username || 'You') : message.authorId.slice(0, 8)}</span>
             <span class="content">{message.content}</span>

@@ -1,20 +1,19 @@
 <script lang="ts">
-  import { getClient } from '../../stores/federise.svelte';
+  import { getClient, hasLogDeletePermissions } from '../../stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
   import type { LogMeta, LogEvent } from '@federise/sdk';
 
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
 
-  // Convert channel name to URL-safe kebab-case slug
-  function slugify(name: string): string {
-    return name
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '') // Remove special chars
-      .replace(/[\s_]+/g, '-')  // Replace spaces/underscores with hyphens
-      .replace(/-+/g, '-')      // Collapse multiple hyphens
-      .replace(/^-|-$/g, '');   // Trim hyphens from ends
+  // Check if a message is a meta entry (used for channel name, etc.)
+  function isMetaMessage(content: string): boolean {
+    try {
+      const parsed = JSON.parse(content);
+      return parsed.type === '__meta__';
+    } catch {
+      return false;
+    }
   }
 
   interface Channel extends LogMeta {
@@ -34,6 +33,8 @@
   let shareUrl = $state<string | null>(null);
   let showShareModal = $state(false);
   let showUsernameModal = $state(false);
+  let showDeleteModal = $state(false);
+  let isDeleting = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   // Get display name for an author
@@ -74,13 +75,19 @@
     const client = getClient();
     if (!client) return;
 
-    // Slugify the channel name for URL-safe usage
-    const slug = slugify(newChannelName);
-    if (!slug) return;
+    const channelName = newChannelName.trim();
 
     isCreating = true;
     try {
-      const result = await client.log.create(slug);
+      // Create the log (using a random ID internally)
+      const result = await client.log.create(channelName);
+
+      // Store channel name as first message (meta entry)
+      await client.log.append(result.metadata.logId, JSON.stringify({
+        type: '__meta__',
+        name: channelName,
+      }));
+
       channels = [...channels, { ...result.metadata, secret: result.secret }];
       newChannelName = '';
       selectChannel({ ...result.metadata, secret: result.secret });
@@ -185,11 +192,35 @@
       );
 
       const baseUrl = window.location.origin;
-      // Channel name is already URL-safe (slugified on creation)
-      shareUrl = `${baseUrl}/channel/${selectedChannel.name}#${result.token}`;
+      // Token contains everything needed - no channel name in URL
+      shareUrl = `${baseUrl}/channel#${result.token}`;
       showShareModal = true;
     } catch (err) {
       console.error('Failed to create share link:', err);
+    }
+  }
+
+  async function deleteChannel() {
+    if (!selectedChannel) return;
+
+    const client = getClient();
+    if (!client) return;
+
+    isDeleting = true;
+    try {
+      await client.log.delete(selectedChannel.logId);
+      // Remove from local list
+      channels = channels.filter(c => c.logId !== selectedChannel.logId);
+      // Clear selection
+      localStorage.removeItem(LAST_CHANNEL_KEY);
+      selectedChannel = null;
+      messages = [];
+      stopPolling();
+      showDeleteModal = false;
+    } catch (err) {
+      console.error('Failed to delete channel:', err);
+    } finally {
+      isDeleting = false;
     }
   }
 
@@ -273,6 +304,9 @@
             </svg>
           </button>
           <button class="btn btn-secondary btn-sm" onclick={shareChannel}>Share</button>
+          {#if hasLogDeletePermissions()}
+            <button class="btn btn-danger btn-sm" onclick={() => showDeleteModal = true}>Delete</button>
+          {/if}
         </div>
       </div>
 
@@ -284,7 +318,7 @@
             <p>No messages yet. Start the conversation!</p>
           </div>
         {:else}
-          {#each messages as message}
+          {#each messages.filter(m => !isMetaMessage(m.content)) as message}
             <div class="message">
               <span class="author">{message.authorId.slice(0, 8)}</span>
               <span class="content">{message.content}</span>
@@ -346,6 +380,21 @@
       <div class="modal-actions">
         <button class="btn btn-secondary btn-sm" onclick={() => showUsernameModal = false}>Cancel</button>
         <button class="btn btn-primary btn-sm" onclick={saveUsername}>Save</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showDeleteModal && selectedChannel}
+  <div class="modal-overlay" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <h3>Delete Channel</h3>
+      <p>Are you sure you want to delete <strong>#{selectedChannel.name}</strong>? This will permanently delete all messages and cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick={() => showDeleteModal = false} disabled={isDeleting}>Cancel</button>
+        <button class="btn btn-danger btn-sm" onclick={deleteChannel} disabled={isDeleting}>
+          {isDeleting ? 'Deleting...' : 'Delete'}
+        </button>
       </div>
     </div>
   </div>
@@ -486,6 +535,20 @@
   .btn-sm {
     padding: 0.375rem 0.625rem;
     font-size: 0.8rem;
+  }
+
+  .btn-danger {
+    background: var(--color-error, #ef4444);
+    color: white;
+    border: none;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: #dc2626;
+  }
+
+  .btn-danger:disabled {
+    opacity: 0.6;
   }
 
   .chat-main {

@@ -650,6 +650,29 @@ export class FederiseClient {
 
       throw new FederiseError('Unexpected response', 'UNKNOWN');
     },
+
+    /**
+     * Delete a log and all its events.
+     * @param logId - The log ID to delete
+     */
+    delete: async (logId: string): Promise<void> => {
+      this.ensureConnected();
+      this.ensureCapability('log:delete');
+
+      const response = await this.sendRequest({ type: 'LOG_DELETE', logId });
+
+      if (response.type === 'LOG_DELETED') {
+        return;
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
   };
 
   private handleMessage(event: MessageEvent): void {

@@ -17,9 +17,8 @@
     const path = window.location.pathname;
     const hash = window.location.hash.slice(1);
 
-    // Check for /channel/{slug}#{token} pattern
-    const channelMatch = path.match(/^\/channel\/([^/]+)$/);
-    if (channelMatch && hash) {
+    // Check for /channel#token pattern (token contains everything needed)
+    if (path === '/channel' && hash) {
       return { view: 'channel', token: hash };
     }
 

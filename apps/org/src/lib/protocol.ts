@@ -37,6 +37,7 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   'blob:read': 'Read your files',
   'blob:write': 'Upload files',
   'log:create': 'Create and manage chat channels',
+  'log:delete': 'Delete chat channels',
   'notifications': 'Send you notifications',
 };
 
@@ -92,6 +93,8 @@ export function isValidRequest(data: unknown): data is RequestMessage {
     case 'LOG_APPEND':
       return typeof msg.logId === 'string' && typeof msg.content === 'string';
     case 'LOG_READ':
+      return typeof msg.logId === 'string';
+    case 'LOG_DELETE':
       return typeof msg.logId === 'string';
     case 'LOG_TOKEN_CREATE':
       return typeof msg.logId === 'string' && Array.isArray(msg.permissions);

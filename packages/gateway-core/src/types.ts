@@ -222,6 +222,15 @@ export const LogReadResponse = z.object({
   hasMore: z.boolean(),
 });
 
+export const LogDeleteRequest = z.object({
+  namespace: NamespaceValue,
+  logId: z.string(),
+});
+
+export const LogDeleteResponse = z.object({
+  success: z.boolean(),
+});
+
 export const LogTokenCreateRequest = z.object({
   namespace: NamespaceValue,
   logId: z.string(),
@@ -290,6 +299,8 @@ export type LogAppendRequest = z.infer<typeof LogAppendRequest>;
 export type LogAppendResponse = z.infer<typeof LogAppendResponse>;
 export type LogReadRequest = z.infer<typeof LogReadRequest>;
 export type LogReadResponse = z.infer<typeof LogReadResponse>;
+export type LogDeleteRequest = z.infer<typeof LogDeleteRequest>;
+export type LogDeleteResponse = z.infer<typeof LogDeleteResponse>;
 export type LogTokenCreateRequest = z.infer<typeof LogTokenCreateRequest>;
 export type LogTokenCreateResponse = z.infer<typeof LogTokenCreateResponse>;
 export type LogCapabilityTokenV1 = z.infer<typeof LogCapabilityTokenV1>;

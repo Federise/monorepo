@@ -6,6 +6,7 @@ export type Capability =
   | 'blob:read'
   | 'blob:write'
   | 'log:create'
+  | 'log:delete'
   | 'notifications';
 
 // Blob visibility levels
@@ -88,6 +89,7 @@ export type LogCreatePayload = { type: 'LOG_CREATE'; name: string };
 export type LogListPayload = { type: 'LOG_LIST' };
 export type LogAppendPayload = { type: 'LOG_APPEND'; logId: string; content: string };
 export type LogReadPayload = { type: 'LOG_READ'; logId: string; afterSeq?: number; limit?: number };
+export type LogDeletePayload = { type: 'LOG_DELETE'; logId: string };
 export type LogTokenCreatePayload = { type: 'LOG_TOKEN_CREATE'; logId: string; permissions: ('read' | 'write')[]; expiresInSeconds?: number };
 export type TestGrantPermissionsPayload = { type: 'TEST_GRANT_PERMISSIONS'; capabilities: Capability[] };
 export type TestClearPermissionsPayload = { type: 'TEST_CLEAR_PERMISSIONS' };
@@ -109,6 +111,7 @@ export type RequestPayload =
   | LogListPayload
   | LogAppendPayload
   | LogReadPayload
+  | LogDeletePayload
   | LogTokenCreatePayload
   | TestGrantPermissionsPayload
   | TestClearPermissionsPayload;
@@ -135,6 +138,7 @@ export type ResponseMessage =
   | { type: 'LOG_LIST_RESULT'; id: string; logs: LogMeta[] }
   | { type: 'LOG_APPENDED'; id: string; event: LogEvent }
   | { type: 'LOG_READ_RESULT'; id: string; events: LogEvent[]; hasMore: boolean }
+  | { type: 'LOG_DELETED'; id: string }
   | { type: 'LOG_TOKEN_CREATED'; id: string; token: string; expiresAt: string }
   | { type: 'ERROR'; id: string; code: string; message: string }
   | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }

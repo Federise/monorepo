@@ -121,6 +121,24 @@ export async function readLog(
 }
 
 /**
+ * Delete a log and all its events.
+ */
+export async function deleteLog(origin: string, logId: string): Promise<void> {
+  const { client, apiKey } = getClient();
+  const namespace = await buildNamespace(origin);
+
+  const { error } = await client.POST('/log/delete', {
+    ...withAuth(apiKey),
+    body: { namespace, logId },
+  });
+
+  if (error) {
+    console.error('[Log] Failed to delete:', error);
+    throw new Error('Failed to delete log');
+  }
+}
+
+/**
  * Create a capability token for sharing a log.
  */
 export async function createLogToken(

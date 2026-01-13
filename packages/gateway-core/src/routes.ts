@@ -27,6 +27,7 @@ import {
   LogListEndpoint,
   LogAppendEndpoint,
   LogReadEndpoint,
+  LogDeleteEndpoint,
   LogTokenCreateEndpoint,
 } from "./endpoints/log/index.js";
 import { registerTokenLogRoutes } from "./endpoints/log/token-routes.js";
@@ -73,6 +74,7 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
   openapi.post("/log/list", LogListEndpoint);
   openapi.post("/log/append", LogAppendEndpoint);
   openapi.post("/log/read", LogReadEndpoint);
+  openapi.post("/log/delete", LogDeleteEndpoint);
   openapi.post("/log/token/create", LogTokenCreateEndpoint);
 
   return openapi;

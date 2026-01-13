@@ -10,7 +10,7 @@
   import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
   import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata, setBlobVisibility } from '../lib/blob-storage';
-  import { createLog, listLogs, appendLog, readLog, createLogToken } from '../lib/log-storage';
+  import { createLog, listLogs, appendLog, readLog, deleteLog, createLogToken } from '../lib/log-storage';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured } from '../utils/auth';
 
   // Track connected clients by origin (used by handleSyn)
@@ -466,6 +466,31 @@
     }
   }
 
+  async function handleLogDelete(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'LOG_DELETE' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'log:delete'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'log:delete',
+      });
+      return;
+    }
+
+    try {
+      await deleteLog(origin, msg.logId);
+      sendResponse(source, origin, {
+        type: 'LOG_DELETED',
+        id: msg.id,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'LOG_DELETE_FAILED', err instanceof Error ? err.message : 'Failed to delete log');
+    }
+  }
+
   async function handleLogTokenCreate(
     source: MessageEventSource,
     origin: string,
@@ -591,6 +616,9 @@
         break;
       case 'LOG_READ':
         await handleLogRead(source, origin, message);
+        break;
+      case 'LOG_DELETE':
+        await handleLogDelete(source, origin, message);
         break;
       case 'LOG_TOKEN_CREATE':
         await handleLogTokenCreate(source, origin, message);
