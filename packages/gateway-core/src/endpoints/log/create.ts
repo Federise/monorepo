@@ -32,38 +32,35 @@ export class LogCreateEndpoint extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const kv = c.get("kv");
+    const logStore = c.get("logStore");
 
     // Use shorter logId (12 hex chars = 6 bytes) for V3 compact tokens
     const logId = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
     const secret = generateApiKey();
-    const createdAt = new Date().toISOString();
 
-    const metadata = {
+    // Create log in Durable Object
+    const metadata = await logStore.create(
       logId,
-      name: data.body.name,
-      ownerNamespace: data.body.namespace,
-      createdAt,
-      secret, // Stored but not exposed in list responses
-    };
-
-    // Store log metadata
-    await kv.put(`__LOG:${logId}:meta`, JSON.stringify(metadata));
-
-    // Store log index for listing by namespace
-    await kv.put(
-      `__LOG_INDEX:${data.body.namespace}:${logId}`,
-      JSON.stringify({ logId, name: data.body.name, createdAt })
+      data.body.name,
+      data.body.namespace,
+      secret
     );
 
-    // Initialize sequence counter
-    await kv.put(`__LOG:${logId}:seq`, "0");
+    // Store log index in KV for listing by namespace
+    await kv.put(
+      `__LOG_INDEX:${data.body.namespace}:${logId}`,
+      JSON.stringify({ logId, name: data.body.name, createdAt: metadata.createdAt })
+    );
+
+    // Store ownership lookup for access control
+    await kv.put(`__LOG_OWNER:${logId}`, data.body.namespace);
 
     return c.json({
       metadata: {
         logId,
         name: data.body.name,
         ownerNamespace: data.body.namespace,
-        createdAt,
+        createdAt: metadata.createdAt,
       },
       secret,
     });

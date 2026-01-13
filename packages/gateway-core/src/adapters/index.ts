@@ -19,3 +19,12 @@ export type {
   PresignUploadOptions,
   PresignDownloadOptions,
 } from "./presigner.js";
+
+export type {
+  ILogStore,
+  LogStoreMetadata,
+  LogStoreEvent,
+  LogAppendOptions,
+  LogReadOptions,
+  LogStoreReadResult,
+} from "./log.js";

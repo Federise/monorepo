@@ -31,6 +31,7 @@ import {
   LogTokenCreateEndpoint,
 } from "./endpoints/log/index.js";
 import { registerTokenLogRoutes } from "./endpoints/log/token-routes.js";
+import { registerLogSubscribeRoute } from "./endpoints/log/subscribe.js";
 
 /**
  * Register all gateway routes on a Hono app.
@@ -81,4 +82,4 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
 }
 
 // Re-export for direct access
-export { registerBlobDownloadRoute, registerPublicBlobRoute, registerTokenLogRoutes };
+export { registerBlobDownloadRoute, registerPublicBlobRoute, registerTokenLogRoutes, registerLogSubscribeRoute };

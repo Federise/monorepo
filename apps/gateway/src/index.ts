@@ -6,11 +6,14 @@ import {
   registerBlobDownloadRoute,
   registerPublicBlobRoute,
   registerTokenLogRoutes,
+  registerLogSubscribeRoute,
   type GatewayEnv,
 } from "@federise/gateway-core";
 import { CloudflareKVAdapter } from "./adapters/cloudflare-kv";
 import { CloudflareR2Adapter } from "./adapters/cloudflare-r2";
 import { CloudflarePresigner } from "./adapters/cloudflare-presigner";
+import { CloudflareLogDOAdapter } from "./adapters/cloudflare-log-do";
+export { LogStorageDO } from "./durable-objects/log-storage";
 
 // Create app with both Cloudflare bindings and our adapter variables
 const app = new Hono<{ Bindings: Env; Variables: GatewayEnv }>();
@@ -19,6 +22,7 @@ const app = new Hono<{ Bindings: Env; Variables: GatewayEnv }>();
 app.use("*", async (c, next) => {
   c.set("kv", new CloudflareKVAdapter(c.env.KV));
   c.set("blob", new CloudflareR2Adapter(c.env.R2));
+  c.set("logStore", new CloudflareLogDOAdapter(c.env.LOG_DO));
 
   // Create presigner if credentials are configured
   if (c.env.R2_ACCOUNT_ID && c.env.R2_ACCESS_KEY_ID && c.env.R2_SECRET_ACCESS_KEY) {
@@ -74,6 +78,9 @@ registerBlobDownloadRoute(app);
 
 // Register token-based log routes BEFORE auth middleware (handles recipient access via token)
 registerTokenLogRoutes(app);
+
+// Register SSE subscription route BEFORE auth middleware (uses token auth)
+registerLogSubscribeRoute(app);
 
 // Auth middleware
 app.use("*", createAuthMiddleware());

@@ -1,6 +1,9 @@
+import type { LogStorageDO } from "./durable-objects/log-storage.js";
+
 declare interface Env {
   KV: KVNamespace;
   R2: R2Bucket;
+  LOG_DO: DurableObjectNamespace<LogStorageDO>;
   BOOTSTRAP_API_KEY?: string;
   CORS_ORIGIN?: string;
   SIGNING_SECRET: string;

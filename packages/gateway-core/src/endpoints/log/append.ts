@@ -5,7 +5,7 @@ import {
   LogAppendResponse,
 } from "../../types.js";
 import type { AppContext } from "../../context.js";
-import { parseLogToken, verifyLogToken } from "../../lib/log-token.js";
+import { verifyLogToken } from "../../lib/log-token.js";
 
 export class LogAppendEndpoint extends OpenAPIRoute {
   schema = {
@@ -40,15 +40,14 @@ export class LogAppendEndpoint extends OpenAPIRoute {
 
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
-    const kv = c.get("kv");
+    const logStore = c.get("logStore");
     const logId = data.body.logId;
 
     // Get log metadata to retrieve secret
-    const metaStr = await kv.get(`__LOG:${logId}:meta`);
-    if (!metaStr) {
+    const meta = await logStore.getMetadata(logId);
+    if (!meta) {
       return c.json({ code: 404, message: "Log not found" }, 404);
     }
-    const meta = JSON.parse(metaStr);
 
     // Check authentication: either API key (already authenticated) or token
     const tokenHeader = c.req.header("X-Log-Token");
@@ -75,23 +74,11 @@ export class LogAppendEndpoint extends OpenAPIRoute {
       authorId = data.body.authorId;
     }
 
-    // Get and increment sequence number atomically
-    const seqStr = await kv.get(`__LOG:${logId}:seq`);
-    const seq = seqStr ? parseInt(seqStr, 10) + 1 : 1;
-    await kv.put(`__LOG:${logId}:seq`, String(seq));
-
-    // Create event
-    const event = {
-      id: crypto.randomUUID(),
-      seq,
+    // Append event atomically via Durable Object
+    const event = await logStore.append(logId, {
       authorId,
       content: data.body.content,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Store event with zero-padded sequence for lexicographic sorting
-    const paddedSeq = String(seq).padStart(10, "0");
-    await kv.put(`__LOG:${logId}:events:${paddedSeq}`, JSON.stringify(event));
+    });
 
     return c.json({ event });
   }

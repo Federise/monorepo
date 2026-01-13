@@ -14,7 +14,6 @@ import { verifyLogToken } from "../../lib/log-token.js";
 export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
   // Log read with token auth
   app.use("/log/read", async (c, next) => {
-
     const tokenHeader = c.req.header("X-Log-Token");
 
     // If no token, pass through to auth middleware
@@ -22,7 +21,7 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
       return next();
     }
 
-    const kv = c.get("kv");
+    const logStore = c.get("logStore");
 
     let body: { logId: string; afterSeq?: number; limit?: number };
     try {
@@ -38,11 +37,10 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
     }
 
     // Get log metadata to retrieve secret
-    const metaStr = await kv.get(`__LOG:${logId}:meta`);
-    if (!metaStr) {
+    const meta = await logStore.getMetadata(logId);
+    if (!meta) {
       return c.json({ code: 404, message: "Log not found" }, 404);
     }
-    const meta = JSON.parse(metaStr);
 
     // Verify token
     const verified = await verifyLogToken(tokenHeader, meta.secret);
@@ -53,40 +51,14 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
       return c.json({ code: 403, message: "Token lacks read permission" }, 403);
     }
 
-    // Build prefix for events after the given sequence
-    const prefix = `__LOG:${logId}:events:`;
+    // Read events from Durable Object
+    const result = await logStore.read(logId, { afterSeq, limit });
 
-    // List all event keys
-    const result = await kv.list({ prefix, limit: limit + 1 });
-
-    // Filter to events after afterSeq and fetch their values
-    const events = [];
-    let hasMore = false;
-
-    for (const key of result.keys) {
-      // Extract sequence from key
-      const seqStr = key.name.replace(prefix, "");
-      const seq = parseInt(seqStr, 10);
-
-      if (seq > afterSeq) {
-        if (events.length >= limit) {
-          hasMore = true;
-          break;
-        }
-
-        const value = await kv.get(key.name);
-        if (value) {
-          events.push(JSON.parse(value));
-        }
-      }
-    }
-
-    return c.json({ events, hasMore });
+    return c.json(result);
   });
 
   // Log append with token auth
   app.use("/log/append", async (c, next) => {
-
     const tokenHeader = c.req.header("X-Log-Token");
 
     // If no token, pass through to auth middleware
@@ -94,7 +66,7 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
       return next();
     }
 
-    const kv = c.get("kv");
+    const logStore = c.get("logStore");
 
     let body: { logId: string; content: string };
     try {
@@ -110,11 +82,10 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
     }
 
     // Get log metadata to retrieve secret
-    const metaStr = await kv.get(`__LOG:${logId}:meta`);
-    if (!metaStr) {
+    const meta = await logStore.getMetadata(logId);
+    if (!meta) {
       return c.json({ code: 404, message: "Log not found" }, 404);
     }
-    const meta = JSON.parse(metaStr);
 
     // Verify token
     const verified = await verifyLogToken(tokenHeader, meta.secret);
@@ -125,24 +96,11 @@ export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
       return c.json({ code: 403, message: "Token lacks write permission" }, 403);
     }
 
-    // Get next sequence number
-    const seqKey = `__LOG:${logId}:seq`;
-    const seqStr = await kv.get(seqKey);
-    const nextSeq = seqStr ? parseInt(seqStr, 10) + 1 : 1;
-
-    // Create event
-    const event = {
-      id: crypto.randomUUID(),
-      seq: nextSeq,
+    // Append event atomically via Durable Object
+    const event = await logStore.append(logId, {
       authorId: verified.authorId,
       content,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Store event and update sequence atomically
-    const paddedSeq = String(nextSeq).padStart(10, "0");
-    await kv.put(`__LOG:${logId}:events:${paddedSeq}`, JSON.stringify(event));
-    await kv.put(seqKey, String(nextSeq));
+    });
 
     return c.json({ event });
   });

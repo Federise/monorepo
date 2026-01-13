@@ -2,42 +2,12 @@
   import { getClient, hasLogDeletePermissions } from '../../stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
   import type { LogMeta, LogEvent } from '@federise/sdk';
+  import MessageList from '../chat/MessageList.svelte';
+  import MessageInput from '../chat/MessageInput.svelte';
+  import UsernameModal from '../chat/UsernameModal.svelte';
 
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
-
-  // Check if a message is a meta entry (used for channel name, etc.)
-  function isMetaMessage(content: string): boolean {
-    try {
-      const parsed = JSON.parse(content);
-      return parsed.type === '__meta__';
-    } catch {
-      return false;
-    }
-  }
-
-  // Parse a chat message to extract author and text
-  function parseChatMessage(content: string): { author: string; text: string } | null {
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed.type === '__chat__' && typeof parsed.author === 'string' && typeof parsed.text === 'string') {
-        return { author: parsed.author, text: parsed.text };
-      }
-    } catch {
-      // Not JSON, treat as plain text (backward compatibility)
-    }
-    return null;
-  }
-
-  // Get display content for a message
-  function getMessageDisplay(message: LogEvent): { author: string; text: string } {
-    const parsed = parseChatMessage(message.content);
-    if (parsed) {
-      return parsed;
-    }
-    // Fallback for plain text messages
-    return { author: message.authorId.slice(0, 8), text: message.content };
-  }
 
   interface Channel extends LogMeta {
     secret?: string;
@@ -59,17 +29,6 @@
   let showDeleteModal = $state(false);
   let isDeleting = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
-
-  // Get display name for an author
-  function getAuthorName(authorId: string): string {
-    // Check if it's our own message
-    const client = getClient();
-    if (client) {
-      const caps = client.getGrantedCapabilities();
-      // For now, just show username if set, otherwise truncated ID
-    }
-    return authorId.slice(0, 8);
-  }
 
   // Convert a string to kebab-case
   function toKebabCase(str: string): string {
@@ -154,7 +113,12 @@
     try {
       const result = await client.log.read(selectedChannel.logId, afterSeq, 100);
       if (afterSeq !== undefined) {
-        messages = [...messages, ...result.events];
+        // Deduplicate by event ID to prevent duplicates from race conditions
+        const existingIds = new Set(messages.map(m => m.id));
+        const newEvents = result.events.filter(e => !existingIds.has(e.id));
+        if (newEvents.length > 0) {
+          messages = [...messages, ...newEvents];
+        }
       } else {
         messages = result.events;
       }
@@ -275,14 +239,6 @@
 
   function saveUsername() {
     localStorage.setItem(USERNAME_KEY, username);
-    showUsernameModal = false;
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
   }
 
   onMount(() => {
@@ -353,37 +309,14 @@
         </div>
       </div>
 
-      <div class="messages">
-        {#if isLoading}
-          <div class="loading">Loading messages...</div>
-        {:else if messages.length === 0}
-          <div class="empty-state">
-            <p>No messages yet. Start the conversation!</p>
-          </div>
-        {:else}
-          {#each messages.filter(m => !isMetaMessage(m.content)) as message}
-            {@const display = getMessageDisplay(message)}
-            <div class="message">
-              <span class="author">{display.author}</span>
-              <span class="content">{display.text}</span>
-              <span class="time">{new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-            </div>
-          {/each}
-        {/if}
-      </div>
+      <MessageList {messages} {isLoading} emptyMessage="No messages yet. Start the conversation!" />
 
-      <div class="message-input">
-        <input
-          type="text"
-          placeholder={username ? `Message as ${username}...` : 'Type a message...'}
-          bind:value={newMessage}
-          onkeydown={handleKeydown}
-          disabled={isSending}
-        />
-        <button class="btn btn-primary btn-sm" onclick={sendMessage} disabled={isSending || !newMessage.trim()}>
-          {isSending ? '...' : 'Send'}
-        </button>
-      </div>
+      <MessageInput
+        bind:value={newMessage}
+        placeholder={username ? `Message as ${username}...` : 'Type a message...'}
+        {isSending}
+        onSend={sendMessage}
+      />
     {:else}
       <div class="no-channel">
         <p>Select a channel or create a new one to start chatting</p>
@@ -409,25 +342,7 @@
   </div>
 {/if}
 
-{#if showUsernameModal}
-  <div class="modal-overlay" role="presentation">
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <h3>Set Username</h3>
-      <p>Choose a display name for your messages:</p>
-      <input
-        type="text"
-        placeholder="Enter username"
-        bind:value={username}
-        onkeydown={(e) => e.key === 'Enter' && saveUsername()}
-        class="username-input"
-      />
-      <div class="modal-actions">
-        <button class="btn btn-secondary btn-sm" onclick={() => showUsernameModal = false}>Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick={saveUsername}>Save</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<UsernameModal bind:show={showUsernameModal} bind:username onSave={saveUsername} onCancel={() => {}} />
 
 {#if showDeleteModal && selectedChannel}
   <div class="modal-overlay" role="presentation">
@@ -623,71 +538,12 @@
     gap: 0.5rem;
   }
 
-  .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .loading,
-  .empty-state,
   .no-channel {
     display: flex;
     align-items: center;
     justify-content: center;
     height: 100%;
     color: var(--color-text-muted);
-    font-size: 0.85rem;
-  }
-
-  .message {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.85rem;
-    border-radius: var(--radius);
-  }
-
-  .message:hover {
-    background: var(--color-bg);
-  }
-
-  .author {
-    font-weight: 600;
-    color: var(--color-primary);
-    font-size: 0.8rem;
-    flex-shrink: 0;
-  }
-
-  .content {
-    flex: 1;
-    word-break: break-word;
-  }
-
-  .time {
-    font-size: 0.7rem;
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-  }
-
-  .message-input {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    border-top: 1px solid var(--color-border);
-  }
-
-  .message-input input {
-    flex: 1;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    background: var(--color-bg);
-    color: var(--color-text);
     font-size: 0.85rem;
   }
 
@@ -738,17 +594,6 @@
 
   .share-note {
     font-size: 0.75rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .username-input {
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    background: var(--color-bg);
-    color: var(--color-text);
-    font-size: 0.85rem;
     margin-bottom: 0.75rem;
   }
 

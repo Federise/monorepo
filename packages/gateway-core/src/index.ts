@@ -39,4 +39,4 @@ export {
 export { createAuthMiddleware, type AuthMiddlewareOptions } from "./middleware/auth.js";
 
 // Routes
-export { registerGatewayRoutes, registerBlobDownloadRoute, registerPublicBlobRoute, registerTokenLogRoutes } from "./routes.js";
+export { registerGatewayRoutes, registerBlobDownloadRoute, registerPublicBlobRoute, registerTokenLogRoutes, registerLogSubscribeRoute } from "./routes.js";

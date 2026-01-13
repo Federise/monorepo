@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { IKVStore, IBlobStore, IPresigner } from "./adapters/index.js";
+import type { IKVStore, IBlobStore, IPresigner, ILogStore } from "./adapters/index.js";
 
 /**
  * Gateway configuration
@@ -22,6 +22,8 @@ export interface GatewayEnv {
   kv: IKVStore;
   /** Single blob store for all files */
   blob: IBlobStore;
+  /** Log store for atomic log operations */
+  logStore: ILogStore;
   /** Presigner for direct S3-compatible uploads (optional) */
   presigner?: IPresigner;
   config: GatewayConfig;
@@ -44,6 +46,13 @@ export function getKV(c: AppContext): IKVStore {
  */
 export function getBlob(c: AppContext): IBlobStore {
   return c.get("blob");
+}
+
+/**
+ * Helper to get log store from context
+ */
+export function getLogStore(c: AppContext): ILogStore {
+  return c.get("logStore");
 }
 
 /**

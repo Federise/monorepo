@@ -39,18 +39,16 @@ export class LogTokenCreateEndpoint extends OpenAPIRoute {
 
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
-    const kv = c.get("kv");
-    const config = c.get("config");
+    const logStore = c.get("logStore");
 
     const logId = data.body.logId;
     const namespace = data.body.namespace;
 
     // Get log metadata
-    const metaStr = await kv.get(`__LOG:${logId}:meta`);
-    if (!metaStr) {
+    const meta = await logStore.getMetadata(logId);
+    if (!meta) {
       return c.json({ code: 404, message: "Log not found" }, 404);
     }
-    const meta = JSON.parse(metaStr);
 
     // Verify caller owns the log
     if (meta.ownerNamespace !== namespace) {

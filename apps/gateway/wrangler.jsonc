@@ -13,6 +13,14 @@
 		{ "binding": "R2", "bucket_name": "federise-objects" },
 		{ "binding": "R2_PUBLIC", "bucket_name": "federise-objects-public" }
 	],
+	"durable_objects": {
+		"bindings": [
+			{ "name": "LOG_DO", "class_name": "LogStorageDO" }
+		]
+	},
+	"migrations": [
+		{ "tag": "v1", "new_classes": ["LogStorageDO"] }
+	],
 	"vars": {
 		"BOOTSTRAP_API_KEY": "PASTE_BOOTSTRAP_API_KEY_HERE"
 		// "PUBLIC_DOMAIN": "https://cdn.example.com" // Optional: Set custom domain for public blobs (defaults to worker URL)

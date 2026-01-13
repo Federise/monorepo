@@ -330,6 +330,14 @@ async function generateWranglerConfig(state: DeploymentState): Promise<void> {
         r2_buckets: [
           { binding: "R2", bucket_name: "{{R2_BUCKET}}" },
         ],
+        durable_objects: {
+          bindings: [
+            { name: "LOG_DO", class_name: "LogStorageDO" },
+          ],
+        },
+        migrations: [
+          { tag: "v1", new_classes: ["LogStorageDO"] },
+        ],
         vars: {
           BOOTSTRAP_API_KEY: "{{BOOTSTRAP_API_KEY}}",
           R2_BUCKET: "{{R2_BUCKET}}",

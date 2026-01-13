@@ -40,17 +40,16 @@ export class LogReadEndpoint extends OpenAPIRoute {
 
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
-    const kv = c.get("kv");
+    const logStore = c.get("logStore");
     const logId = data.body.logId;
     const afterSeq = data.body.afterSeq ?? 0;
     const limit = data.body.limit ?? 50;
 
     // Get log metadata to retrieve secret
-    const metaStr = await kv.get(`__LOG:${logId}:meta`);
-    if (!metaStr) {
+    const meta = await logStore.getMetadata(logId);
+    if (!meta) {
       return c.json({ code: 404, message: "Log not found" }, 404);
     }
-    const meta = JSON.parse(metaStr);
 
     // Check authentication: either API key (already authenticated) or token
     const tokenHeader = c.req.header("X-Log-Token");
@@ -67,35 +66,9 @@ export class LogReadEndpoint extends OpenAPIRoute {
     }
     // If no token, we assume API key auth (already validated by middleware)
 
-    // Build prefix for events after the given sequence
-    const afterPadded = String(afterSeq).padStart(10, "0");
-    const prefix = `__LOG:${logId}:events:`;
+    // Read events from Durable Object
+    const result = await logStore.read(logId, { afterSeq, limit });
 
-    // List all event keys
-    const result = await kv.list({ prefix, limit: limit + 1 });
-
-    // Filter to events after afterSeq and fetch their values
-    const events = [];
-    let hasMore = false;
-
-    for (const key of result.keys) {
-      // Extract sequence from key
-      const seqStr = key.name.replace(prefix, "");
-      const seq = parseInt(seqStr, 10);
-
-      if (seq > afterSeq) {
-        if (events.length >= limit) {
-          hasMore = true;
-          break;
-        }
-
-        const value = await kv.get(key.name);
-        if (value) {
-          events.push(JSON.parse(value));
-        }
-      }
-    }
-
-    return c.json({ events, hasMore });
+    return c.json(result);
   }
 }

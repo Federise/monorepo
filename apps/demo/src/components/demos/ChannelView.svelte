@@ -1,6 +1,10 @@
 <script lang="ts">
   import { LogClient, type LogEvent } from '@federise/sdk';
   import { onMount, onDestroy } from 'svelte';
+  import { parseMetaMessage } from '../../lib/chat-utils';
+  import MessageList from '../chat/MessageList.svelte';
+  import MessageInput from '../chat/MessageInput.svelte';
+  import UsernameModal from '../chat/UsernameModal.svelte';
 
   const USERNAME_KEY = 'federise-demo:chatUsername';
 
@@ -23,48 +27,6 @@
   let showUsernameModal = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Check if a message is a meta entry and extract channel name if present
-  function parseMetaMessage(content: string): { type: string; name?: string } | null {
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed.type === '__meta__') {
-        return parsed;
-      }
-    } catch {
-      // Not JSON, regular message
-    }
-    return null;
-  }
-
-  // Parse a chat message to extract author and text
-  function parseChatMessage(content: string): { author: string; text: string } | null {
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed.type === '__chat__' && typeof parsed.author === 'string' && typeof parsed.text === 'string') {
-        return { author: parsed.author, text: parsed.text };
-      }
-    } catch {
-      // Not JSON, treat as plain text
-    }
-    return null;
-  }
-
-  // Get display content for a message
-  function getMessageDisplay(message: LogEvent): { author: string; text: string; isOwn: boolean } {
-    const parsed = parseChatMessage(message.content);
-    const isOwn = message.authorId === client?.authorId;
-    if (parsed) {
-      return { ...parsed, isOwn };
-    }
-    // Fallback for plain text messages
-    return { author: message.authorId.slice(0, 8), text: message.content, isOwn };
-  }
-
-  // Filter messages to exclude meta entries
-  function getDisplayMessages(): LogEvent[] {
-    return messages.filter(m => !parseMetaMessage(m.content));
-  }
-
   function initClient() {
     try {
       // Pass gateway URL from share link (required for connecting to correct gateway)
@@ -82,7 +44,12 @@
     try {
       const result = await client.read(afterSeq, 100);
       if (afterSeq !== undefined) {
-        messages = [...messages, ...result.events];
+        // Deduplicate by event ID to prevent duplicates from race conditions
+        const existingIds = new Set(messages.map(m => m.id));
+        const newEvents = result.events.filter(e => !existingIds.has(e.id));
+        if (newEvents.length > 0) {
+          messages = [...messages, ...newEvents];
+        }
       } else {
         messages = result.events;
         // Extract channel name from first meta message
@@ -157,14 +124,6 @@
 
   function saveUsername() {
     localStorage.setItem(USERNAME_KEY, username);
-    showUsernameModal = false;
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
   }
 
   onMount(async () => {
@@ -236,45 +195,23 @@
       </div>
     </div>
 
-    <div class="messages">
-      {#if isLoading}
-        <div class="loading">
-          <div class="spinner"></div>
-          <p>Loading messages...</p>
-        </div>
-      {:else if getDisplayMessages().length === 0}
-        <div class="empty-state">
-          <p>No messages yet. {client?.canWrite ? 'Start the conversation!' : 'Waiting for messages...'}</p>
-        </div>
-      {:else}
-        {#each getDisplayMessages() as message}
-          {@const display = getMessageDisplay(message)}
-          <div class="message" class:own={display.isOwn}>
-            <span class="author">{display.author}</span>
-            <span class="content">{display.text}</span>
-            <span class="time">{new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-          </div>
-        {/each}
-      {/if}
-    </div>
+    <MessageList
+      {messages}
+      {isLoading}
+      emptyMessage={client?.canWrite ? 'No messages yet. Start the conversation!' : 'No messages yet. Waiting for messages...'}
+    />
 
     {#if error}
       <div class="error-banner">{error}</div>
     {/if}
 
     {#if client?.canWrite}
-      <div class="message-input">
-        <input
-          type="text"
-          placeholder={username ? `Message as ${username}...` : 'Type a message...'}
-          bind:value={newMessage}
-          onkeydown={handleKeydown}
-          disabled={isSending}
-        />
-        <button class="btn btn-primary btn-sm" onclick={sendMessage} disabled={isSending || !newMessage.trim()}>
-          {isSending ? '...' : 'Send'}
-        </button>
-      </div>
+      <MessageInput
+        bind:value={newMessage}
+        placeholder={username ? `Message as ${username}...` : 'Type a message...'}
+        {isSending}
+        onSend={sendMessage}
+      />
     {:else}
       <div class="readonly-notice">
         <p>You have read-only access to this channel</p>
@@ -283,33 +220,18 @@
   {/if}
 </div>
 
-{#if showUsernameModal}
-  <div class="modal-overlay" role="presentation">
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <h3>Set Username</h3>
-      <p>Choose a display name for your messages:</p>
-      <input
-        type="text"
-        placeholder="Enter username"
-        bind:value={username}
-        onkeydown={(e) => e.key === 'Enter' && saveUsername()}
-        class="username-input"
-      />
-      <div class="modal-actions">
-        <button class="btn btn-secondary btn-sm" onclick={() => showUsernameModal = false}>Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick={saveUsername}>Save</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<UsernameModal bind:show={showUsernameModal} bind:username onSave={saveUsername} onCancel={() => {}} />
 
 <style>
   .channel-view {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile */
     background: var(--color-bg);
     overflow: hidden;
+    position: fixed;
+    inset: 0;
   }
 
   .error-state {
@@ -345,6 +267,7 @@
     padding: 0.75rem 1rem;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
   }
 
   .channel-info {
@@ -410,99 +333,12 @@
     to { transform: rotate(360deg); }
   }
 
-  .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .loading,
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--color-text-muted);
-    font-size: 0.85rem;
-  }
-
-  .spinner {
-    width: 24px;
-    height: 24px;
-    border: 2px solid var(--color-border);
-    border-top-color: var(--color-primary);
-    border-radius: 50%;
-    margin-bottom: 0.75rem;
-    animation: spin 0.8s linear infinite;
-  }
-
-  .message {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.85rem;
-    border-radius: var(--radius);
-  }
-
-  .message:hover {
-    background: var(--color-bg);
-  }
-
-  .message.own .author {
-    color: var(--color-success, #22c55e);
-  }
-
-  .author {
-    font-weight: 600;
-    color: var(--color-primary);
-    font-size: 0.8rem;
-    flex-shrink: 0;
-  }
-
-  .content {
-    flex: 1;
-    word-break: break-word;
-  }
-
-  .time {
-    font-size: 0.7rem;
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-  }
-
   .error-banner {
     padding: 0.5rem 0.75rem;
     background: var(--color-error, #ef4444);
     color: white;
     font-size: 0.8rem;
-  }
-
-  .message-input {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: var(--color-surface);
-    border-top: 1px solid var(--color-border);
-  }
-
-  .message-input input {
-    flex: 1;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    background: var(--color-bg);
-    color: var(--color-text);
-    font-size: 0.85rem;
-  }
-
-  .btn-sm {
-    padding: 0.375rem 0.625rem;
-    font-size: 0.8rem;
+    flex-shrink: 0;
   }
 
   .readonly-notice {
@@ -512,56 +348,10 @@
     text-align: center;
     color: var(--color-text-muted);
     font-size: 0.8rem;
+    flex-shrink: 0;
   }
 
   .readonly-notice p {
     margin: 0;
   }
-
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .modal {
-    background: var(--color-surface);
-    border-radius: var(--radius-lg);
-    padding: 1.25rem;
-    max-width: 350px;
-    width: 90%;
-  }
-
-  .modal h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
-  }
-
-  .modal p {
-    color: var(--color-text-muted);
-    margin-bottom: 0.75rem;
-    font-size: 0.85rem;
-  }
-
-  .username-input {
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    background: var(--color-bg);
-    color: var(--color-text);
-    font-size: 0.85rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .modal-actions {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
-  }
-
 </style>
