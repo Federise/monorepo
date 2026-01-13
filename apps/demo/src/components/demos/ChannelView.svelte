@@ -138,7 +138,7 @@
   {#if error && !client}
     <div class="error-state">
       <div class="error-icon">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10" />
           <line x1="15" y1="9" x2="9" y2="15" />
           <line x1="9" y1="9" x2="15" y2="15" />
@@ -146,19 +146,17 @@
       </div>
       <h2>Invalid Link</h2>
       <p>{error}</p>
-      <a href="/" class="btn btn-primary btn-sm">Go to Demo</a>
     </div>
   {:else if client?.isExpired}
     <div class="error-state">
       <div class="error-icon">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10" />
           <polyline points="12 6 12 12 16 14" />
         </svg>
       </div>
       <h2>Link Expired</h2>
       <p>This share link has expired. Please ask the channel owner for a new link.</p>
-      <a href="/" class="btn btn-primary btn-sm">Go to Demo</a>
     </div>
   {:else}
     <div class="channel-header">
@@ -257,10 +255,8 @@
   .channel-view {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 120px);
-    background: var(--color-surface);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
+    height: 100vh;
+    background: var(--color-bg);
     overflow: hidden;
   }
 
@@ -276,25 +272,26 @@
 
   .error-icon {
     color: var(--color-text-muted);
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
   }
 
   .error-state h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1.1rem;
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
   }
 
   .error-state p {
     color: var(--color-text-muted);
-    margin-bottom: 1rem;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
+    max-width: 300px;
   }
 
   .channel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.625rem 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
   }
 
@@ -364,7 +361,7 @@
   .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 0.5rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -436,7 +433,8 @@
   .message-input {
     display: flex;
     gap: 0.5rem;
-    padding: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-surface);
     border-top: 1px solid var(--color-border);
   }
 
@@ -456,8 +454,8 @@
   }
 
   .readonly-notice {
-    padding: 0.5rem 0.75rem;
-    background: var(--color-bg);
+    padding: 0.75rem 1rem;
+    background: var(--color-surface);
     border-top: 1px solid var(--color-border);
     text-align: center;
     color: var(--color-text-muted);
@@ -514,9 +512,4 @@
     justify-content: flex-end;
   }
 
-  @media (max-width: 768px) {
-    .channel-view {
-      height: calc(100vh - 80px);
-    }
-  }
 </style>

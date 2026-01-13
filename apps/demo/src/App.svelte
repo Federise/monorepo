@@ -60,102 +60,104 @@
   });
 </script>
 
-<div class="app-layout">
-  <Sidebar bind:currentView bind:mobileMenuOpen />
+{#if currentView === 'channel' && channelToken}
+  <ChannelView token={channelToken} />
+{:else}
+  <div class="app-layout">
+    <Sidebar bind:currentView bind:mobileMenuOpen />
 
-  <div class="main-wrapper">
-    <!-- Mobile header -->
-    <header class="mobile-header">
-      <button class="menu-btn" onclick={() => (mobileMenuOpen = true)} aria-label="Open menu">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
-      </button>
-      <span class="mobile-title">Federise Demo</span>
-      <span
-        class="status-dot mobile-status"
-        class:connected={connectionState.value === 'connected'}
-        class:connecting={connectionState.value === 'connecting'}
-        class:disconnected={connectionState.value === 'disconnected'}
-      ></span>
-    </header>
+    <div class="main-wrapper">
+      <!-- Mobile header -->
+      <header class="mobile-header">
+        <button class="menu-btn" onclick={() => (mobileMenuOpen = true)} aria-label="Open menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <span class="mobile-title">Federise Demo</span>
+        <span
+          class="status-dot mobile-status"
+          class:connected={connectionState.value === 'connected'}
+          class:connecting={connectionState.value === 'connecting'}
+          class:disconnected={connectionState.value === 'disconnected'}
+        ></span>
+      </header>
 
-    <main class="main-content">
-      {#if !initialized.value}
-        <div class="card connect-prompt">
-          <div class="spinner"></div>
-          <p>Restoring connection...</p>
-        </div>
-      {:else if currentView === 'settings'}
-        <Settings />
-      {:else if currentView === 'notes'}
-        {#if connectionState.value === 'connected' && hasKVPermissions()}
-          <Notes />
-        {:else}
+      <main class="main-content">
+        {#if !initialized.value}
           <div class="card connect-prompt">
-            <div class="prompt-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-            </div>
-            <h2>Notes Demo</h2>
-            <p>Connect to Federise and grant KV permissions to use the notes demo.</p>
-            {#if connectionState.value === 'disconnected'}
-              <p class="hint">Click "Connect" in the sidebar to get started.</p>
-            {:else if connectionState.value === 'connected'}
-              <p class="hint">Click "Grant Permissions" to enable KV access.</p>
-            {/if}
+            <div class="spinner"></div>
+            <p>Restoring connection...</p>
           </div>
-        {/if}
-      {:else if currentView === 'files'}
-        {#if connectionState.value === 'connected' && hasBlobPermissions()}
-          <Files />
-        {:else}
-          <div class="card connect-prompt">
-            <div class="prompt-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-              </svg>
+        {:else if currentView === 'settings'}
+          <Settings />
+        {:else if currentView === 'notes'}
+          {#if connectionState.value === 'connected' && hasKVPermissions()}
+            <Notes />
+          {:else}
+            <div class="card connect-prompt">
+              <div class="prompt-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+              </div>
+              <h2>Notes Demo</h2>
+              <p>Connect to Federise and grant KV permissions to use the notes demo.</p>
+              {#if connectionState.value === 'disconnected'}
+                <p class="hint">Click "Connect" in the sidebar to get started.</p>
+              {:else if connectionState.value === 'connected'}
+                <p class="hint">Click "Grant Permissions" to enable KV access.</p>
+              {/if}
             </div>
-            <h2>Files Demo</h2>
-            <p>Connect to Federise and grant blob permissions to use the files demo.</p>
-            {#if connectionState.value === 'disconnected'}
-              <p class="hint">Click "Connect" in the sidebar to get started.</p>
-            {:else if connectionState.value === 'connected'}
-              <p class="hint">Click "Grant Permissions" to enable file access.</p>
-            {/if}
-          </div>
-        {/if}
-      {:else if currentView === 'chat'}
-        {#if connectionState.value === 'connected' && hasLogPermissions()}
-          <Chat />
-        {:else}
-          <div class="card connect-prompt">
-            <div class="prompt-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+          {/if}
+        {:else if currentView === 'files'}
+          {#if connectionState.value === 'connected' && hasBlobPermissions()}
+            <Files />
+          {:else}
+            <div class="card connect-prompt">
+              <div class="prompt-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <h2>Files Demo</h2>
+              <p>Connect to Federise and grant blob permissions to use the files demo.</p>
+              {#if connectionState.value === 'disconnected'}
+                <p class="hint">Click "Connect" in the sidebar to get started.</p>
+              {:else if connectionState.value === 'connected'}
+                <p class="hint">Click "Grant Permissions" to enable file access.</p>
+              {/if}
             </div>
-            <h2>Chat Demo</h2>
-            <p>Connect to Federise and grant log permissions to create and share channels.</p>
-            {#if connectionState.value === 'disconnected'}
-              <p class="hint">Click "Connect" in the sidebar to get started.</p>
-            {:else if connectionState.value === 'connected'}
-              <p class="hint">Click "Grant Permissions" to enable chat.</p>
-            {/if}
-          </div>
+          {/if}
+        {:else if currentView === 'chat'}
+          {#if connectionState.value === 'connected' && hasLogPermissions()}
+            <Chat />
+          {:else}
+            <div class="card connect-prompt">
+              <div class="prompt-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <h2>Chat Demo</h2>
+              <p>Connect to Federise and grant log permissions to create and share channels.</p>
+              {#if connectionState.value === 'disconnected'}
+                <p class="hint">Click "Connect" in the sidebar to get started.</p>
+              {:else if connectionState.value === 'connected'}
+                <p class="hint">Click "Grant Permissions" to enable chat.</p>
+              {/if}
+            </div>
+          {/if}
         {/if}
-      {:else if currentView === 'channel' && channelToken}
-        <ChannelView token={channelToken} />
-      {/if}
-    </main>
+      </main>
+    </div>
   </div>
-</div>
+{/if}
 
 <style>
   .app-layout {
