@@ -51,12 +51,12 @@ interface ProxyBackend {
   blobDelete(namespace: string, key: string): Promise<void>;
   blobList(namespace: string): Promise<BlobMetadata[]>;
 
-  // Log operations
-  logCreate(namespace: string, name: string): Promise<{ metadata: LogMetadata; secret: string }>;
-  logAppend(namespace: string, logId: string, content: string): Promise<LogEvent>;
-  logRead(namespace: string, logId: string, afterSeq?: number, limit?: number): Promise<LogReadResult>;
-  logDelete(namespace: string, logId: string): Promise<void>;
-  logCreateToken(namespace: string, logId: string, permissions: string[], expiresIn?: number): Promise<TokenResult>;
+  // Channel operations
+  channelCreate(namespace: string, name: string): Promise<{ metadata: ChannelMetadata; secret: string }>;
+  channelAppend(namespace: string, channelId: string, content: string): Promise<ChannelEvent>;
+  channelRead(namespace: string, channelId: string, afterSeq?: number, limit?: number): Promise<ChannelReadResult>;
+  channelDelete(namespace: string, channelId: string): Promise<void>;
+  channelCreateToken(namespace: string, channelId: string, permissions: string[], expiresIn?: number): Promise<TokenResult>;
 }
 
 interface CapabilityStore {

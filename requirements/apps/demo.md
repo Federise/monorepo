@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Demo application is a Svelte 5 single-page application that showcases the three core Federise capabilities: Notes (KV storage), Files (Blob storage), and Chat (Log storage). It demonstrates how third-party applications integrate with Federise through the SDK.
+The Demo application is a Svelte 5 single-page application that showcases the three core Federise capabilities: Notes (KV storage), Files (Blob storage), and Chat (Channel storage). It demonstrates how third-party applications integrate with Federise through the SDK.
 
 ## Technical Specifications
 
@@ -34,7 +34,7 @@ src/
 │   └── demos/
 │       ├── Notes.svelte     # KV storage demo
 │       ├── Files.svelte     # Blob storage demo
-│       ├── Chat.svelte      # Log storage demo
+│       ├── Chat.svelte      # Channel storage demo
 │       └── ChannelView.svelte # Shared channel viewer
 ├── lib/
 │   ├── types.ts             # TypeScript definitions
@@ -160,8 +160,8 @@ interface Note {
 
 **Channel Structure:**
 ```typescript
-interface Channel extends LogMeta {
-  logId: string;
+interface Channel extends ChannelMeta {
+  channelId: string;
   name: string;
   createdAt?: string;
   secret?: string;  // Only for owner
@@ -180,12 +180,12 @@ interface Channel extends LogMeta {
 **Operations:**
 | Action | SDK Method | Notes |
 |--------|------------|-------|
-| Create | `client.log.create()` | + meta message |
-| List | `client.log.list()` | User's channels |
-| Append | `client.log.append()` | Chat message |
-| Read | `client.log.read()` | With afterSeq |
-| Share | `client.log.createToken()` | 7-day expiry |
-| Delete | `client.log.delete()` | Owner only |
+| Create | `client.channel.create()` | + meta message |
+| List | `client.channel.list()` | User's channels |
+| Append | `client.channel.append()` | Chat message |
+| Read | `client.channel.read()` | With afterSeq |
+| Share | `client.channel.createToken()` | 7-day expiry |
+| Delete | `client.channel.delete()` | Owner only |
 
 **Polling System:**
 ```typescript
@@ -202,12 +202,12 @@ pollInterval = setInterval(async () => {
 **Implementation:**
 ```typescript
 // ChannelView.svelte:30-39
-const logClient = new LogClient({
+const logClient = new ChannelClient({
   gatewayUrl: props.gatewayUrl,
   token: props.token
 });
 
-// No FederiseClient needed - uses token-based LogClient
+// No FederiseClient needed - uses token-based ChannelClient
 ```
 
 **Features:**

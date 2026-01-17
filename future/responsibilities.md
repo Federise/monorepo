@@ -119,7 +119,7 @@ Each layer has specific responsibilities and boundaries.
 |----------------|----------------|
 | API key authentication | Validate `Authorization: ApiKey {key}` header |
 | Token authentication | Verify HMAC-signed tokens for logs/blobs |
-| Storage abstraction | `IKVStore`, `IBlobStore`, `ILogStore` interfaces |
+| Storage abstraction | `IKVStore`, `IBlobStore`, `IChannelStore` interfaces |
 | Business logic | Create, read, update, delete operations |
 | URL signing | Presigned URLs for direct upload/download |
 
@@ -154,7 +154,7 @@ Each layer has specific responsibilities and boundaries.
 | **SHA-256 namespace hashing** | Namespaces are opaque, unreadable | Yes - add readable names |
 | **Capabilities are coarse** | kv:write grants write to ALL keys | Yes - add key patterns |
 | **Frame is single source** | Must use federise.org frame | Yes - configurable proxy |
-| **Logs require log:create for everything** | Can't have read-only log access | Yes - split into read/write |
+| **Channels require channel:create for everything** | Can't have read-only channel access | Yes - split into read/write |
 | **No data portability** | Users can't export their data | Yes - add export capability |
 | **Presigned URLs only** | No direct streaming downloads | Maybe - security tradeoff |
 | **JSON-only KV values** | SDK treats values as strings | Keep - simplicity |
@@ -177,9 +177,9 @@ Each layer has specific responsibilities and boundaries.
 | Permission | Description | Use Case |
 |------------|-------------|----------|
 | `kv:list` | List keys without reading values | Show key browser |
-| `log:read` | Read logs without write | Read-only log access |
-| `log:write` | Append without create | Write to existing logs |
-| `log:share` | Create share tokens | Sharing without full access |
+| `channel:read` | Read channels without write | Read-only channel access |
+| `channel:write` | Append without create | Write to existing channels |
+| `channel:share` | Create share tokens | Sharing without full access |
 | `blob:list` | List blobs without reading | File browser |
 | `blob:share` | Create share tokens | Share individual files |
 | `namespace:list` | List accessible namespaces | Namespace browser |
@@ -304,10 +304,10 @@ Where should each check happen?
 - **Not Generic**: Visibility model (public/presigned/private) is opinionated
 - **Fix**: Make visibility just one of many access policies
 
-### Log (Append-Only Event Stream)
+### Channel (Append-Only Event Stream)
 - **Purpose**: Ordered, append-only event storage
 - **Generic**: Any content, any author, any use case
-- **Not Generic**: log:create bundles create/read/write/share
+- **Not Generic**: channel:create bundles create/read/write/share
 - **Fix**: Split into granular permissions
 
 ### Namespace
@@ -319,7 +319,7 @@ Where should each check happen?
 ## Implementation Priority
 
 ### Phase 1: Split Permissions
-1. Split `log:create` into `log:read`, `log:write`, `log:create`, `log:share`
+1. Split `channel:create` into `channel:read`, `channel:write`, `channel:create`, `channel:share`
 2. Add `kv:list`, `blob:list`
 3. Update SDK, proxy, and authorization flow
 

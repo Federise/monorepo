@@ -40,13 +40,13 @@ This document covers security, performance, and cost considerations that span mu
 
 | Aspect | Implementation | Location |
 |--------|----------------|----------|
-| Algorithm | HMAC-SHA256 | `gateway-core/src/lib/log-token.ts` |
-| Formats | V1 (JSON), V2 (binary), V3 (ultra-compact) | `gateway-core/src/lib/log-token.ts:6-16` |
-| Expiration | Absolute Unix timestamp | `gateway-core/src/lib/log-token.ts:176` |
-| Verification | Timing-safe comparison | `gateway-core/src/lib/log-token.ts:152,207,267` |
+| Algorithm | HMAC-SHA256 | `gateway-core/src/lib/channel-token.ts` |
+| Formats | V1 (JSON), V2 (binary), V3 (ultra-compact) | `gateway-core/src/lib/channel-token.ts:6-16` |
+| Expiration | Absolute Unix timestamp | `gateway-core/src/lib/channel-token.ts:176` |
+| Verification | Timing-safe comparison | `gateway-core/src/lib/channel-token.ts:152,207,267` |
 
 **Token Security Analysis:**
-- HMAC prevents forgery without knowing log secret
+- HMAC prevents forgery without knowing channel secret
 - Timing-safe comparison prevents timing attacks
 - No revocation mechanism (tokens valid until expiry)
 - Token visible in URL fragments (referrer leakage possible)
@@ -62,8 +62,8 @@ Capability Types:
 ├── kv:delete    - Delete KV values
 ├── blob:read    - Read blob metadata and content
 ├── blob:write   - Upload and modify blobs
-├── log:create   - Create logs and append events
-├── log:delete   - Delete logs
+├── channel:create   - Create channels and append events
+├── channel:delete   - Delete channels
 └── notifications - Receive notifications (reserved)
 ```
 
@@ -121,7 +121,7 @@ async function buildNamespace(origin: string): Promise<string> {
 | Algorithm | Usage | Location |
 |-----------|-------|----------|
 | SHA-256 | API key hashing, namespace generation | `gateway-core/src/lib/crypto.ts` |
-| HMAC-SHA256 | Token signing, presigned URLs | `gateway-core/src/lib/hmac.ts`, `log-token.ts` |
+| HMAC-SHA256 | Token signing, presigned URLs | `gateway-core/src/lib/hmac.ts`, `channel-token.ts` |
 | crypto.getRandomValues | Key generation | `gateway-core/src/lib/crypto.ts:2` |
 
 **Implementation Quality:**
@@ -155,8 +155,8 @@ async function buildNamespace(origin: string): Promise<string> {
 | KV List | 30-100ms | Key enumeration |
 | Blob Upload (direct) | 50-200ms | R2 write |
 | Blob Upload (presigned) | 10-20ms | URL generation |
-| Log Append | 50-100ms | Durable Object coordination |
-| Log Read | 30-80ms | DO storage query |
+| Channel Append | 50-100ms | Durable Object coordination |
+| Channel Read | 30-80ms | DO storage query |
 | SSE Poll | 1000ms interval | Fixed polling |
 
 #### Self-Hosted Gateway
@@ -172,21 +172,21 @@ async function buildNamespace(origin: string): Promise<string> {
 
 #### Durable Object Log Bottleneck
 
-**Problem:** Single DO instance per log serializes all appends
-- Theoretical max: ~20 appends/second per log
-- Location: `apps/gateway/src/durable-objects/log-storage.ts`
+**Problem:** Single DO instance per channel serializes all appends
+- Theoretical max: ~20 appends/second per channel
+- Location: `apps/gateway/src/durable-objects/channel-storage.ts`
 
-**Impact:** High-throughput logs will queue requests
+**Impact:** High-throughput channels will queue requests
 
 **Mitigation Options:**
-1. Log sharding (split logId into segments)
+1. Channel sharding (split channelId into segments)
 2. Client-side buffering
 3. Batch append API
 
 #### SSE Polling Overhead
 
 **Problem:** 1-second polling interval creates constant load
-- Location: `gateway-core/src/endpoints/log/subscribe.ts:55`
+- Location: `gateway-core/src/endpoints/channel/subscribe.ts:55`
 - 60+ requests/minute per active subscriber
 
 **Impact:** High subscriber count = high request volume
@@ -253,8 +253,8 @@ async function buildNamespace(origin: string): Promise<string> {
    - Solution: Client-side upload deduplication
 
 3. **Durable Object Requests**
-   - Each log append = 1+ DO requests
-   - High-volume logs add up quickly
+   - Each channel append = 1+ DO requests
+   - High-volume channels add up quickly
    - Solution: Batch append operations
 
 **Low-Cost Operations:**
@@ -314,7 +314,7 @@ async function buildNamespace(origin: string): Promise<string> {
 
 | ID | Component | Issue | Impact |
 |----|-----------|-------|--------|
-| BUG-005 | apps/gateway | Single DO bottleneck per log | Throughput limit |
+| BUG-005 | apps/gateway | Single DO bottleneck per channel | Throughput limit |
 | BUG-006 | gateway-core | No SSE heartbeat | Connection timeouts |
 | BUG-007 | apps/org | KV delete uses empty string instead of delete | Storage waste |
 | BUG-008 | apps/self | Presigned bucket logic uses string matching | Security risk |
@@ -362,7 +362,7 @@ async function buildNamespace(origin: string): Promise<string> {
 ### Performance Recommendations
 
 **Priority 1 (Critical):**
-1. Implement log sharding for high-throughput scenarios
+1. Implement channel sharding for high-throughput scenarios
 2. Add SSE heartbeat to prevent connection timeouts
 3. Implement true streaming for self-hosted uploads
 

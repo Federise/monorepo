@@ -6,7 +6,7 @@ No caching exists at any layer. Every operation = full round trip to gateway.
 
 **Impact:**
 - KV get: ~30-80ms per request (even for same key)
-- Log read: ~50-100ms per request (re-fetches all events)
+- Channel read: ~50-100ms per request (re-fetches all events)
 - High latency for repeated access
 - Unnecessary load on gateway
 - Poor offline experience
@@ -68,28 +68,28 @@ interface CacheInvalidation {
 }
 ```
 
-## Log Caching
+## Channel Caching
 
-Logs are append-only, making caching more predictable. Only fetch events after `lastCachedSeq`.
+Channels are append-only, making caching more predictable. Only fetch events after `lastCachedSeq`.
 
 ### Configuration
 
 ```typescript
-interface LogCacheConfig {
+interface ChannelCacheConfig {
   enabled: boolean;
   storage: 'memory' | 'indexeddb' | 'both';
-  maxEventsPerLog?: number;
+  maxEventsPerChannel?: number;
   maxTotalEvents?: number;
   syncMode: 'manual' | 'poll' | 'realtime';
   pollInterval?: number;
   compactOnRead?: boolean;
 }
 
-interface LogCacheState {
-  events: LogEvent[];
+interface ChannelCacheState {
+  events: ChannelEvent[];
   lastSeq: number;
   lastSyncedAt: number;
-  metadata?: LogMeta;
+  metadata?: ChannelMeta;
 }
 ```
 
@@ -100,7 +100,7 @@ Fetch only new events by passing `afterSeq` parameter. Merge with cached events.
 ### Real-Time Sync
 
 When WebSocket support is added:
-- Subscribe to log with `afterSeq` parameter
+- Subscribe to channel with `afterSeq` parameter
 - Append incoming events to cache
 - Detect gaps and trigger full resync
 
@@ -201,9 +201,9 @@ const unsubscribe = client.kv.watch('user:*', (event) => {
   else if (event.type === 'delete') cache.delete(event.key);
 });
 
-// Subscribe to log events
-const unsubscribe = client.log.subscribe(logId, (event) => {
-  cache.appendEvent(logId, event);
+// Subscribe to channel events
+const unsubscribe = client.channel.subscribe(channelId, (event) => {
+  cache.appendEvent(channelId, event);
 });
 ```
 
@@ -212,7 +212,7 @@ const unsubscribe = client.log.subscribe(logId, (event) => {
 ### React
 
 ```typescript
-import { useFederiseKV, useFederiseLog } from '@federise/react';
+import { useFederiseKV, useFederiseChannel } from '@federise/react';
 
 const { data: user, isLoading, mutate } = useFederiseKV<User>('user:profile', {
   revalidateOnFocus: true,
@@ -220,7 +220,7 @@ const { data: user, isLoading, mutate } = useFederiseKV<User>('user:profile', {
   dedupingInterval: 2000,
 });
 
-const { events, isLoading, append } = useFederiseLog(logId, {
+const { events, isLoading, append } = useFederiseChannel(channelId, {
   subscribe: true,
   limit: 100,
 });
@@ -229,19 +229,19 @@ const { events, isLoading, append } = useFederiseLog(logId, {
 ### Svelte
 
 ```typescript
-import { federiseKV, federiseLog } from '@federise/svelte';
+import { federiseKV, federiseChannel } from '@federise/svelte';
 
 const user = federiseKV<User>('user:profile', { cache: true });
-const messages = federiseLog(logId, { subscribe: true, limit: 100 });
+const messages = federiseChannel(channelId, { subscribe: true, limit: 100 });
 ```
 
 ### Vue
 
 ```typescript
-import { useFederiseKV, useFederiseLog } from '@federise/vue';
+import { useFederiseKV, useFederiseChannel } from '@federise/vue';
 
 const { data: user, loading, error, mutate } = useFederiseKV('user:profile');
-const { events, append, subscribe } = useFederiseLog(logId);
+const { events, append, subscribe } = useFederiseChannel(channelId);
 ```
 
 ## Implementation Phases
@@ -253,7 +253,7 @@ Opt-in cache configuration with memory and IndexedDB storage options.
 Gateway returns version info, supports conditional requests (If-None-Match, 304).
 
 ### Phase 3: Bulk Operations
-New endpoints: `POST /kv/bulk/get`, `POST /kv/bulk/set`, `POST /log/bulk/read`.
+New endpoints: `POST /kv/bulk/get`, `POST /kv/bulk/set`, `POST /channel/bulk/read`.
 
 ### Phase 4: Real-Time Subscriptions
 WebSocket for real-time updates (see logs.md).

@@ -6,7 +6,7 @@ Run Federise gateway capabilities entirely in the browser, without requiring a r
 
 ## Key Insight: Reusing gateway-core
 
-`gateway-core` is already environment-agnostic. It defines adapter interfaces (`IKVStore`, `IBlobStore`, `ILogStore`), HTTP routes via Hono, and business logic for all operations.
+`gateway-core` is already environment-agnostic. It defines adapter interfaces (`IKVStore`, `IBlobStore`, `IChannelStore`), HTTP routes via Hono, and business logic for all operations.
 
 **We can run gateway-core in a Service Worker** by:
 1. Implementing adapters using browser storage APIs
@@ -20,7 +20,7 @@ This means the local gateway exposes the **exact same HTTP API** as the remote g
 - Web Application makes fetch requests to `/gateway/*`
 - Service Worker intercepts these requests
 - gateway-core (Hono) handles routing
-- IndexedDB adapters (IndexedDBKVStore, IndexedDBBlobStore, IndexedDBLogStore) persist data
+- IndexedDB adapters (IndexedDBKVStore, IndexedDBBlobStore, IndexedDBChannelStore) persist data
 
 ## Package Structure
 
@@ -31,7 +31,7 @@ packages/local/
 │   ├── adapters/
 │   │   ├── kv.ts               # IKVStore → IndexedDB
 │   │   ├── blob.ts             # IBlobStore → IndexedDB + Object URLs
-│   │   └── log.ts              # ILogStore → IndexedDB
+│   │   └── channel.ts          # IChannelStore → IndexedDB
 │   ├── gateway.ts              # Creates Hono app with local adapters
 │   ├── service-worker.ts       # Service worker entry point
 │   └── db.ts                   # IndexedDB schema and helpers
@@ -61,8 +61,8 @@ interface BlobRecord {
 // IndexedDB stores:
 // federise_kv: KVRecord
 // federise_blobs: BlobRecord
-// federise_log_metadata: LogStoreMetadata
-// federise_log_events: { logId, ...LogStoreEvent }
+// federise_channel_metadata: ChannelStoreMetadata
+// federise_channel_events: { channelId, ...ChannelStoreEvent }
 ```
 
 ## Service Worker Configuration
@@ -98,10 +98,10 @@ const value = await client.kv.get('mykey');
 | Blob upload | Full | IndexedDB (size limits apply) |
 | Blob download | Full | Object URLs or direct |
 | Blob presign | Partial | Returns local URLs, not S3 presigned |
-| Log create | Full | IndexedDB |
-| Log append/read | Full | IndexedDB |
-| Log subscribe (SSE) | Partial | Polling only, no push |
-| Log subscribe (WS) | No | Requires server |
+| Channel create | Full | IndexedDB |
+| Channel append/read | Full | IndexedDB |
+| Channel subscribe (SSE) | Partial | Polling only, no push |
+| Channel subscribe (WS) | No | Requires server |
 | Public blob URLs | Partial | Works within same origin only |
 
 ## Graceful Degradation

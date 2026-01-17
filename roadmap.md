@@ -7,10 +7,10 @@ This document provides a comprehensive listing of completed features and planned
 ### Platform Core
 
 - [x] **Gateway Core Package** (`@federise/gateway-core`)
-  - [x] Adapter interfaces (`IKVStore`, `IBlobStore`, `ILogStore`, `IPresigner`)
+  - [x] Adapter interfaces (`IKVStore`, `IBlobStore`, `IChannelStore`, `IPresigner`)
   - [x] KV endpoints: get, set, keys, bulk get/set, namespaces, dump
   - [x] Blob endpoints: upload, presign-upload, get, download, delete, list, visibility
-  - [x] Log endpoints: create, list, append, read, delete, token/create, subscribe (SSE)
+  - [x] Channel endpoints: create, list, append, read, delete, token/create, subscribe (SSE)
   - [x] Principal endpoints: create, list, delete
   - [x] Auth middleware with API key validation
   - [x] HMAC signing for presigned URLs
@@ -23,7 +23,7 @@ This document provides a comprehensive listing of completed features and planned
   - [x] Cloudflare Workers deployment
   - [x] KV adapter for Cloudflare KV
   - [x] R2 adapter for blob storage
-  - [x] Durable Objects adapter for logs
+  - [x] Durable Objects adapter for channels
   - [x] R2 presigner for direct uploads
 
 - [x] **Self-Hosted Gateway** (`apps/self`)
@@ -31,16 +31,16 @@ This document provides a comprehensive listing of completed features and planned
   - [x] Deno KV adapter (SQLite-backed)
   - [x] Filesystem blob adapter
   - [x] S3/MinIO blob adapter
-  - [x] In-memory log adapter
+  - [x] In-memory channel adapter
 
 ### Client SDK
 
 - [x] **SDK Package** (`@federise/sdk`)
   - [x] FederiseClient (iframe-based, browser)
-  - [x] LogClient (token-based, browser + Node.js)
+  - [x] ChannelClient (token-based, browser + Node.js)
   - [x] KV namespace API (get, set, delete, keys)
   - [x] Blob namespace API (upload, get, delete, list, setVisibility)
-  - [x] Log namespace API (create, list, append, read, delete, createToken)
+  - [x] Channel namespace API (create, list, append, read, delete, createToken)
   - [x] Upload progress tracking with XHR
   - [x] Presigned URL upload with fallback
   - [x] Capability token parsing (V1/V2/V3)
@@ -61,7 +61,7 @@ This document provides a comprehensive listing of completed features and planned
 ### Demo App
 
 - [x] **Demo Application** (`apps/demo`)
-  - [x] Chat room using Log capability
+  - [x] Chat room using Channel capability
   - [x] Token-based sharing
   - [x] SSE subscription polling
   - [x] Cross-gateway channel sharing
@@ -70,25 +70,25 @@ This document provides a comprehensive listing of completed features and planned
 
 ## Planned
 
-### Hybrid Log Architecture
+### Hybrid Channel Architecture
 
 See: `logs.md`
 
 - [ ] **D1 Persistence Layer**
-  - [ ] D1 schema for log_metadata and log_events tables
+  - [ ] D1 schema for channel_metadata and channel_events tables
   - [ ] Dual-write from Durable Objects to D1
   - [ ] Historical query support with SQL indexes
-  - [ ] Cross-log search capability
+  - [ ] Cross-channel search capability
 
 - [ ] **WebSocket Realtime**
   - [ ] WebSocket support in Durable Objects
   - [ ] Replace SSE polling with push-based updates
   - [ ] Connection hydration from recent events buffer
-  - [ ] Presence tracking per log room
+  - [ ] Presence tracking per channel room
 
-- [ ] **ILogStore Interface Extensions**
-  - [ ] `getRealtimeUrl(logId)` for WebSocket URL
-  - [ ] `query(logId, options)` for filtered queries (date range, author, content search)
+- [ ] **IChannelStore Interface Extensions**
+  - [ ] `getRealtimeUrl(channelId)` for WebSocket URL
+  - [ ] `query(channelId, options)` for filtered queries (date range, author, content search)
 
 ### Proxy Package Extraction
 
@@ -97,7 +97,7 @@ See: `proxy.md`
 - [ ] **packages/proxy Package**
   - [ ] Extract Frame Enforcer logic to reusable package
   - [ ] `MessageRouter` for routing messages to backends
-  - [ ] `ProxyBackend` interface (KV, Blob, Log operations)
+  - [ ] `ProxyBackend` interface (KV, Blob, Channel operations)
   - [ ] `CapabilityStore` interface
 
 - [ ] **Transport Adapters**
@@ -132,7 +132,7 @@ See: `local.md`
 - [ ] **IndexedDB Adapters**
   - [ ] `IndexedDBKVStore` implementing IKVStore
   - [ ] `IndexedDBBlobStore` implementing IBlobStore
-  - [ ] `IndexedDBLogStore` implementing ILogStore
+  - [ ] `IndexedDBChannelStore` implementing IChannelStore
 
 - [ ] **Local Features**
   - [ ] Data URL / Object URL presigning for blobs
@@ -202,7 +202,7 @@ See: `auth.md`
 - [ ] **Rate Limiting**
   - [ ] Per-principal limits (requests/minute, requests/hour, burst)
   - [ ] Per-token limits (can be lower than principal)
-  - [ ] Per-operation limits (blob:upload, log:append)
+  - [ ] Per-operation limits (blob:upload, channel:append)
   - [ ] Rate limit headers (X-RateLimit-*)
   - [ ] Durable Object rate limiter for Cloudflare
   - [ ] In-memory rate limiter for self-hosted
@@ -214,10 +214,10 @@ See: `auth.md`
   - [ ] Download counting and tracking
   - [ ] Password-protected downloads
 
-- [ ] **Log Token Enhancements**
+- [ ] **Channel Token Enhancements**
   - [ ] Sequence range restrictions
   - [ ] Max reads/writes limits
-  - [ ] Forever tokens for public logs
+  - [ ] Forever tokens for public channels
 
 - [ ] **Bearer Token Support**
   - [ ] `Authorization: Bearer {token}` header
@@ -225,7 +225,7 @@ See: `auth.md`
 
 - [ ] **App-Level Configuration**
   - [ ] Per-app rate limits
-  - [ ] Per-app resource restrictions (key patterns, log IDs)
+  - [ ] Per-app resource restrictions (key patterns, channel IDs)
   - [ ] Per-app token policy (max expiry, allowed types)
 
 - [ ] **Audit Logging**
@@ -275,7 +275,7 @@ See: `permissions.md`
   - [ ] Permission expiry and review policy
 
 - [ ] **Updated Capability Set**
-  - [ ] Split `log:create` into `log:read`, `log:write`, `log:create`, `log:share`
+  - [ ] Split `channel:create` into `channel:read`, `channel:write`, `channel:create`, `channel:share`
   - [ ] Add `kv:list`, `blob:list`
   - [ ] Add namespace capabilities: `namespace:list`, `namespace:create`, `namespace:share`, `namespace:admin`
   - [ ] Add cross-app capabilities: `cross:read`, `cross:write`
@@ -303,7 +303,7 @@ See: `responsibilities.md`
   - [ ] Namespace enforcement (validate access, not trust proxy)
   - [ ] Audit logging
   - [ ] Rate limiting
-  - [ ] Universal token system (blobs, KV, not just logs)
+  - [ ] Universal token system (blobs, KV, not just channels)
 
 - [ ] **User Control Panel**
   - [ ] View all apps with permissions
@@ -353,8 +353,8 @@ See: `caching.md`
   - [ ] Watch/subscribe for key changes
 
 - [ ] **Framework Integrations**
-  - [ ] `@federise/react` with useFederiseKV, useFederiseLog hooks
-  - [ ] `@federise/svelte` with federiseKV, federiseLog stores
+  - [ ] `@federise/react` with useFederiseKV, useFederiseChannel hooks
+  - [ ] `@federise/svelte` with federiseKV, federiseChannel stores
   - [ ] `@federise/vue` with composables
   - [ ] `@federise/solid` with primitives
 
@@ -383,7 +383,7 @@ From `CROSS-CUTTING-CONCERNS.md`:
 
 ### Performance
 
-- [ ] BUG-005: Log sharding for high-throughput (single DO bottleneck)
+- [ ] BUG-005: Channel sharding for high-throughput (single DO bottleneck)
 - [ ] BUG-006: Add SSE heartbeat
 - [ ] BUG-009: Fix N+1 principal listing
 - [ ] BUG-012: Adaptive SSE polling intervals

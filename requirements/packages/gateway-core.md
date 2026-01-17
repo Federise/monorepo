@@ -29,19 +29,19 @@ src/
 │   ├── kv.ts               # IKVStore interface
 │   ├── blob.ts             # IBlobStore interface
 │   ├── presigner.ts        # IPresigner interface
-│   └── log.ts              # ILogStore interface
+│   └── channel.ts              # IChannelStore interface
 ├── endpoints/
 │   ├── ping.ts             # Health check
 │   ├── kv/                 # KV operations
 │   ├── blob/               # Blob operations
-│   ├── log/                # Log operations
+│   ├── channel/            # Channel operations
 │   └── principal/          # Principal management
 ├── middleware/
 │   └── auth.ts             # Authentication middleware
 └── lib/
     ├── crypto.ts           # Key generation/hashing
     ├── hmac.ts             # HMAC signing
-    ├── log-token.ts        # Capability tokens
+    ├── channel-token.ts        # Capability tokens
     ├── namespace-alias.ts  # URL shortening
     └── observability.ts    # Request tracking
 ```
@@ -113,33 +113,33 @@ interface IPresigner {
 }
 ```
 
-### ILogStore
+### IChannelStore
 
 ```typescript
-interface ILogStore {
+interface IChannelStore {
   create(
-    logId: string,
+    channelId: string,
     name: string,
     ownerNamespace: string,
     secret: string
-  ): Promise<LogStoreMetadata>;
+  ): Promise<ChannelStoreMetadata>;
 
-  getMetadata(logId: string): Promise<LogStoreMetadata | null>;
+  getMetadata(channelId: string): Promise<ChannelStoreMetadata | null>;
 
   append(
-    logId: string,
-    options: LogAppendOptions
-  ): Promise<LogStoreEvent>;
+    channelId: string,
+    options: ChannelAppendOptions
+  ): Promise<ChannelStoreEvent>;
 
   read(
-    logId: string,
-    options?: LogReadOptions
-  ): Promise<LogStoreReadResult>;
+    channelId: string,
+    options?: ChannelReadOptions
+  ): Promise<ChannelStoreReadResult>;
 
-  delete(logId: string): Promise<void>;
+  delete(channelId: string): Promise<void>;
 }
 
-interface LogStoreEvent {
+interface ChannelStoreEvent {
   id: string;
   seq: number;
   authorId: string;
@@ -156,7 +156,7 @@ interface LogStoreEvent {
 interface GatewayEnv {
   kv: IKVStore;
   blob: IBlobStore;
-  logStore: ILogStore;
+  channelStore: IChannelStore;
   presigner?: IPresigner;
   config: GatewayConfig;
 }
@@ -182,8 +182,8 @@ export function getBlob(c: AppContext): IBlobStore {
   return c.get('blob');
 }
 
-export function getLogStore(c: AppContext): ILogStore {
-  return c.get('logStore');
+export function getChannelStore(c: AppContext): IChannelStore {
+  return c.get('channelStore');
 }
 
 export function getPresigner(c: AppContext): IPresigner | undefined {
@@ -240,17 +240,17 @@ const GetResponse = z.object({
 const BlobVisibility = z.enum(['public', 'presigned', 'private']);
 ```
 
-### Log Endpoints
+### Channel Endpoints
 
 | Endpoint | Class | Method | Purpose |
 |----------|-------|--------|---------|
-| /log/create | LogCreateEndpoint | POST | Create log |
-| /log/list | LogListEndpoint | POST | List logs |
-| /log/append | LogAppendEndpoint | POST | Append event |
-| /log/read | LogReadEndpoint | POST | Read events |
-| /log/delete | LogDeleteEndpoint | POST | Delete log |
-| /log/token/create | LogTokenCreateEndpoint | POST | Create share token |
-| /log/subscribe | - | GET | SSE stream |
+| /channel/create | ChannelCreateEndpoint | POST | Create channel |
+| /channel/list | ChannelListEndpoint | POST | List channels |
+| /channel/append | ChannelAppendEndpoint | POST | Append event |
+| /channel/read | ChannelReadEndpoint | POST | Read events |
+| /channel/delete | ChannelDeleteEndpoint | POST | Delete channel |
+| /channel/token/create | ChannelTokenCreateEndpoint | POST | Create share token |
+| /channel/subscribe | - | GET | SSE stream |
 
 ### Principal Endpoints
 
@@ -303,15 +303,15 @@ export function createAuthMiddleware(options?: AuthMiddlewareOptions): Middlewar
 ### Token Routes Middleware
 
 ```typescript
-// endpoints/log/token-routes.ts
-export function registerTokenLogRoutes(app: Hono<{ Variables: GatewayEnv }>) {
+// endpoints/channel/token-routes.ts
+export function registerTokenChannelRoutes(app: Hono<{ Variables: GatewayEnv }>) {
   // Runs BEFORE auth middleware for token-based access
-  app.use('/log/read', async (c, next) => {
-    const tokenHeader = c.req.header('X-Log-Token');
+  app.use('/channel/read', async (c, next) => {
+    const tokenHeader = c.req.header('X-Channel-Token');
     if (!tokenHeader) return next();  // Fall through to API key auth
 
     // Verify token and execute operation
-    const verified = await verifyLogToken(tokenHeader, meta.secret);
+    const verified = await verifyChannelToken(tokenHeader, meta.secret);
     if (!verified || !verified.permissions.includes('read')) {
       return c.json({ code: 403, message: 'Token lacks permission' }, 403);
     }
@@ -386,7 +386,7 @@ export async function verifyDownloadUrl(
 }
 ```
 
-### Capability Tokens (`lib/log-token.ts`)
+### Capability Tokens (`lib/channel-token.ts`)
 
 **Token Formats:**
 
@@ -460,7 +460,7 @@ export const BlobMetadata = z.object({
 });
 
 // Log
-export const LogEvent = z.object({
+export const ChannelEvent = z.object({
   id: z.string(),
   seq: z.number().int(),
   authorId: z.string(),
@@ -500,7 +500,7 @@ export function registerGatewayRoutes(app: Hono<{ Variables: GatewayEnv }>) {
   // ... more routes
 
   // Log routes
-  openAPIApp.post('/log/create', LogCreateEndpoint);
+  openAPIApp.post('/channel/create', ChannelCreateEndpoint);
   // ... more routes
 }
 ```
@@ -510,7 +510,7 @@ export function registerGatewayRoutes(app: Hono<{ Variables: GatewayEnv }>) {
 ```typescript
 // index.ts
 // Adapters
-export type { IKVStore, IBlobStore, IPresigner, ILogStore };
+export type { IKVStore, IBlobStore, IPresigner, IChannelStore };
 
 // Types
 export * from './types';
@@ -519,7 +519,7 @@ export * from './context';
 // Crypto utilities
 export { generateApiKey, hashApiKey };
 export { signDownloadUrl, verifyDownloadUrl, generateSignedDownloadUrl };
-export { createLogToken, verifyLogToken, parseLogToken };
+export { createChannelToken, verifyChannelToken, parseChannelToken };
 
 // Namespace utilities
 export { generateAlias, isFullNamespace, resolveNamespace, getAlias, getOrCreateAlias };
@@ -535,8 +535,8 @@ export {
   registerGatewayRoutes,
   registerBlobDownloadRoute,
   registerPublicBlobRoute,
-  registerTokenLogRoutes,
-  registerLogSubscribeRoute
+  registerTokenChannelRoutes,
+  registerChannelSubscribeRoute
 };
 ```
 
@@ -556,7 +556,7 @@ export {
 | Issue | Description | Location |
 |-------|-------------|----------|
 | No Rate Limiting | Auth endpoints vulnerable | `middleware/auth.ts` |
-| No Token Revocation | Tokens valid until expiry | `lib/log-token.ts` |
+| No Token Revocation | Tokens valid until expiry | `lib/channel-token.ts` |
 | N+1 Principal List | Inefficient fetching | `endpoints/principal/list.ts:26-45` |
 
 ## Performance Considerations
@@ -575,7 +575,7 @@ export {
 ### SSE Polling
 
 ```typescript
-// endpoints/log/subscribe.ts:55
+// endpoints/channel/subscribe.ts:55
 const POLL_INTERVAL = 1000;  // 1 second
 ```
 

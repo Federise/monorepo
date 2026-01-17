@@ -11,8 +11,8 @@ type Capability =
   | 'kv:delete'      // Delete any KV key in app's namespace
   | 'blob:read'      // Read any blob in app's namespace
   | 'blob:write'     // Upload/modify any blob in app's namespace
-  | 'log:create'     // Create logs and append/read events
-  | 'log:delete'     // Delete logs
+  | 'channel:create'     // Create channels and append/read events
+  | 'channel:delete'     // Delete channels
   | 'notifications'; // Reserved
 ```
 
@@ -292,8 +292,8 @@ type Capability =
   | 'kv:read' | 'kv:write' | 'kv:delete'
   // Blob Operations
   | 'blob:read' | 'blob:write'
-  // Log Operations (split for granularity)
-  | 'log:read' | 'log:write' | 'log:create' | 'log:delete' | 'log:share'
+  // Channel Operations (split for granularity)
+  | 'channel:read' | 'channel:write' | 'channel:create' | 'channel:delete' | 'channel:share'
   // Namespace Operations (NEW)
   | 'namespace:list' | 'namespace:create' | 'namespace:share' | 'namespace:admin'
   // Cross-App Operations (NEW)

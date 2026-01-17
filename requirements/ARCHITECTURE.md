@@ -10,7 +10,7 @@ Federise is a federated data storage and synchronization platform providing mult
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           Client Applications                            │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  Demo App   │  │  Org Admin  │  │ Third-Party │  │   LogClient │    │
+│  │  Demo App   │  │  Org Admin  │  │ Third-Party │  │   ChannelClient │    │
 │  │  (Svelte)   │  │   (Astro)   │  │    Apps     │  │  (Token)    │    │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘    │
 └─────────┼────────────────┼────────────────┼────────────────┼───────────┘
@@ -20,7 +20,7 @@ Federise is a federated data storage and synchronization platform providing mult
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         SDK Layer (@federise/sdk)                        │
 │  ┌────────────────────────────────┐  ┌──────────────────────────────┐  │
-│  │       FederiseClient           │  │         LogClient            │  │
+│  │       FederiseClient           │  │         ChannelClient            │  │
 │  │   (iframe-based, multi-op)     │  │   (token-based, direct)      │  │
 │  └────────────────────────────────┘  └──────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -41,7 +41,7 @@ Federise is a federated data storage and synchronization platform providing mult
 │  ┌────────────────────────────────────────────────────────────────────┐ │
 │  │                    gateway-core (shared logic)                     │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │ │
-│  │  │   KV     │  │   Blob   │  │   Log    │  │    Principal     │  │ │
+│  │  │   KV     │  │   Blob   │  │ Channel  │  │    Principal     │  │ │
 │  │  │ Endpoints│  │ Endpoints│  │ Endpoints│  │    Management    │  │ │
 │  │  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘  │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
@@ -90,7 +90,7 @@ Platform-agnostic business logic shared between gateway implementations:
 Client libraries for accessing Federise services:
 
 - **FederiseClient**: Full-featured iframe-based client for browser apps
-- **LogClient**: Lightweight token-based client for log operations only
+- **ChannelClient**: Lightweight token-based client for channel operations only
 
 ### 4. Applications
 
@@ -122,12 +122,12 @@ interface IBlobStore {
   list(options?: BlobListOptions): Promise<BlobListResult>;
 }
 
-interface ILogStore {
-  create(logId: string, name: string, ownerNamespace: string, secret: string): Promise<LogStoreMetadata>;
-  getMetadata(logId: string): Promise<LogStoreMetadata | null>;
-  append(logId: string, options: LogAppendOptions): Promise<LogStoreEvent>;
-  read(logId: string, options?: LogReadOptions): Promise<LogStoreReadResult>;
-  delete(logId: string): Promise<void>;
+interface IChannelStore {
+  create(channelId: string, name: string, ownerNamespace: string, secret: string): Promise<ChannelStoreMetadata>;
+  getMetadata(channelId: string): Promise<ChannelStoreMetadata | null>;
+  append(channelId: string, options: ChannelAppendOptions): Promise<ChannelStoreEvent>;
+  read(channelId: string, options?: ChannelReadOptions): Promise<ChannelStoreReadResult>;
+  delete(channelId: string): Promise<void>;
 }
 ```
 
@@ -139,7 +139,7 @@ Access is granted through capabilities, not roles:
 type Capability =
   | 'kv:read' | 'kv:write' | 'kv:delete'
   | 'blob:read' | 'blob:write'
-  | 'log:create' | 'log:delete'
+  | 'channel:create' | 'channel:delete'
   | 'notifications';
 ```
 
@@ -169,8 +169,8 @@ Logs can be shared via capability tokens without requiring accounts:
 
 ```
 Token Format (V3): ~34 characters
-Components: version + logId + permissions + authorId + expiresAt + HMAC signature
-Usage: X-Log-Token header or URL fragment
+Components: version + channelId + permissions + authorId + expiresAt + HMAC signature
+Usage: X-Channel-Token header or URL fragment
 ```
 
 ## Data Flow Patterns
@@ -212,7 +212,7 @@ Log Owner → Gateway → Create Token
                           ↓
                     Share with Recipient
                           ↓
-Recipient → LogClient → Gateway
+Recipient → ChannelClient → Gateway
                           ↓
                     Token Verification
                           ↓
@@ -238,11 +238,11 @@ Recipient → LogClient → Gateway
 | Blob | POST /blob/get | API Key | Get download URL |
 | Blob | GET /blob/f/:ns/:key | None (public) | Public download |
 | Blob | GET /blob/download/:ns/:key | API Key | Authenticated download |
-| Log | POST /log/create | API Key | Create log |
-| Log | POST /log/append | API Key/Token | Append event |
-| Log | POST /log/read | API Key/Token | Read events |
-| Log | GET /log/subscribe | API Key/Token | SSE stream |
-| Log | POST /log/token/create | API Key | Create share token |
+| Log | POST /channel/create | API Key | Create channel |
+| Log | POST /channel/append | API Key/Token | Append event |
+| Log | POST /channel/read | API Key/Token | Read events |
+| Log | GET /channel/subscribe | API Key/Token | SSE stream |
+| Log | POST /channel/token/create | API Key | Create share token |
 
 ### SDK API
 
@@ -259,15 +259,15 @@ client.blob.delete(key)
 client.blob.list()
 client.blob.setVisibility(key, visibility)
 
-client.log.create(name)
-client.log.append(logId, content)
-client.log.read(logId, afterSeq?, limit?)
-client.log.createToken(logId, permissions, expiresInSeconds?)
-client.log.delete(logId)
+client.channel.create(name)
+client.channel.append(channelId, content)
+client.channel.read(channelId, afterSeq?, limit?)
+client.channel.createToken(channelId, permissions, expiresInSeconds?)
+client.channel.delete(channelId)
 
-// LogClient (token-based)
-logClient.read(afterSeq?, limit?)
-logClient.append(content)
+// ChannelClient (token-based)
+channelClient.read(afterSeq?, limit?)
+channelClient.append(content)
 ```
 
 ## Configuration
@@ -293,7 +293,7 @@ logClient.append(content)
   "kv_namespaces": [{ "binding": "KV", "id": "..." }],
   "r2_buckets": [{ "binding": "R2", "bucket_name": "..." }],
   "durable_objects": {
-    "bindings": [{ "name": "LOG_DO", "class_name": "LogStorageDO" }]
+    "bindings": [{ "name": "CHANNEL_DO", "class_name": "ChannelStorageDO" }]
   }
 }
 ```

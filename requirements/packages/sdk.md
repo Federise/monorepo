@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Federise SDK provides client libraries for accessing Federise services from browser and Node.js applications. It includes two clients: FederiseClient (iframe-based, full-featured) and LogClient (token-based, lightweight).
+The Federise SDK provides client libraries for accessing Federise services from browser and Node.js applications. It includes two clients: FederiseClient (iframe-based, full-featured) and ChannelClient (token-based, lightweight).
 
 ## Technical Specifications
 
@@ -22,7 +22,7 @@ The Federise SDK provides client libraries for accessing Federise services from 
 src/
 ├── index.ts          # Public exports (32 lines)
 ├── client.ts         # FederiseClient (887 lines)
-├── log-client.ts     # LogClient (292 lines)
+├── channel-client.ts     # ChannelClient (292 lines)
 └── types.ts          # Type definitions (193 lines)
 
 Total: ~1,404 lines
@@ -30,11 +30,11 @@ Total: ~1,404 lines
 
 ### Client Comparison
 
-| Aspect | FederiseClient | LogClient |
+| Aspect | FederiseClient | ChannelClient |
 |--------|----------------|-----------|
 | Transport | iframe + postMessage | Direct HTTP |
 | Auth | Capability-based | Token-based |
-| Operations | All (KV, Blob, Log) | Log only |
+| Operations | All (KV, Blob, Channel) | Channel only |
 | Environment | Browser only | Browser + Node.js |
 | State | Connected session | Stateless |
 | Bundle Impact | ~15KB | ~8KB |
@@ -146,26 +146,26 @@ const metadata = await client.blob.upload(file, {
    - Chunked file reading (5MB chunks)
    - Memory-bounded
 
-#### Log Namespace
+#### Channel Namespace
 
 ```typescript
-interface LogNamespace {
-  create(name: string): Promise<LogCreateResult>;
-  list(): Promise<LogMeta[]>;
-  append(logId: string, content: string): Promise<LogEvent>;
-  read(logId: string, afterSeq?: number, limit?: number): Promise<LogReadResult>;
-  delete(logId: string): Promise<void>;
+interface ChannelNamespace {
+  create(name: string): Promise<ChannelCreateResult>;
+  list(): Promise<ChannelMeta[]>;
+  append(channelId: string, content: string): Promise<ChannelEvent>;
+  read(channelId: string, afterSeq?: number, limit?: number): Promise<ChannelReadResult>;
+  delete(channelId: string): Promise<void>;
   createToken(
-    logId: string,
+    channelId: string,
     permissions: ('read' | 'write')[],
     expiresInSeconds?: number
   ): Promise<{ token: string; expiresAt: string; gatewayUrl: string }>;
 }
 
 // Usage
-const { metadata, secret } = await client.log.create('My Channel');
-await client.log.append(metadata.logId, 'Hello world');
-const { events, hasMore } = await client.log.read(metadata.logId, 0, 50);
+const { metadata, secret } = await client.channel.create('My Channel');
+await client.channel.append(metadata.channelId, 'Hello world');
+const { events, hasMore } = await client.channel.read(metadata.channelId, 0, 50);
 ```
 
 ### Error Handling
@@ -241,23 +241,23 @@ private uploadFileWithXHR(file: File, url: string, onProgress?): Promise<void> {
 }
 ```
 
-## LogClient
+## ChannelClient
 
 ### Purpose
 
-Lightweight client for token-based log access without iframe dependency. Used by recipients accessing shared logs.
+Lightweight client for token-based channel access without iframe dependency. Used by recipients accessing shared channels.
 
 ### Initialization
 
 ```typescript
 // From capability token
-const logClient = new LogClient({
+const logClient = new ChannelClient({
   gatewayUrl: 'https://gateway.federise.org',
   token: 'AbCdEf...'  // V1, V2, or V3 format
 });
 
 // Properties (readonly)
-logClient.logId      // Extracted from token
+logClient.channelId      // Extracted from token
 logClient.authorId   // Client identifier
 logClient.canRead    // Boolean
 logClient.canWrite   // Boolean
@@ -270,17 +270,17 @@ logClient.expiresAt  // Date
 ```typescript
 // Read events
 const result = await logClient.read(afterSeq?, limit?);
-// Returns: { events: LogEvent[], hasMore: boolean }
+// Returns: { events: ChannelEvent[], hasMore: boolean }
 
 // Append event
 const event = await logClient.append('Hello world');
-// Returns: LogEvent
+// Returns: ChannelEvent
 ```
 
 ### Token Parsing
 
 ```typescript
-// Token format detection (log-client.ts:156-292)
+// Token format detection (channel-client.ts:156-292)
 private parseToken(token: string): TokenData {
   const bytes = base64urlDecode(token);
 
@@ -308,8 +308,8 @@ type Capability =
   | 'kv:delete'
   | 'blob:read'
   | 'blob:write'
-  | 'log:create'
-  | 'log:delete'
+  | 'channel:create'
+  | 'channel:delete'
   | 'notifications';
 ```
 
@@ -337,18 +337,18 @@ interface BlobGetResult {
 ### Log Types
 
 ```typescript
-interface LogMeta {
-  logId: string;
+interface ChannelMeta {
+  channelId: string;
   name: string;
   createdAt?: string;
 }
 
-interface LogCreateResult {
-  metadata: LogMeta;
+interface ChannelCreateResult {
+  metadata: ChannelMeta;
   secret: string;
 }
 
-interface LogEvent {
+interface ChannelEvent {
   id: string;
   seq: number;
   authorId: string;
@@ -356,8 +356,8 @@ interface LogEvent {
   createdAt: string;
 }
 
-interface LogReadResult {
-  events: LogEvent[];
+interface ChannelReadResult {
+  events: ChannelEvent[];
   hasMore: boolean;
 }
 ```
@@ -394,9 +394,9 @@ interface ResponseMessage {
 
 | Feature | Location | Notes |
 |---------|----------|-------|
-| LogClient | log-client.ts | Full functionality |
-| Token parsing | log-client.ts:156 | No DOM needed |
-| Fetch API | log-client.ts | Node 18+ |
+| ChannelClient | channel-client.ts | Full functionality |
+| Token parsing | channel-client.ts:156 | No DOM needed |
+| Fetch API | channel-client.ts | Node 18+ |
 
 **Note:** `atob`/`btoa` may need polyfill in older Node.js versions.
 
@@ -419,7 +419,7 @@ interface ResponseMessage {
 | KV set | 40-100ms | KV write |
 | Blob upload (small) | 100-300ms | Upload + metadata |
 | Blob upload (large) | Variable | File size |
-| Log append | 60-150ms | DO coordination |
+| Channel append | 60-150ms | DO coordination |
 
 ### Memory Efficiency
 
@@ -428,7 +428,7 @@ interface ResponseMessage {
 | Single KV get | Minimal (string) |
 | Presigned upload | Streaming (no buffering) |
 | Iframe upload | 5MB chunks |
-| Log read | Per-event objects |
+| Channel read | Per-event objects |
 
 ## Security Considerations
 
@@ -485,16 +485,16 @@ source.postMessage(message, { targetOrigin: origin });
 ```typescript
 // index.ts
 export { FederiseClient } from './client';
-export { LogClient } from './log-client';
+export { ChannelClient } from './channel-client';
 
 export type {
   Capability,
   BlobMetadata,
   BlobVisibility,
-  LogEvent,
-  LogMeta,
-  LogCreateResult,
-  LogReadResult,
+  ChannelEvent,
+  ChannelMeta,
+  ChannelCreateResult,
+  ChannelReadResult,
   UploadProgress,
   UploadOptions,
   RequestMessage,

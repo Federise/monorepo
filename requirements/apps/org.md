@@ -65,7 +65,7 @@ src/lib/
 ├── permissions.ts           # Permission storage
 ├── kv-storage.ts            # KV operations
 ├── blob-storage.ts          # Blob operations
-└── log-storage.ts           # Log operations
+└── channel-storage.ts       # Channel operations
 
 src/utils/
 └── auth.ts                  # Credential management
@@ -102,7 +102,7 @@ Third-Party App ←────────────────────�
 | Connection | SYN, ACK, REQUEST_CAPABILITIES |
 | KV | GET, SET, DELETE, LIST_KEYS |
 | Blob | UPLOAD, GET_BLOB, DELETE_BLOB, LIST_BLOBS, GET_UPLOAD_URL, SET_VISIBILITY |
-| Log | CREATE, LIST, APPEND, READ, DELETE, CREATE_TOKEN |
+| Channel | CREATE, LIST, APPEND, READ, DELETE, CREATE_TOKEN |
 | Test | TEST_GRANT_PERMISSIONS, TEST_CLEAR_PERMISSIONS |
 
 ### Permission Enforcement

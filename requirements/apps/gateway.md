@@ -23,7 +23,7 @@ The Cloudflare Workers gateway is the production-grade, edge-distributed impleme
 1. Adapter Injection (line 22-46)
    ├─ kv: CloudflareKVAdapter
    ├─ blob: CloudflareR2Adapter
-   ├─ logStore: CloudflareLogDOAdapter
+   ├─ channelStore: CloudflareChannelDOAdapter
    ├─ presigner: CloudflarePresigner (optional)
    └─ config: GatewayConfig
 
@@ -36,8 +36,8 @@ The Cloudflare Workers gateway is the production-grade, edge-distributed impleme
 5. Public Routes - NO AUTH (line 73-83)
    ├─ registerPublicBlobRoute()
    ├─ registerBlobDownloadRoute()
-   ├─ registerTokenLogRoutes()
-   └─ registerLogSubscribeRoute()
+   ├─ registerTokenChannelRoutes()
+   └─ registerChannelSubscribeRoute()
 
 6. Auth Middleware (line 86)
 
@@ -62,8 +62,8 @@ class CloudflareKVAdapter implements IKVStore {
 ```
 __PRINCIPAL:{SHA256_HASH} → { display_name, created_at, active }
 __BLOB:{namespace}:{key} → { size, contentType, visibility, uploadedAt }
-__LOG_INDEX:{namespace}:{logId} → { name, createdAt }
-__LOG_OWNER:{logId} → { ownerNamespace }
+__CHANNEL_INDEX:{namespace}:{channelId} → { name, createdAt }
+__CHANNEL_OWNER:{channelId} → { ownerNamespace }
 __NS_ALIAS:{alias} → {fullNamespace}
 __NS_FULL:{namespace} → {alias}
 {namespace}:{key} → {user_value}
@@ -86,21 +86,21 @@ class CloudflareR2Adapter implements IBlobStore {
 - HTTP metadata (contentType) preservation
 - ETag support for caching
 
-#### CloudflareLogDOAdapter (`src/adapters/cloudflare-log-do.ts`)
+#### CloudflareChannelDOAdapter (`src/adapters/cloudflare-channel-do.ts`)
 
 ```typescript
-class CloudflareLogDOAdapter implements ILogStore {
-  // Routes requests to Durable Object instances by logId
-  private getDO(logId: string): DurableObjectStub {
-    const id = this.namespace.idFromName(logId);
+class CloudflareChannelDOAdapter implements IChannelStore {
+  // Routes requests to Durable Object instances by channelId
+  private getDO(channelId: string): DurableObjectStub {
+    const id = this.namespace.idFromName(channelId);
     return this.namespace.get(id);
   }
 }
 ```
 
 **DO Instance Management:**
-- Each log gets dedicated DO instance
-- Instance identified by `idFromName(logId)`
+- Each channel gets dedicated DO instance
+- Instance identified by `idFromName(channelId)`
 - Cloudflare manages lifecycle (create on demand, hibernate when idle)
 
 #### CloudflarePresigner (`src/adapters/cloudflare-presigner.ts`)
@@ -122,16 +122,16 @@ class CloudflarePresigner implements IPresigner {
 - R2_SECRET_ACCESS_KEY
 - Optional: R2_CUSTOM_DOMAIN
 
-### Durable Object: LogStorageDO
+### Durable Object: ChannelStorageDO
 
-**Location:** `src/durable-objects/log-storage.ts`
+**Location:** `src/durable-objects/channel-storage.ts`
 
 ```typescript
-export class LogStorageDO implements DurableObject {
+export class ChannelStorageDO implements DurableObject {
   private storage: DurableObjectStorage;
 
   // Storage keys:
-  // "meta" → LogMetadata JSON
+  // "meta" → ChannelMetadata JSON
   // "seq" → Current sequence number
   // "event:{paddedSeq}" → Event JSON (10-digit padded)
 }
@@ -141,11 +141,11 @@ export class LogStorageDO implements DurableObject {
 
 | Method | Description |
 |--------|-------------|
-| `create(meta)` | Initialize log with metadata |
-| `getMetadata()` | Retrieve log metadata |
+| `create(meta)` | Initialize channel with metadata |
+| `getMetadata()` | Retrieve channel metadata |
 | `append(content, authorId)` | Atomically append event |
 | `read(afterSeq, limit)` | Read events with pagination |
-| `delete()` | Remove all log data |
+| `delete()` | Remove all channel data |
 
 **Atomic Append Implementation (line 59-81):**
 ```typescript
@@ -204,11 +204,11 @@ async append(options: LogAppendOptions): Promise<LogStoreEvent> {
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "LOG_DO", "class_name": "LogStorageDO" }
+      { "name": "CHANNEL_DO", "class_name": "ChannelStorageDO" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_classes": ["LogStorageDO"] }
+    { "tag": "v1", "new_classes": ["ChannelStorageDO"] }
   ]
 }
 ```
@@ -237,7 +237,7 @@ async append(options: LogAppendOptions): Promise<LogStoreEvent> {
 | R2 object size | 5 TB | Cloudflare |
 | DO storage | 1 GB per instance | Cloudflare |
 | DO websockets | 32,768 per instance | Cloudflare |
-| Log append rate | ~20/sec per log | DO coordination |
+| Channel append rate | ~20/sec per channel | DO coordination |
 
 ### Scalability
 
@@ -247,7 +247,7 @@ async append(options: LogAppendOptions): Promise<LogStoreEvent> {
 - High availability (Cloudflare SLA)
 
 **Limitations:**
-- Single DO instance per log (serialized appends)
+- Single DO instance per channel (serialized appends)
 - KV eventual consistency (stale reads possible)
 - No cross-region transactions
 
@@ -274,15 +274,15 @@ Request → Extract Authorization header
 ### Token-Based Authentication
 
 ```
-Request → Check X-Log-Token header
+Request → Check X-Channel-Token header
         ↓
         Token present? → Pass through to auth middleware
         ↓
         Parse token (detect V1/V2/V3 format)
         ↓
-        Extract logId from token
+        Extract channelId from token
         ↓
-        Load log metadata (get secret)
+        Load channel metadata (get secret)
         ↓
         Verify HMAC signature (timing-safe)
         ↓
@@ -305,9 +305,9 @@ Request → Check X-Log-Token header
 | Blob Upload | 1 | 2 | 1 | - | - |
 | Blob Download | 1 | - | - | 1 | - |
 | Presign Upload | 1 | 1 | - | - | - |
-| Log Create | 1 | 2 | - | - | 1 |
-| Log Append | - | - | - | - | 1 |
-| Log Read | - | - | - | - | 1 |
+| Channel Create | 1 | 2 | - | - | 1 |
+| Channel Append | - | - | - | - | 1 |
+| Channel Read | - | - | - | - | 1 |
 
 ### Monthly Cost Projection
 
@@ -340,7 +340,7 @@ Total: ~$34.50/month
 
 | Issue | Description | Location | Mitigation |
 |-------|-------------|----------|------------|
-| DO Bottleneck | Single DO instance per log limits throughput to ~20 appends/sec | `cloudflare-log-do.ts:21-23` | Implement log sharding |
+| DO Bottleneck | Single DO instance per channel limits throughput to ~20 appends/sec | `cloudflare-channel-do.ts:21-23` | Implement channel sharding |
 | No SSE Heartbeat | Long-lived connections timeout without data | `subscribe.ts:55` | Add 30-second heartbeat |
 
 ### High Priority
@@ -423,10 +423,10 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md#api-surface) for full API documentation
 |------|--------|------|---------|
 | None | OPTIONS | * | CORS preflight |
 | None | GET | /blob/f/:ns/:key | Public blob download |
-| Token | POST | /log/read | Read log events |
-| Token | POST | /log/append | Append log event |
-| Token | GET | /log/subscribe | SSE subscription |
+| Token | POST | /channel/read | Read channel events |
+| Token | POST | /channel/append | Append channel event |
+| Token | GET | /channel/subscribe | SSE subscription |
 | Key | POST | /principal/* | Principal management |
 | Key | POST | /kv/* | KV operations |
 | Key | POST | /blob/* | Blob operations |
-| Key | POST | /log/* | Log operations |
+| Key | POST | /channel/* | Log operations |

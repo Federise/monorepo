@@ -1,10 +1,10 @@
-# Hybrid Log Architecture: Durable Objects + D1
+# Hybrid Channel Architecture: Durable Objects + D1
 
 ## Current State
 
 | Component | Cloudflare Gateway | Self-Hosted |
 |-----------|-------------------|-------------|
-| Log Storage | Durable Objects | In-memory (planned: SQLite) |
+| Channel Storage | Durable Objects | In-memory (planned: SQLite) |
 | Realtime | SSE with 1s polling | SSE with 1s polling |
 | Persistence | DO storage (per-object) | None (volatile) |
 
@@ -13,14 +13,14 @@
 1. **SSE Polling**: Fixed 1-second interval creates constant load and latency
 2. **No True Realtime**: Clients must poll; no push-based updates
 3. **DO Storage Isolation**: Each log is a separate DO; no cross-log queries
-4. **No Historical Search**: Can't query logs by content, date range, etc.
+4. **No Historical Search**: Can't query channels by content, date range, etc.
 
 ## Proposed Architecture
 
 Use **Durable Objects for realtime** and **D1 for persistence**.
 
-- D1 Database stores `log_events` and `log_metadata` (persistence, queries)
-- Durable Object per log room handles WebSocket connections, in-memory recent events, broadcast to subscribers, presence tracking
+- D1 Database stores `channel_events` and `channel_metadata` (persistence, queries)
+- Durable Object per channel room handles WebSocket connections, in-memory recent events, broadcast to subscribers, presence tracking
 - Clients connect via WebSocket to DO for realtime, query D1 for history
 
 ## Data Flow
@@ -32,18 +32,18 @@ Client → DO.append(content) → Broadcast to all WebSocket clients (immediate)
 Client → DO.connect() via WebSocket → DO maintains connection → Push events as they arrive
 
 ### Read (History)
-Client → Gateway → D1.query() → SELECT from log_events WHERE log_id = ? AND seq > ?
+Client → Gateway → D1.query() → SELECT from channel_events WHERE channel_id = ? AND seq > ?
 
-### Create Log
-Client → Gateway → D1: INSERT INTO log_metadata → DO: Initialize (lazy, on first connection)
+### Create Channel
+Client → Gateway → D1: INSERT INTO channel_metadata → DO: Initialize (lazy, on first connection)
 
-### Delete Log
-Client → Gateway → D1: DELETE log_events and log_metadata → DO: Cleanup and close connections
+### Delete Channel
+Client → Gateway → D1: DELETE channel_events and channel_metadata → DO: Cleanup and close connections
 
 ## D1 Schema
 
 ```sql
-CREATE TABLE log_metadata (
+CREATE TABLE channel_metadata (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   owner_namespace TEXT NOT NULL,
@@ -52,54 +52,54 @@ CREATE TABLE log_metadata (
   deleted_at TEXT
 );
 
-CREATE INDEX idx_log_metadata_owner ON log_metadata(owner_namespace);
+CREATE INDEX idx_channel_metadata_owner ON channel_metadata(owner_namespace);
 
-CREATE TABLE log_events (
+CREATE TABLE channel_events (
   id TEXT PRIMARY KEY,
-  log_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
   seq INTEGER NOT NULL,
   author_id TEXT NOT NULL,
   content TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
 
-  FOREIGN KEY (log_id) REFERENCES log_metadata(id),
-  UNIQUE (log_id, seq)
+  FOREIGN KEY (channel_id) REFERENCES channel_metadata(id),
+  UNIQUE (channel_id, seq)
 );
 
-CREATE INDEX idx_log_events_log_seq ON log_events(log_id, seq);
-CREATE INDEX idx_log_events_created ON log_events(created_at);
+CREATE INDEX idx_channel_events_log_seq ON channel_events(channel_id, seq);
+CREATE INDEX idx_channel_events_created ON channel_events(created_at);
 ```
 
 ## Durable Object State
 
 ```typescript
-interface LogRoomDOState {
+interface ChannelRoomDOState {
   connections: Map<WebSocket, { authorId: string }>;
-  recentEvents: LogEvent[];  // Last N events for quick hydration
+  recentEvents: ChannelEvent[];  // Last N events for quick hydration
   nextSeq: number;
   db: D1Database;  // D1 binding for persistence
 }
 ```
 
-## ILogStore Interface Changes
+## IChannelStore Interface Changes
 
 ```typescript
-interface ILogStore {
+interface IChannelStore {
   // Existing
-  create(logId: string, name: string, ownerNamespace: string, secret: string): Promise<LogStoreMetadata>;
-  getMetadata(logId: string): Promise<LogStoreMetadata | null>;
-  append(logId: string, options: LogAppendOptions): Promise<LogStoreEvent>;
-  read(logId: string, options?: LogReadOptions): Promise<LogStoreReadResult>;
-  delete(logId: string): Promise<void>;
+  create(channelId: string, name: string, ownerNamespace: string, secret: string): Promise<ChannelStoreMetadata>;
+  getMetadata(channelId: string): Promise<ChannelStoreMetadata | null>;
+  append(channelId: string, options: ChannelAppendOptions): Promise<ChannelStoreEvent>;
+  read(channelId: string, options?: ChannelReadOptions): Promise<ChannelStoreReadResult>;
+  delete(channelId: string): Promise<void>;
 
   // New: Get WebSocket URL for realtime subscription
-  getRealtimeUrl?(logId: string): string;
+  getRealtimeUrl?(channelId: string): string;
 
   // New: Query with filters (D1-powered)
-  query?(logId: string, options: LogQueryOptions): Promise<LogStoreReadResult>;
+  query?(channelId: string, options: ChannelQueryOptions): Promise<ChannelStoreReadResult>;
 }
 
-interface LogQueryOptions {
+interface ChannelQueryOptions {
   afterSeq?: number;
   beforeSeq?: number;
   authorId?: string;

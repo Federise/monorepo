@@ -5,7 +5,7 @@
 Users can mix and match capability providers:
 - KV stored locally in browser (IndexedDB)
 - Blobs on a self-hosted MinIO server
-- Logs on Cloudflare with Durable Objects
+- Channels on Cloudflare with Durable Objects
 
 Different apps can be configured to use different providers for the same capability.
 
@@ -78,13 +78,13 @@ interface ProviderCapabilities {
     list(namespace: string): Promise<BlobMetadata[]>;
     setVisibility(namespace: string, key: string, visibility: BlobVisibility): Promise<BlobMetadata>;
   };
-  log?: {
-    create(namespace: string, name: string): Promise<LogCreateResult>;
-    append(namespace: string, logId: string, content: string): Promise<LogEvent>;
-    read(namespace: string, logId: string, afterSeq?: number, limit?: number): Promise<LogReadResult>;
-    delete(namespace: string, logId: string): Promise<void>;
-    createToken(namespace: string, logId: string, perms: string[], expiresIn?: number): Promise<TokenResult>;
-    subscribe?(namespace: string, logId: string): AsyncIterable<LogEvent>;
+  channel?: {
+    create(namespace: string, name: string): Promise<ChannelCreateResult>;
+    append(namespace: string, channelId: string, content: string): Promise<ChannelEvent>;
+    read(namespace: string, channelId: string, afterSeq?: number, limit?: number): Promise<ChannelReadResult>;
+    delete(namespace: string, channelId: string): Promise<void>;
+    createToken(namespace: string, channelId: string, perms: string[], expiresIn?: number): Promise<TokenResult>;
+    subscribe?(namespace: string, channelId: string): AsyncIterable<ChannelEvent>;
   };
 }
 
@@ -98,7 +98,7 @@ interface IProvider {
 
   getKV?(): ProviderCapabilities['kv'];
   getBlob?(): ProviderCapabilities['blob'];
-  getLog?(): ProviderCapabilities['log'];
+  getChannel?(): ProviderCapabilities['channel'];
 
   ping(): Promise<boolean>;
 }

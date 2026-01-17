@@ -5,7 +5,7 @@
 | Layer | Mechanism | Strengths | Weaknesses |
 |-------|-----------|-----------|------------|
 | **Principal (API Key)** | 64-char hex, SHA-256 hashed | Secure generation, no plaintext storage | No rotation, no scoping, no rate limits |
-| **Log Tokens** | HMAC-SHA256, V1/V2/V3 formats | Compact, self-contained, time-limited | No revocation, no usage limits |
+| **Channel Tokens** | HMAC-SHA256, V1/V2/V3 formats | Compact, self-contained, time-limited | No revocation, no usage limits |
 | **Blob Presign** | HMAC-SHA256 signed URLs | Stateless verification | Time-based only, no download limits |
 | **App Permissions** | Origin → Capability[] mapping | Simple, effective | No rate limits, no granular control |
 
@@ -37,7 +37,7 @@
   - Token Verifier: Signature, expiry, revocation checks
   - Policy Evaluator: Rate limits, quotas, usage tracking
 - **Auth Context** output: `{ principalId, capabilities, limits, metadata }`
-- **Resource Layer**: KV, Blob, and Log operations
+- **Resource Layer**: KV, Blob, and Channel operations
 
 ## Token Types
 
@@ -67,7 +67,7 @@ interface TokenV4 {
   type: TokenType;
 
   scope: {
-    resourceType: 'kv' | 'blob' | 'log' | 'all';
+    resourceType: 'kv' | 'blob' | 'channel' | 'all';
     resourceId?: string;
     namespace?: string;
   };
@@ -99,7 +99,7 @@ interface TokenV4 {
 interface CreateTokenRequest {
   type: TokenType;
   scope: {
-    resourceType: 'kv' | 'blob' | 'log' | 'all';
+    resourceType: 'kv' | 'blob' | 'channel' | 'all';
     resourceId?: string;
     namespace?: string;
   };
@@ -241,7 +241,7 @@ interface RateLimitConfig {
 
   operations?: {
     'blob:upload': { requestsPerMinute: number; bandwidthPerHour: number };
-    'log:append': { requestsPerMinute: number };
+    'channel:append': { requestsPerMinute: number };
   };
 }
 ```
@@ -285,18 +285,18 @@ interface BlobShareResponse {
 }
 ```
 
-## Log Token Enhancements
+## Channel Token Enhancements
 
 ```typescript
-interface LogTokenV2 extends TokenV4 {
+interface ChannelTokenV2 extends TokenV4 {
   scope: {
-    resourceType: 'log';
+    resourceType: 'channel';
     resourceId: string;
     namespace: string;
   };
   permissions: ('read' | 'write' | 'subscribe' | 'admin')[];
 
-  logLimits?: {
+  channelLimits?: {
     maxReads?: number;
     maxWrites?: number;
     maxEventsPerRead?: number;
@@ -313,7 +313,7 @@ interface LogTokenV2 extends TokenV4 {
 ```
 Authorization: ApiKey {key}      // API Key (existing)
 Authorization: Bearer {token}    // Bearer token (new)
-X-Log-Token: {token}            // Legacy log tokens (deprecated)
+X-Channel-Token: {token}        // Legacy channel tokens (deprecated)
 ```
 
 ## App-Level Configuration
@@ -331,7 +331,7 @@ interface AppConfig {
   restrictions?: {
     kvKeyPatterns?: string[];
     blobKeyPatterns?: string[];
-    allowedLogIds?: string[];
+    allowedChannelIds?: string[];
   };
 
   tokenPolicy?: {
@@ -355,7 +355,7 @@ interface AuditEvent {
   appOrigin?: string;
 
   action: AuditAction;
-  resourceType: 'kv' | 'blob' | 'log' | 'principal' | 'token';
+  resourceType: 'kv' | 'blob' | 'channel' | 'principal' | 'token';
   resourceId?: string;
 
   success: boolean;
@@ -380,10 +380,10 @@ enum AuditAction {
   BLOB_UPLOAD = 'blob.upload',
   BLOB_DOWNLOAD = 'blob.download',
   BLOB_DELETE = 'blob.delete',
-  LOG_CREATE = 'log.create',
-  LOG_APPEND = 'log.append',
-  LOG_READ = 'log.read',
-  LOG_DELETE = 'log.delete',
+  CHANNEL_CREATE = 'channel.create',
+  CHANNEL_APPEND = 'channel.append',
+  CHANNEL_READ = 'channel.read',
+  CHANNEL_DELETE = 'channel.delete',
   PERMISSION_GRANTED = 'permission.granted',
   PERMISSION_REVOKED = 'permission.revoked',
   CONFIG_CHANGED = 'config.changed',

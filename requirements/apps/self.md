@@ -287,7 +287,7 @@ await Deno.writeFile(filePath, combined);
 Identical to Cloudflare gateway - uses `gateway-core` auth middleware:
 - API key authentication
 - Bootstrap key for initial setup
-- Token-based log access
+- Token-based channel access
 
 ### Presigned Token Security
 
@@ -324,7 +324,7 @@ async function sign(payload: string, secret: string): Promise<string> {
 app.use(cors({
   origin: config.corsOrigin || "*",
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-Blob-*", "X-Log-Token"],
+  allowHeaders: ["Content-Type", "Authorization", "X-Blob-*", "X-Channel-Token"],
   exposeHeaders: ["Content-Length", "Content-Disposition"],
   maxAge: 86400
 }));
@@ -347,7 +347,7 @@ app.use(async (c, next) => {
 | **Scaling** | Auto | Manual |
 | **KV Backend** | Cloudflare KV | Deno KV (SQLite) |
 | **Blob Backend** | R2 | Filesystem or S3 |
-| **Log Backend** | Durable Objects | Not implemented (metadata only) |
+| **Channel Backend** | Durable Objects | Not implemented (metadata only) |
 | **TLS** | Cloudflare managed | Self-signed or ACME |
 | **Binary** | N/A | ~98MB executable |
 | **Startup** | Instant | ~100-200ms |
@@ -360,7 +360,7 @@ app.use(async (c, next) => {
 | Issue | Description | Location |
 |-------|-------------|----------|
 | Memory Exhaustion | Full file buffering on uploads | `filesystem-blob.ts:133-147` |
-| No Log Persistence | Log events not stored in self-hosted | `cloudflare-log-do.ts` not ported |
+| No Channel Persistence | Channel events not stored in self-hosted | `cloudflare-channel-do.ts` not ported |
 | ACME Unused | TLS/ACME code present but not integrated | `lib/acme.ts`, `lib/tls.ts` |
 
 ### High Priority
@@ -497,7 +497,7 @@ Returns system health status:
 
 1. **Implement streaming uploads** - Remove full-file buffering
 2. **Add graceful shutdown** - Handle SIGTERM/SIGINT properly
-3. **Port log storage** - Implement log persistence (SQLite)
+3. **Port channel storage** - Implement channel persistence (SQLite)
 
 ### Priority 2 (High)
 
