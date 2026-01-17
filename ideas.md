@@ -1,0 +1,1 @@
+-One time token, allowing a shared user to then setup their own security (Passkey, Public Key, etc.)
