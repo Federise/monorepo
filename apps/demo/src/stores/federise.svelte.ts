@@ -64,7 +64,7 @@ export async function requestPermissions(): Promise<void> {
   }
 
   try {
-    await client.requestCapabilities(['kv:read', 'kv:write', 'kv:delete', 'blob:read', 'blob:write', 'log:create', 'log:delete']);
+    await client.requestCapabilities(['kv:read', 'kv:write', 'kv:delete', 'blob:read', 'blob:write', 'channel:create', 'channel:delete']);
     capabilities.value = client.getGrantedCapabilities();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to request permissions';
@@ -84,12 +84,12 @@ export function hasBlobPermissions(): boolean {
   return hasCapability('blob:read') && hasCapability('blob:write');
 }
 
-export function hasLogPermissions(): boolean {
-  return hasCapability('log:create');
+export function hasChannelPermissions(): boolean {
+  return hasCapability('channel:create');
 }
 
-export function hasLogDeletePermissions(): boolean {
-  return hasCapability('log:delete');
+export function hasChannelDeletePermissions(): boolean {
+  return hasCapability('channel:delete');
 }
 
 /**

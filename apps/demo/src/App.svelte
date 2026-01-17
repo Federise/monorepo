@@ -5,7 +5,7 @@
   import Files from './components/demos/Files.svelte';
   import Chat from './components/demos/Chat.svelte';
   import ChannelView from './components/demos/ChannelView.svelte';
-  import { connectionState, hasKVPermissions, hasBlobPermissions, hasLogPermissions, initialized, initializeConnection } from './stores/federise.svelte';
+  import { connectionState, hasKVPermissions, hasBlobPermissions, hasChannelPermissions, initialized, initializeConnection } from './stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
 
   type View = 'notes' | 'files' | 'chat' | 'channel' | 'settings';
@@ -151,7 +151,7 @@
             </div>
           {/if}
         {:else if currentView === 'chat'}
-          {#if connectionState.value === 'connected' && hasLogPermissions()}
+          {#if connectionState.value === 'connected' && hasChannelPermissions()}
             <Chat />
           {:else}
             <div class="card connect-prompt">
@@ -161,7 +161,7 @@
                 </svg>
               </div>
               <h2>Chat Demo</h2>
-              <p>Connect to Federise and grant log permissions to create and share channels.</p>
+              <p>Connect to Federise and grant channel permissions to create and share channels.</p>
               {#if connectionState.value === 'disconnected'}
                 <p class="hint">Click "Connect" in the sidebar to get started.</p>
               {:else if connectionState.value === 'connected'}

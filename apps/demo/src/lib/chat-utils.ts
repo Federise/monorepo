@@ -1,4 +1,4 @@
-import type { LogEvent } from '@federise/sdk';
+import type { ChannelEvent } from '@federise/sdk';
 
 /**
  * Generate a deterministic color for a username (readable on dark background)
@@ -41,12 +41,15 @@ export function parseMetaMessage(content: string): { type: string; name?: string
 
 /**
  * Parse a chat message to extract author and text
+ * Author is optional - if not present, the display name from the token will be used
  */
-export function parseChatMessage(content: string): { author: string; text: string } | null {
+export function parseChatMessage(content: string): { author: string | null; text: string } | null {
   try {
     const parsed = JSON.parse(content);
-    if (parsed.type === '__chat__' && typeof parsed.author === 'string' && typeof parsed.text === 'string') {
-      return { author: parsed.author, text: parsed.text };
+    if (parsed.type === '__chat__' && typeof parsed.text === 'string') {
+      // Author can be string, undefined, or null
+      const author = typeof parsed.author === 'string' ? parsed.author : null;
+      return { author, text: parsed.text };
     }
   } catch {
     // Not JSON, treat as plain text
@@ -60,20 +63,43 @@ export interface MessageDisplay {
 }
 
 /**
- * Get display content for a message
+ * Format author display string
+ * - If username and displayName both exist and differ: "Username (Display Name)"
+ * - If only username: "Username"
+ * - If only displayName: "Display Name"
  */
-export function getMessageDisplay(message: LogEvent): MessageDisplay {
-  const parsed = parseChatMessage(message.content);
-  if (parsed) {
-    return parsed;
+function formatAuthorDisplay(username: string | null, displayName: string | null): string {
+  if (username && displayName && username !== displayName) {
+    return `${username} (${displayName})`;
   }
-  // Fallback for plain text messages
-  return { author: message.authorId.slice(0, 8), text: message.content };
+  return username || displayName || 'Anonymous';
+}
+
+/**
+ * Get display content for a message
+ * @param message The channel event
+ * @param content The message content string (optional, uses message.content if not provided)
+ */
+export function getMessageDisplay(message: ChannelEvent): MessageDisplay {
+  const content = message.content || '';
+  const parsed = parseChatMessage(content);
+
+  // The authorId from the event is the display name assigned via the share token
+  const displayName = message.authorId;
+
+  if (parsed) {
+    // Message has structured content with a custom username
+    const author = formatAuthorDisplay(parsed.author, displayName);
+    return { author, text: parsed.text };
+  }
+
+  // Fallback for plain text messages - use display name or truncated authorId
+  return { author: displayName || message.authorId.slice(0, 8), text: content };
 }
 
 /**
  * Filter messages to exclude meta entries
  */
-export function filterDisplayMessages(messages: LogEvent[]): LogEvent[] {
+export function filterDisplayMessages(messages: ChannelEvent[]): ChannelEvent[] {
   return messages.filter(m => !isMetaMessage(m.content));
 }

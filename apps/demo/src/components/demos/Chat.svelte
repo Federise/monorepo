@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { getClient, hasLogDeletePermissions } from '../../stores/federise.svelte';
+  import { getClient, hasChannelDeletePermissions } from '../../stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
-  import type { LogMeta, LogEvent } from '@federise/sdk';
+  import type { ChannelMeta, ChannelEvent } from '@federise/sdk';
   import MessageList from '../chat/MessageList.svelte';
   import MessageInput from '../chat/MessageInput.svelte';
   import UsernameModal from '../chat/UsernameModal.svelte';
@@ -9,13 +9,13 @@
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
 
-  interface Channel extends LogMeta {
+  interface Channel extends ChannelMeta {
     secret?: string;
   }
 
   let channels = $state<Channel[]>([]);
   let selectedChannel = $state<Channel | null>(null);
-  let messages = $state<LogEvent[]>([]);
+  let messages = $state<ChannelEvent[]>([]);
   let newMessage = $state('');
   let newChannelName = $state('');
   let username = $state(localStorage.getItem(USERNAME_KEY) || '');
@@ -28,7 +28,26 @@
   let showUsernameModal = $state(false);
   let showDeleteModal = $state(false);
   let isDeleting = $state(false);
+  let isGeneratingLink = $state(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Share modal state
+  let shareDisplayName = $state('');
+  let sharePermRead = $state(true);
+  let sharePermAppend = $state(true);
+  let sharePermDeleteOwn = $state(false);
+  let sharePermDeleteAny = $state(false);
+  let sharePermReadDeleted = $state(false);
+  let shareExpiryDays = $state(7); // Default 7 days
+
+  // Expiry options
+  const expiryOptions = [
+    { value: 1, label: '1 day' },
+    { value: 7, label: '7 days' },
+    { value: 30, label: '30 days' },
+    { value: 90, label: '90 days' },
+    { value: 365, label: '1 year' },
+  ];
 
   // Convert a string to kebab-case
   function toKebabCase(str: string): string {
@@ -44,13 +63,13 @@
     if (!client) return;
 
     try {
-      const result = await client.log.list();
+      const result = await client.channel.list();
       channels = result;
 
       // Restore last selected channel
       const lastChannelId = localStorage.getItem(LAST_CHANNEL_KEY);
       if (lastChannelId && !selectedChannel) {
-        const lastChannel = channels.find(c => c.logId === lastChannelId);
+        const lastChannel = channels.find(c => c.channelId === lastChannelId);
         if (lastChannel) {
           selectChannel(lastChannel);
         }
@@ -70,11 +89,11 @@
 
     isCreating = true;
     try {
-      // Create the log (using a random ID internally)
-      const result = await client.log.create(channelName);
+      // Create the channel (using a random ID internally)
+      const result = await client.channel.create(channelName);
 
       // Store channel name as first message (meta entry)
-      await client.log.append(result.metadata.logId, JSON.stringify({
+      await client.channel.append(result.metadata.channelId, JSON.stringify({
         type: '__meta__',
         name: channelName,
       }));
@@ -91,7 +110,7 @@
 
   async function selectChannel(channel: Channel) {
     selectedChannel = channel;
-    localStorage.setItem(LAST_CHANNEL_KEY, channel.logId);
+    localStorage.setItem(LAST_CHANNEL_KEY, channel.channelId);
     messages = [];
     isLoading = true;
 
@@ -111,7 +130,7 @@
     if (!client) return;
 
     try {
-      const result = await client.log.read(selectedChannel.logId, afterSeq, 100);
+      const result = await client.channel.read(selectedChannel.channelId, afterSeq, 100);
       if (afterSeq !== undefined) {
         // Deduplicate by event ID to prevent duplicates from race conditions
         const existingIds = new Set(messages.map(m => m.id));
@@ -170,7 +189,7 @@
         author: username || 'Anonymous',
         text: newMessage.trim(),
       });
-      const event = await client.log.append(selectedChannel.logId, messageContent);
+      const event = await client.channel.append(selectedChannel.channelId, messageContent);
       messages = [...messages, event];
       newMessage = '';
     } catch (err) {
@@ -180,17 +199,48 @@
     }
   }
 
-  async function shareChannel() {
+  function openShareModal() {
+    if (!selectedChannel) return;
+    // Reset share modal state
+    shareUrl = null;
+    shareDisplayName = '';
+    sharePermRead = true;
+    sharePermAppend = true;
+    sharePermDeleteOwn = false;
+    sharePermDeleteAny = false;
+    sharePermReadDeleted = false;
+    shareExpiryDays = 7;
+    showShareModal = true;
+  }
+
+  async function generateShareLink() {
     if (!selectedChannel) return;
 
     const client = getClient();
     if (!client) return;
 
+    // Build permissions array from toggles
+    const permissions: string[] = [];
+    if (sharePermRead) permissions.push('read');
+    if (sharePermAppend) permissions.push('append');
+    if (sharePermDeleteOwn) permissions.push('delete:own');
+    if (sharePermDeleteAny) permissions.push('delete:any');
+    if (sharePermReadDeleted) permissions.push('read:deleted');
+
+    if (permissions.length === 0) {
+      alert('Please select at least one permission');
+      return;
+    }
+
+    isGeneratingLink = true;
     try {
-      const result = await client.log.createToken(
-        selectedChannel.logId,
-        ['read', 'write'],
-        7 * 24 * 60 * 60
+      const result = await client.channel.createToken(
+        selectedChannel.channelId,
+        permissions,
+        {
+          expiresInSeconds: shareExpiryDays * 24 * 60 * 60,
+          displayName: shareDisplayName.trim() || undefined,
+        }
       );
 
       const baseUrl = window.location.origin;
@@ -201,9 +251,10 @@
         .replace(/\//g, '_')
         .replace(/=+$/, '');
       shareUrl = `${baseUrl}/channel#${result.token}@${base64Gateway}`;
-      showShareModal = true;
     } catch (err) {
       console.error('Failed to create share link:', err);
+    } finally {
+      isGeneratingLink = false;
     }
   }
 
@@ -215,9 +266,9 @@
 
     isDeleting = true;
     try {
-      await client.log.delete(selectedChannel.logId);
+      await client.channel.delete(selectedChannel.channelId);
       // Remove from local list
-      channels = channels.filter(c => c.logId !== selectedChannel.logId);
+      channels = channels.filter(c => c.channelId !== selectedChannel.channelId);
       // Clear selection
       localStorage.removeItem(LAST_CHANNEL_KEY);
       selectedChannel = null;
@@ -239,6 +290,23 @@
 
   function saveUsername() {
     localStorage.setItem(USERNAME_KEY, username);
+  }
+
+  async function deleteMessage(message: import('@federise/sdk').ChannelEvent) {
+    if (!selectedChannel) return;
+
+    const client = getClient();
+    if (!client) return;
+
+    try {
+      await client.channel.deleteEvent(selectedChannel.channelId, message.seq);
+      // Mark as deleted locally
+      messages = messages.map(m =>
+        m.seq === message.seq ? { ...m, deleted: true } : m
+      );
+    } catch (err) {
+      console.error('Failed to delete message:', err);
+    }
   }
 
   onMount(() => {
@@ -266,7 +334,7 @@
       {#each channels as channel}
         <button
           class="channel-item"
-          class:active={selectedChannel?.logId === channel.logId}
+          class:active={selectedChannel?.channelId === channel.channelId}
           onclick={() => selectChannel(channel)}
         >
           <span class="channel-icon">#</span>
@@ -302,14 +370,21 @@
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
           </button>
-          <button class="btn btn-secondary btn-sm" onclick={shareChannel}>Share</button>
-          {#if hasLogDeletePermissions()}
+          <button class="btn btn-secondary btn-sm" onclick={openShareModal}>Share</button>
+          {#if hasChannelDeletePermissions()}
             <button class="btn btn-danger btn-sm" onclick={() => showDeleteModal = true}>Delete</button>
           {/if}
         </div>
       </div>
 
-      <MessageList {messages} {isLoading} emptyMessage="No messages yet. Start the conversation!" />
+      <MessageList
+        {messages}
+        {isLoading}
+        emptyMessage="No messages yet. Start the conversation!"
+        canDeleteAny={true}
+        currentAuthorId="Owner"
+        onDelete={deleteMessage}
+      />
 
       <MessageInput
         bind:value={newMessage}
@@ -329,15 +404,113 @@
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={() => showShareModal = false} role="presentation">
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="modal share-modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
       <h3>Share Channel</h3>
-      <p>Anyone with this link can read and write to this channel:</p>
-      <div class="share-url">
-        <input type="text" readonly value={shareUrl} />
-        <button class="btn btn-primary btn-sm" onclick={copyShareUrl}>Copy</button>
-      </div>
-      <p class="share-note">Link expires in 7 days</p>
-      <button class="btn btn-secondary btn-sm" onclick={() => showShareModal = false}>Close</button>
+
+      {#if !shareUrl}
+        <div class="share-config">
+          <div class="form-group">
+            <label for="share-display-name">Display Name (optional)</label>
+            <input
+              id="share-display-name"
+              type="text"
+              placeholder="e.g., Alice, Bob, Guest"
+              bind:value={shareDisplayName}
+              maxlength="32"
+            />
+            <p class="field-hint">Shown as the author when they send messages</p>
+          </div>
+
+          <div class="form-group">
+            <span class="form-label">Permissions</span>
+            <div class="permission-toggles">
+              <label class="permission-toggle">
+                <input type="checkbox" bind:checked={sharePermRead} />
+                <span class="toggle-label">
+                  <span class="toggle-name">Read</span>
+                  <span class="toggle-desc">View messages in the channel</span>
+                </span>
+              </label>
+
+              <label class="permission-toggle">
+                <input type="checkbox" bind:checked={sharePermAppend} />
+                <span class="toggle-label">
+                  <span class="toggle-name">Send Messages</span>
+                  <span class="toggle-desc">Post new messages to the channel</span>
+                </span>
+              </label>
+
+              <label class="permission-toggle">
+                <input type="checkbox" bind:checked={sharePermDeleteOwn} disabled={sharePermDeleteAny} />
+                <span class="toggle-label">
+                  <span class="toggle-name">Delete Own</span>
+                  <span class="toggle-desc">Delete their own messages</span>
+                </span>
+              </label>
+
+              <label class="permission-toggle">
+                <input type="checkbox" bind:checked={sharePermDeleteAny} onchange={() => { if (sharePermDeleteAny) sharePermDeleteOwn = false; }} />
+                <span class="toggle-label">
+                  <span class="toggle-name">Delete Any</span>
+                  <span class="toggle-desc">Delete any message (moderator)</span>
+                </span>
+              </label>
+
+              <label class="permission-toggle">
+                <input type="checkbox" bind:checked={sharePermReadDeleted} />
+                <span class="toggle-label">
+                  <span class="toggle-name">See Deleted</span>
+                  <span class="toggle-desc">View soft-deleted messages</span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="share-expiry">Link Expires In</label>
+            <select id="share-expiry" bind:value={shareExpiryDays}>
+              {#each expiryOptions as option}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn btn-secondary btn-sm" onclick={() => showShareModal = false}>Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick={generateShareLink} disabled={isGeneratingLink}>
+              {isGeneratingLink ? 'Generating...' : 'Generate Link'}
+            </button>
+          </div>
+        </div>
+      {:else}
+        <div class="share-result">
+          <p>Share this link to grant access:</p>
+
+          <div class="permission-badges">
+            {#if sharePermRead}<span class="badge">Read</span>{/if}
+            {#if sharePermAppend}<span class="badge">Send</span>{/if}
+            {#if sharePermDeleteOwn}<span class="badge">Delete Own</span>{/if}
+            {#if sharePermDeleteAny}<span class="badge badge-warn">Delete Any</span>{/if}
+            {#if sharePermReadDeleted}<span class="badge">See Deleted</span>{/if}
+          </div>
+
+          {#if shareDisplayName}
+            <p class="display-name-note">Messages will appear from: <strong>{shareDisplayName}</strong></p>
+          {/if}
+
+          <div class="share-url">
+            <input type="text" readonly value={shareUrl} />
+            <button class="btn btn-primary btn-sm" onclick={copyShareUrl}>Copy</button>
+          </div>
+
+          <p class="share-note">Link expires in {expiryOptions.find(o => o.value === shareExpiryDays)?.label || `${shareExpiryDays} days`}</p>
+
+          <div class="modal-actions">
+            <button class="btn btn-secondary btn-sm" onclick={() => shareUrl = null}>Back</button>
+            <button class="btn btn-primary btn-sm" onclick={() => showShareModal = false}>Done</button>
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -595,6 +768,128 @@
   .share-note {
     font-size: 0.75rem;
     margin-bottom: 0.75rem;
+  }
+
+  .share-modal {
+    max-width: 450px;
+  }
+
+  .share-config,
+  .share-result {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .form-group > label,
+  .form-group > .form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .form-group input[type="text"] {
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 0.85rem;
+  }
+
+  .form-group select {
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .field-hint {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .permission-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--color-bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+  }
+
+  .permission-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .permission-toggle input[type="checkbox"] {
+    margin-top: 0.125rem;
+    accent-color: var(--color-primary);
+  }
+
+  .permission-toggle input[type="checkbox"]:disabled {
+    opacity: 0.5;
+  }
+
+  .toggle-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .toggle-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  .toggle-desc {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+  }
+
+  .permission-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    border-radius: var(--radius);
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .badge-warn {
+    background: var(--color-warning, #f59e0b);
+  }
+
+  .display-name-note {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .display-name-note strong {
+    color: var(--color-text);
   }
 
   .modal-actions {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { LogClient, type LogEvent } from '@federise/sdk';
+  import { ChannelClient, type ChannelEvent } from '@federise/sdk';
   import { onMount, onDestroy } from 'svelte';
   import { parseMetaMessage } from '../../lib/chat-utils';
   import MessageList from '../chat/MessageList.svelte';
@@ -15,8 +15,8 @@
 
   let { token, gatewayUrl }: Props = $props();
 
-  let client = $state<LogClient | null>(null);
-  let messages = $state<LogEvent[]>([]);
+  let client = $state<ChannelClient | null>(null);
+  let messages = $state<ChannelEvent[]>([]);
   let channelName = $state<string>('Channel');
   let newMessage = $state('');
   let username = $state(localStorage.getItem(USERNAME_KEY) || '');
@@ -30,7 +30,7 @@
   function initClient() {
     try {
       // Pass gateway URL from share link (required for connecting to correct gateway)
-      client = new LogClient({ token, gatewayUrl: gatewayUrl || undefined });
+      client = new ChannelClient({ token, gatewayUrl: gatewayUrl || undefined });
       error = null;
     } catch (err) {
       error = 'Invalid share link. The link may be expired or corrupted.';
@@ -98,15 +98,19 @@
     }
   }
 
+  // Get the display name from the token (cryptographically guaranteed identity)
+  const tokenDisplayName = $derived(client?.authorId || '');
+
   async function sendMessage() {
     if (!newMessage.trim() || !client || !client.canWrite) return;
 
     isSending = true;
     try {
       // Include username in message content
+      // If user has a custom username, include it; otherwise the authorId from the token will be used
       const messageContent = JSON.stringify({
         type: '__chat__',
-        author: username || 'Anonymous',
+        author: username || undefined, // Only include if user has set a custom username
         text: newMessage.trim(),
       });
       const event = await client.append(messageContent);
@@ -124,6 +128,23 @@
 
   function saveUsername() {
     localStorage.setItem(USERNAME_KEY, username);
+  }
+
+  async function deleteMessage(message: import('@federise/sdk').ChannelEvent) {
+    if (!client || !client.canDelete) return;
+
+    try {
+      await client.deleteEvent(message.seq);
+      // Mark as deleted locally
+      messages = messages.map(m =>
+        m.seq === message.seq ? { ...m, deleted: true } : m
+      );
+      error = null;
+    } catch (err) {
+      if (err instanceof Error) {
+        error = err.message;
+      }
+    }
   }
 
   onMount(async () => {
@@ -180,7 +201,15 @@
         {/if}
       </div>
       <div class="channel-actions">
-        <button class="icon-btn" onclick={() => showUsernameModal = true} title="Set username">
+        {#if tokenDisplayName}
+          <span class="identity-badge" title="Your assigned identity">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            {tokenDisplayName}
+          </span>
+        {/if}
+        <button class="icon-btn" onclick={() => showUsernameModal = true} title="Set custom username">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
@@ -199,6 +228,10 @@
       {messages}
       {isLoading}
       emptyMessage={client?.canWrite ? 'No messages yet. Start the conversation!' : 'No messages yet. Waiting for messages...'}
+      canDeleteAny={client?.canDeleteAny || false}
+      canDeleteOwn={client?.canDeleteOwn || false}
+      currentAuthorId={tokenDisplayName}
+      onDelete={client?.canDelete ? deleteMessage : undefined}
     />
 
     {#if error}
@@ -208,7 +241,11 @@
     {#if client?.canWrite}
       <MessageInput
         bind:value={newMessage}
-        placeholder={username ? `Message as ${username}...` : 'Type a message...'}
+        placeholder={username
+          ? `Message as ${username} (${tokenDisplayName})...`
+          : tokenDisplayName
+            ? `Message as ${tokenDisplayName}...`
+            : 'Type a message...'}
         {isSending}
         onSend={sendMessage}
       />
@@ -300,6 +337,24 @@
 
   .badge.readonly {
     background: var(--color-text-muted);
+  }
+
+  .identity-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 0.2rem 0.5rem;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+  }
+
+  .identity-badge svg {
+    color: var(--color-success, #22c55e);
+    flex-shrink: 0;
   }
 
   .icon-btn {
