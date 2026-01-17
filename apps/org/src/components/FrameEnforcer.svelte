@@ -1,671 +1,20 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import {
-    type RequestMessage,
-    type ResponseMessage,
-    type Capability,
-    PROTOCOL_VERSION,
-    isValidRequest,
-  } from '../lib/protocol';
-  import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
-  import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
-  import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata, setBlobVisibility } from '../lib/blob-storage';
-  import { createChannel, listChannels, appendChannel, readChannel, deleteChannel, deleteChannelEvent, createChannelToken } from '../lib/channel-storage';
+    MessageRouter,
+    PostMessageTransport,
+    RemoteBackend,
+    CookieCapabilityStore,
+  } from '@federise/proxy';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured, getGatewayConfig } from '../utils/auth';
 
-  // Track connected clients by origin (used by handleSyn)
-  const connectedClients = new Map<string, MessageEventSource>();
+  // Transport reference for cleanup
+  let transport: PostMessageTransport | null = null;
 
   // UI state for storage access flow
   let needsStorageAccess = $state(false);
   let storageAccessError = $state<string | null>(null);
   let isRequestingAccess = $state(false);
-  let handlersInitialized = false;
-
-  function sendResponse(
-    source: MessageEventSource | null,
-    origin: string,
-    response: ResponseMessage
-  ): void {
-    if (!source) return;
-    source.postMessage(response, { targetOrigin: origin } as WindowPostMessageOptions);
-  }
-
-  function sendError(
-    source: MessageEventSource | null,
-    origin: string,
-    id: string,
-    code: string,
-    message: string
-  ): void {
-    sendResponse(source, origin, { type: 'ERROR', id, code, message });
-  }
-
-  async function handleSyn(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'SYN' }>
-  ): Promise<void> {
-    // Check if gateway is configured
-    if (!isGatewayConfigured()) {
-      sendError(
-        source,
-        origin,
-        msg.id,
-        'GATEWAY_NOT_CONFIGURED',
-        'Gateway not configured. Visit the Federise management page to configure your gateway connection.'
-      );
-      return;
-    }
-
-    try {
-      // getPermissions always returns a valid record (with empty capabilities if none granted)
-      const permissions = await getPermissions(origin);
-      connectedClients.set(origin, source);
-
-      sendResponse(source, origin, {
-        type: 'ACK',
-        id: msg.id,
-        version: PROTOCOL_VERSION,
-        capabilities: permissions.capabilities, // Always an array, never undefined
-      });
-    } catch (err) {
-      console.error('[FrameEnforcer] Error in handleSyn:', err);
-      sendError(
-        source,
-        origin,
-        msg.id,
-        'INTERNAL_ERROR',
-        err instanceof Error ? err.message : 'Failed to initialize connection'
-      );
-    }
-  }
-
-  async function handleRequestCapabilities(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'REQUEST_CAPABILITIES' }>
-  ): Promise<void> {
-    const permissions = await getPermissions(origin);
-    const granted = permissions.capabilities; // Always an array
-    const requested = msg.capabilities;
-
-    const alreadyGranted = requested.filter((c) => granted.includes(c));
-    const needsApproval = requested.filter((c) => !granted.includes(c));
-
-    // Early return if all capabilities already granted
-    if (needsApproval.length === 0) {
-      sendResponse(source, origin, {
-        type: 'CAPABILITIES_GRANTED',
-        id: msg.id,
-        granted: alreadyGranted,
-      });
-      return;
-    }
-
-    // Need user approval for some capabilities
-    const scope = needsApproval.join(',');
-    const authUrl = `/authorize?app_origin=${encodeURIComponent(origin)}&scope=${encodeURIComponent(scope)}`;
-
-    sendResponse(source, origin, {
-      type: 'AUTH_REQUIRED',
-      id: msg.id,
-      url: new URL(authUrl, window.location.origin).href,
-      granted: alreadyGranted,
-    });
-  }
-
-  async function handleKVGet(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'KV_GET' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'kv:read'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'kv:read',
-      });
-      return;
-    }
-
-    const value = await getKV(origin, msg.key);
-    sendResponse(source, origin, {
-      type: 'KV_RESULT',
-      id: msg.id,
-      value,
-    });
-  }
-
-  async function handleKVSet(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'KV_SET' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'kv:write'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'kv:write',
-      });
-      return;
-    }
-
-    await setKV(origin, msg.key, msg.value);
-    sendResponse(source, origin, {
-      type: 'KV_OK',
-      id: msg.id,
-    });
-  }
-
-  async function handleKVDelete(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'KV_DELETE' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'kv:delete'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'kv:delete',
-      });
-      return;
-    }
-
-    await deleteKV(origin, msg.key);
-    sendResponse(source, origin, {
-      type: 'KV_OK',
-      id: msg.id,
-    });
-  }
-
-  async function handleKVKeys(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'KV_KEYS' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'kv:read'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'kv:read',
-      });
-      return;
-    }
-
-    const keys = await listKVKeys(origin, msg.prefix);
-    sendResponse(source, origin, {
-      type: 'KV_KEYS_RESULT',
-      id: msg.id,
-      keys,
-    });
-  }
-
-  async function handleBlobUpload(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'BLOB_UPLOAD' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'blob:write'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'blob:write',
-      });
-      return;
-    }
-
-    try {
-      // Data is already an ArrayBuffer (transferred from SDK)
-      // Support both visibility and legacy isPublic
-      const metadata = await uploadBlob(origin, msg.key, msg.contentType, msg.data, msg.visibility, msg.isPublic);
-      sendResponse(source, origin, {
-        type: 'BLOB_UPLOADED',
-        id: msg.id,
-        metadata,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'UPLOAD_FAILED', err instanceof Error ? err.message : 'Upload failed');
-    }
-  }
-
-  async function handleBlobGet(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'BLOB_GET' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'blob:read'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'blob:read',
-      });
-      return;
-    }
-
-    try {
-      const result = await getBlob(origin, msg.key);
-      sendResponse(source, origin, {
-        type: 'BLOB_DOWNLOAD_URL',
-        id: msg.id,
-        url: result.url,
-        metadata: result.metadata,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'NOT_FOUND', 'Blob not found');
-    }
-  }
-
-  async function handleBlobDelete(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'BLOB_DELETE' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'blob:write'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'blob:write',
-      });
-      return;
-    }
-
-    await deleteBlob(origin, msg.key);
-    sendResponse(source, origin, {
-      type: 'BLOB_OK',
-      id: msg.id,
-    });
-  }
-
-  async function handleBlobList(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'BLOB_LIST' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'blob:read'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'blob:read',
-      });
-      return;
-    }
-
-    const blobs = await listBlobs(origin);
-    sendResponse(source, origin, {
-      type: 'BLOB_LIST_RESULT',
-      id: msg.id,
-      blobs,
-    });
-  }
-
-  async function handleBlobGetUploadUrl(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'BLOB_GET_UPLOAD_URL' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'blob:write'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'blob:write',
-      });
-      return;
-    }
-
-    try {
-      // Support both visibility and legacy isPublic
-      const result = await getUploadUrlWithMetadata(origin, msg.key, msg.contentType, msg.size, msg.visibility, msg.isPublic);
-
-      if (!result) {
-        // Presigned URLs not available - SDK should fall back to BLOB_UPLOAD
-        sendError(source, origin, msg.id, 'PRESIGN_NOT_AVAILABLE', 'Presigned uploads not configured');
-        return;
-      }
-
-      sendResponse(source, origin, {
-        type: 'BLOB_UPLOAD_URL',
-        id: msg.id,
-        uploadUrl: result.uploadUrl,
-        metadata: result.metadata,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'PRESIGN_FAILED', err instanceof Error ? err.message : 'Failed to get upload URL');
-    }
-  }
-
-  async function handleBlobSetVisibility(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'BLOB_SET_VISIBILITY' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'blob:write'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'blob:write',
-      });
-      return;
-    }
-
-    try {
-      const metadata = await setBlobVisibility(origin, msg.key, msg.visibility);
-      sendResponse(source, origin, {
-        type: 'BLOB_VISIBILITY_SET',
-        id: msg.id,
-        metadata,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'VISIBILITY_FAILED', err instanceof Error ? err.message : 'Failed to set visibility');
-    }
-  }
-
-  async function handleChannelCreate(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'CHANNEL_CREATE' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'channel:create'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'channel:create',
-      });
-      return;
-    }
-
-    try {
-      const result = await createChannel(origin, msg.name);
-      sendResponse(source, origin, {
-        type: 'CHANNEL_CREATED',
-        id: msg.id,
-        metadata: result.metadata,
-        secret: result.secret,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'CHANNEL_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create channel');
-    }
-  }
-
-  async function handleChannelList(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'CHANNEL_LIST' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'channel:create'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'channel:create',
-      });
-      return;
-    }
-
-    try {
-      const channels = await listChannels(origin);
-      sendResponse(source, origin, {
-        type: 'CHANNEL_LIST_RESULT',
-        id: msg.id,
-        channels,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'CHANNEL_LIST_FAILED', err instanceof Error ? err.message : 'Failed to list channels');
-    }
-  }
-
-  async function handleChannelAppend(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'CHANNEL_APPEND' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'channel:create'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'channel:create',
-      });
-      return;
-    }
-
-    try {
-      const event = await appendChannel(origin, msg.channelId, msg.content);
-      sendResponse(source, origin, {
-        type: 'CHANNEL_APPENDED',
-        id: msg.id,
-        event,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'CHANNEL_APPEND_FAILED', err instanceof Error ? err.message : 'Failed to append to channel');
-    }
-  }
-
-  async function handleChannelRead(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'CHANNEL_READ' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'channel:create'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'channel:create',
-      });
-      return;
-    }
-
-    try {
-      const result = await readChannel(origin, msg.channelId, msg.afterSeq, msg.limit);
-      sendResponse(source, origin, {
-        type: 'CHANNEL_READ_RESULT',
-        id: msg.id,
-        events: result.events,
-        hasMore: result.hasMore,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'CHANNEL_READ_FAILED', err instanceof Error ? err.message : 'Failed to read channel');
-    }
-  }
-
-  async function handleChannelDelete(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'CHANNEL_DELETE' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'channel:delete'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'channel:delete',
-      });
-      return;
-    }
-
-    try {
-      await deleteChannel(origin, msg.channelId);
-      sendResponse(source, origin, {
-        type: 'CHANNEL_DELETED',
-        id: msg.id,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'CHANNEL_DELETE_FAILED', err instanceof Error ? err.message : 'Failed to delete channel');
-    }
-  }
-
-  async function handleChannelDeleteEvent(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'CHANNEL_DELETE_EVENT' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'channel:create'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'channel:create',
-      });
-      return;
-    }
-
-    try {
-      const event = await deleteChannelEvent(origin, msg.channelId, msg.targetSeq);
-      sendResponse(source, origin, {
-        type: 'CHANNEL_EVENT_DELETED',
-        id: msg.id,
-        event,
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'CHANNEL_DELETE_EVENT_FAILED', err instanceof Error ? err.message : 'Failed to delete event');
-    }
-  }
-
-  async function handleChannelTokenCreate(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'CHANNEL_TOKEN_CREATE' }>
-  ): Promise<void> {
-    if (!(await hasCapability(origin, 'channel:create'))) {
-      sendResponse(source, origin, {
-        type: 'PERMISSION_DENIED',
-        id: msg.id,
-        capability: 'channel:create',
-      });
-      return;
-    }
-
-    try {
-      const result = await createChannelToken(origin, msg.channelId, msg.permissions, {
-        displayName: msg.displayName,
-        expiresInSeconds: msg.expiresInSeconds,
-      });
-      await requestStorageAccess();
-      const { url: gatewayUrl } = getGatewayConfig();
-      sendResponse(source, origin, {
-        type: 'CHANNEL_TOKEN_CREATED',
-        id: msg.id,
-        token: result.token,
-        expiresAt: result.expiresAt,
-        gatewayUrl: gatewayUrl || '',
-      });
-    } catch (err) {
-      sendError(source, origin, msg.id, 'CHANNEL_TOKEN_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create token');
-    }
-  }
-
-  async function handleTestGrantPermissions(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'TEST_GRANT_PERMISSIONS' }>
-  ): Promise<void> {
-    // Only allow test harness origin (localhost:5174) in development
-    if (import.meta.env.DEV && origin === 'http://localhost:5174') {
-      await grantCapabilities(origin, msg.capabilities);
-      sendResponse(source, origin, {
-        type: 'TEST_PERMISSIONS_GRANTED',
-        id: msg.id,
-      });
-    } else {
-      sendError(source, origin, msg.id, 'FORBIDDEN', 'Test messages only allowed from test harness');
-    }
-  }
-
-  async function handleTestClearPermissions(
-    source: MessageEventSource,
-    origin: string,
-    msg: Extract<RequestMessage, { type: 'TEST_CLEAR_PERMISSIONS' }>
-  ): Promise<void> {
-    // Only allow test harness origin (localhost:5174) in development
-    if (import.meta.env.DEV && origin === 'http://localhost:5174') {
-      await revokePermissions(origin);
-      sendResponse(source, origin, {
-        type: 'TEST_PERMISSIONS_CLEARED',
-        id: msg.id,
-      });
-    } else {
-      sendError(source, origin, msg.id, 'FORBIDDEN', 'Test messages only allowed from test harness');
-    }
-  }
-
-  async function handleMessage(event: MessageEvent): Promise<void> {
-    // Ignore messages from self
-    if (event.origin === window.location.origin) return;
-
-    // Validate message structure
-    if (!isValidRequest(event.data)) {
-      if (event.data?.id) {
-        sendError(event.source, event.origin, event.data.id, 'INVALID_MESSAGE', 'Invalid message format');
-      }
-      return;
-    }
-
-    const message = event.data as RequestMessage;
-    const origin = event.origin;
-    const source = event.source as MessageEventSource;
-
-    switch (message.type) {
-      case 'SYN':
-        await handleSyn(source, origin, message);
-        break;
-      case 'REQUEST_CAPABILITIES':
-        await handleRequestCapabilities(source, origin, message);
-        break;
-      case 'KV_GET':
-        await handleKVGet(source, origin, message);
-        break;
-      case 'KV_SET':
-        await handleKVSet(source, origin, message);
-        break;
-      case 'KV_DELETE':
-        await handleKVDelete(source, origin, message);
-        break;
-      case 'KV_KEYS':
-        await handleKVKeys(source, origin, message);
-        break;
-      case 'BLOB_UPLOAD':
-        await handleBlobUpload(source, origin, message);
-        break;
-      case 'BLOB_GET':
-        await handleBlobGet(source, origin, message);
-        break;
-      case 'BLOB_DELETE':
-        await handleBlobDelete(source, origin, message);
-        break;
-      case 'BLOB_LIST':
-        await handleBlobList(source, origin, message);
-        break;
-      case 'BLOB_GET_UPLOAD_URL':
-        await handleBlobGetUploadUrl(source, origin, message);
-        break;
-      case 'BLOB_SET_VISIBILITY':
-        await handleBlobSetVisibility(source, origin, message);
-        break;
-      case 'CHANNEL_CREATE':
-        await handleChannelCreate(source, origin, message);
-        break;
-      case 'CHANNEL_LIST':
-        await handleChannelList(source, origin, message);
-        break;
-      case 'CHANNEL_APPEND':
-        await handleChannelAppend(source, origin, message);
-        break;
-      case 'CHANNEL_READ':
-        await handleChannelRead(source, origin, message);
-        break;
-      case 'CHANNEL_DELETE':
-        await handleChannelDelete(source, origin, message);
-        break;
-      case 'CHANNEL_DELETE_EVENT':
-        await handleChannelDeleteEvent(source, origin, message);
-        break;
-      case 'CHANNEL_TOKEN_CREATE':
-        await handleChannelTokenCreate(source, origin, message);
-        break;
-      case 'TEST_GRANT_PERMISSIONS':
-        await handleTestGrantPermissions(source, origin, message);
-        break;
-      case 'TEST_CLEAR_PERMISSIONS':
-        await handleTestClearPermissions(source, origin, message);
-        break;
-    }
-  }
 
   async function handleConnectClick(): Promise<void> {
     isRequestingAccess = true;
@@ -684,9 +33,14 @@
         return;
       }
 
-      // Success - hide UI and signal parent
+      // Success - initialize the proxy and hide UI
       needsStorageAccess = false;
-      window.parent.postMessage({ type: '__STORAGE_ACCESS_GRANTED__' }, '*');
+      initializeProxy();
+
+      // Signal to parent that storage access was granted
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: '__STORAGE_ACCESS_GRANTED__' }, '*');
+      }
     } catch (err) {
       storageAccessError = err instanceof Error ? err.message : 'Failed to request storage access';
     } finally {
@@ -694,57 +48,90 @@
     }
   }
 
+  function initializeProxy(): void {
+    if (transport) return; // Already initialized
+
+    const { apiKey, url } = getGatewayConfig();
+    if (!apiKey || !url) {
+      console.error('[FrameEnforcer] Gateway not configured');
+      return;
+    }
+
+    // Create the backend
+    const backend = new RemoteBackend({
+      gatewayUrl: url,
+      apiKey: apiKey,
+    });
+
+    // Create the capability store
+    const capabilities = new CookieCapabilityStore({ backend });
+
+    // Create the message router
+    const router = new MessageRouter({
+      backend,
+      capabilities,
+      onAuthRequired: async (origin, requestedCapabilities, alreadyGranted) => {
+        // Build the scope from capabilities that aren't already granted
+        const needsApproval = requestedCapabilities.filter((c) => !alreadyGranted.includes(c));
+        const scope = needsApproval.join(',');
+        const authUrl = `/authorize?app_origin=${encodeURIComponent(origin)}&scope=${encodeURIComponent(scope)}`;
+        return new URL(authUrl, window.location.origin).href;
+      },
+      getGatewayUrl: () => url,
+      // Enable test messages only in development
+      enableTestMessages: import.meta.env.DEV,
+      testMessageOrigins: ['http://localhost:5174'],
+    });
+
+    // Create the transport
+    transport = new PostMessageTransport({
+      router,
+      onStorageAccessRequired: () => {
+        needsStorageAccess = true;
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: '__STORAGE_ACCESS_REQUIRED__' }, '*');
+        }
+      },
+      onReady: () => {
+        console.log('[FrameEnforcer] Proxy ready');
+      },
+    });
+
+    // Signal ready
+    transport.signalReady();
+  }
+
   onMount(async () => {
     const isIframe = window.self !== window.top;
 
     if (!isIframe) {
-      // Top-level context - just set up handlers
-      setupMessageHandlers();
+      // Top-level context - just initialize directly
+      if (isGatewayConfigured()) {
+        initializeProxy();
+      }
       return;
     }
 
-    // In iframe context, check storage access (sets internal state for production cross-origin cases)
+    // In iframe context, check storage access
     await checkStorageAccess();
 
-    // Check if gateway is configured (tries cookies first, works on localhost)
-    // This handles the localhost case where Storage Access might report false
-    // but cookies are actually accessible because localhost ports are same-site
+    // Check if gateway is configured
     if (isGatewayConfigured()) {
-      // Gateway is configured - ready to go
-      setupMessageHandlers();
+      // Gateway is configured - initialize the proxy
+      initializeProxy();
       return;
     }
 
-    // Gateway not configured - could be:
-    // 1. User hasn't set up gateway yet (needs to visit org app directly)
-    // 2. Cross-origin production case where we need Storage Access for cookies
-    // Show modal to either grant storage access or inform user
+    // Gateway not configured - show modal
     needsStorageAccess = true;
-    window.parent.postMessage({ type: '__STORAGE_ACCESS_REQUIRED__' }, '*');
-  });
-
-  function setupMessageHandlers(): void {
-    if (handlersInitialized) return;
-    handlersInitialized = true;
-
-    window.addEventListener('message', handleMessage);
-
-    // Signal to parent that frame is ready
     if (window.parent !== window) {
-      window.parent.postMessage({ type: '__FRAME_READY__' }, '*');
-    }
-  }
-
-  // Called after successful storage access
-  $effect(() => {
-    if (!needsStorageAccess && window.self !== window.top) {
-      // Storage access was granted, set up handlers
-      setupMessageHandlers();
+      window.parent.postMessage({ type: '__STORAGE_ACCESS_REQUIRED__' }, '*');
     }
   });
 
   onDestroy(() => {
-    window.removeEventListener('message', handleMessage);
+    transport?.destroy();
+    transport = null;
   });
 </script>
 

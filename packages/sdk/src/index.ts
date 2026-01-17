@@ -22,11 +22,15 @@ export type {
   UploadProgress,
 } from './types';
 
-// Errors
+// Errors and utilities
 export {
   FederiseError,
   PermissionDeniedError,
   TimeoutError,
   ConnectionError,
   PROTOCOL_VERSION,
+  isValidRequest,
 } from './types';
+
+// Re-export channel permission types
+export type { ChannelPermission, ChannelPermissionInput } from './types';

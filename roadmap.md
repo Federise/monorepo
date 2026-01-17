@@ -46,10 +46,20 @@ This document provides a comprehensive listing of completed features and planned
   - [x] Capability token parsing (V1/V2/V3)
   - [x] Error classes (FederiseError, PermissionDeniedError, TimeoutError, ConnectionError)
 
+- [x] **Proxy Package** (`@federise/proxy`)
+  - [x] `MessageRouter` for capability-enforced message routing
+  - [x] `ProxyBackend` interface for storage operations
+  - [x] `RemoteBackend` HTTP client implementation
+  - [x] `CapabilityStore` interface for permission management
+  - [x] `CookieCapabilityStore` using gateway KV
+  - [x] `PostMessageTransport` for iframe communication
+  - [x] Namespace extraction utilities
+
 ### Organization App
 
 - [x] **Org Admin Dashboard** (`apps/org`)
   - [x] Frame Enforcer (message broker between apps and gateway)
+  - [x] Frame Enforcer refactored to use `@federise/proxy` package
   - [x] Permission management (grant, revoke, list)
   - [x] Authorization flow with popup
   - [x] Gateway connection configuration
@@ -94,23 +104,23 @@ See: `logs.md`
 
 See: `proxy.md`
 
-- [ ] **packages/proxy Package**
-  - [ ] Extract Frame Enforcer logic to reusable package
-  - [ ] `MessageRouter` for routing messages to backends
-  - [ ] `ProxyBackend` interface (KV, Blob, Channel operations)
-  - [ ] `CapabilityStore` interface
+- [x] **packages/proxy Package** (COMPLETE)
+  - [x] Extract Frame Enforcer logic to reusable package
+  - [x] `MessageRouter` for routing messages to backends
+  - [x] `ProxyBackend` interface (KV, Blob, Channel operations)
+  - [x] `CapabilityStore` interface
 
-- [ ] **Transport Adapters**
-  - [ ] `PostMessageTransport` for iframe communication
+- [~] **Transport Adapters** (PARTIAL)
+  - [x] `PostMessageTransport` for iframe communication
   - [ ] `ExtensionTransport` for browser extension messaging
 
-- [ ] **Backend Implementations**
-  - [ ] `RemoteBackend` wrapping HTTP client to gateway
+- [~] **Backend Implementations** (PARTIAL)
+  - [x] `RemoteBackend` wrapping HTTP client to gateway
   - [ ] `LocalBackend` using IndexedDB (see local.md)
   - [ ] `HybridBackend` combining local and remote with configurable strategy
 
-- [ ] **Capability Store Implementations**
-  - [ ] `CookieCapabilityStore` for iframe context
+- [~] **Capability Store Implementations** (PARTIAL)
+  - [x] `CookieCapabilityStore` for iframe context
   - [ ] `ExtensionCapabilityStore` for chrome.storage.local
   - [ ] `IndexedDBCapabilityStore` for local-only scenarios
 
@@ -291,8 +301,8 @@ See: `responsibilities.md`
   - [ ] Add offline support
   - [ ] Add request batching
 
-- [ ] **Proxy Improvements**
-  - [ ] Extract from org app to reusable package
+- [~] **Proxy Improvements** (PARTIAL)
+  - [x] Extract from org app to reusable package
   - [ ] Add rate limiting
   - [ ] Add granular permissions
   - [ ] Add user visibility (what apps are doing)

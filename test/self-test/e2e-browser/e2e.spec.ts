@@ -2,10 +2,11 @@ import { test, expect, type Page } from "@playwright/test";
 
 const GATEWAY_URL = "http://localhost:3000";
 const FRAME_URL = "http://localhost:4321/frame";
-const BOOTSTRAP_KEY = "test-bootstrap-key-for-e2e";
+const BOOTSTRAP_KEY = "testbootstrapkey123";
 
 // Store the principal API key after creation
-let principalApiKey: string | null = null;
+// Can be set via FEDERISE_API_KEY environment variable
+let principalApiKey: string | null = process.env.FEDERISE_API_KEY || null;
 
 /**
  * Helper to create a principal via the gateway API
@@ -65,7 +66,12 @@ async function injectFrameUrl(page: Page): Promise<void> {
 
 test.describe("Gateway API Compliance", () => {
   test.beforeAll(async () => {
-    // Create a principal for testing
+    // Use existing API key from environment, or create a new principal
+    if (principalApiKey) {
+      console.log("Using API key from FEDERISE_API_KEY environment variable");
+      return;
+    }
+
     try {
       principalApiKey = await createPrincipal();
       console.log("Created test principal");

@@ -3,3 +3,4 @@ packages:
   - 'apps/org/tests'
   - 'apps/org/service-worker'
   - 'packages/*'
+  - 'test/self-test/e2e-browser'
