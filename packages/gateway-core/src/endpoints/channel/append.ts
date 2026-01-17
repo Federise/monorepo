@@ -1,27 +1,27 @@
 import { OpenAPIRoute } from "chanfana";
 import {
   ErrorResponse,
-  LogAppendRequest,
-  LogAppendResponse,
+  ChannelAppendRequest,
+  ChannelAppendResponse,
 } from "../../types.js";
 import type { AppContext } from "../../context.js";
-import { verifyLogToken } from "../../lib/log-token.js";
+import { verifyChannelToken } from "../../lib/channel-token.js";
 
-export class LogAppendEndpoint extends OpenAPIRoute {
+export class ChannelAppendEndpoint extends OpenAPIRoute {
   schema = {
-    tags: ["Log Operations"],
-    summary: "Append an event to a log",
+    tags: ["Channel Operations"],
+    summary: "Append an event to a channel",
     description:
-      "Authenticated via API key or capability token (X-Log-Token header)",
+      "Authenticated via API key or capability token (X-Channel-Token header)",
     request: {
       body: {
-        content: { "application/json": { schema: LogAppendRequest } },
+        content: { "application/json": { schema: ChannelAppendRequest } },
       },
     },
     responses: {
       "200": {
         description: "Event appended successfully",
-        content: { "application/json": { schema: LogAppendResponse } },
+        content: { "application/json": { schema: ChannelAppendResponse } },
       },
       "401": {
         description: "Unauthorized",
@@ -32,7 +32,7 @@ export class LogAppendEndpoint extends OpenAPIRoute {
         content: { "application/json": { schema: ErrorResponse } },
       },
       "404": {
-        description: "Log not found",
+        description: "Channel not found",
         content: { "application/json": { schema: ErrorResponse } },
       },
     },
@@ -40,27 +40,27 @@ export class LogAppendEndpoint extends OpenAPIRoute {
 
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
-    const logStore = c.get("logStore");
-    const logId = data.body.logId;
+    const channelStore = c.get("channelStore");
+    const channelId = data.body.channelId;
 
-    // Get log metadata to retrieve secret
-    const meta = await logStore.getMetadata(logId);
+    // Get channel metadata to retrieve secret
+    const meta = await channelStore.getMetadata(channelId);
     if (!meta) {
-      return c.json({ code: 404, message: "Log not found" }, 404);
+      return c.json({ code: 404, message: "Channel not found" }, 404);
     }
 
     // Check authentication: either API key (already authenticated) or token
-    const tokenHeader = c.req.header("X-Log-Token");
+    const tokenHeader = c.req.header("X-Channel-Token");
     let authorId: string;
 
     if (tokenHeader) {
       // Token-based authentication
-      const verified = await verifyLogToken(tokenHeader, meta.secret);
+      const verified = await verifyChannelToken(tokenHeader, meta.secret);
       if (!verified) {
         return c.json({ code: 401, message: "Invalid or expired token" }, 401);
       }
-      if (!verified.permissions.includes("write")) {
-        return c.json({ code: 403, message: "Token lacks write permission" }, 403);
+      if (!verified.permissions.includes("append")) {
+        return c.json({ code: 403, message: "Token lacks append permission" }, 403);
       }
       authorId = verified.authorId;
     } else {
@@ -75,7 +75,7 @@ export class LogAppendEndpoint extends OpenAPIRoute {
     }
 
     // Append event atomically via Durable Object
-    const event = await logStore.append(logId, {
+    const event = await channelStore.append(channelId, {
       authorId,
       content: data.body.content,
     });

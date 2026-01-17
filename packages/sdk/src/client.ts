@@ -2,6 +2,7 @@ import type {
   BlobMetadata,
   BlobVisibility,
   Capability,
+  ChannelPermissionInput,
   FederiseClientOptions,
   GrantResult,
   RequestPayload,
@@ -519,19 +520,19 @@ export class FederiseClient {
     },
   };
 
-  // Log namespace
-  log = {
+  // Channel namespace
+  channel = {
     /**
-     * Create a new log.
+     * Create a new channel.
      * Returns metadata and secret for generating share tokens.
      */
-    create: async (name: string): Promise<{ metadata: import('./types').LogMeta; secret: string }> => {
+    create: async (name: string): Promise<{ metadata: import('./types').ChannelMeta; secret: string }> => {
       this.ensureConnected();
-      this.ensureCapability('log:create');
+      this.ensureCapability('channel:create');
 
-      const response = await this.sendRequest({ type: 'LOG_CREATE', name });
+      const response = await this.sendRequest({ type: 'CHANNEL_CREATE', name });
 
-      if (response.type === 'LOG_CREATED') {
+      if (response.type === 'CHANNEL_CREATED') {
         return { metadata: response.metadata, secret: response.secret };
       }
       if (response.type === 'PERMISSION_DENIED') {
@@ -545,16 +546,16 @@ export class FederiseClient {
     },
 
     /**
-     * List logs owned by this origin.
+     * List channels owned by this origin.
      */
-    list: async (): Promise<import('./types').LogMeta[]> => {
+    list: async (): Promise<import('./types').ChannelMeta[]> => {
       this.ensureConnected();
-      this.ensureCapability('log:create');
+      this.ensureCapability('channel:create');
 
-      const response = await this.sendRequest({ type: 'LOG_LIST' });
+      const response = await this.sendRequest({ type: 'CHANNEL_LIST' });
 
-      if (response.type === 'LOG_LIST_RESULT') {
-        return response.logs;
+      if (response.type === 'CHANNEL_LIST_RESULT') {
+        return response.channels;
       }
       if (response.type === 'PERMISSION_DENIED') {
         throw new PermissionDeniedError(response.capability);
@@ -567,15 +568,15 @@ export class FederiseClient {
     },
 
     /**
-     * Append an event to a log.
+     * Append an event to a channel.
      */
-    append: async (logId: string, content: string): Promise<import('./types').LogEvent> => {
+    append: async (channelId: string, content: string): Promise<import('./types').ChannelEvent> => {
       this.ensureConnected();
-      this.ensureCapability('log:create');
+      this.ensureCapability('channel:create');
 
-      const response = await this.sendRequest({ type: 'LOG_APPEND', logId, content });
+      const response = await this.sendRequest({ type: 'CHANNEL_APPEND', channelId, content });
 
-      if (response.type === 'LOG_APPENDED') {
+      if (response.type === 'CHANNEL_APPENDED') {
         return response.event;
       }
       if (response.type === 'PERMISSION_DENIED') {
@@ -589,22 +590,22 @@ export class FederiseClient {
     },
 
     /**
-     * Read events from a log.
-     * @param logId - The log ID
+     * Read events from a channel.
+     * @param channelId - The channel ID
      * @param afterSeq - Only return events after this sequence number (for polling)
      * @param limit - Maximum number of events to return
      */
     read: async (
-      logId: string,
+      channelId: string,
       afterSeq?: number,
       limit?: number
-    ): Promise<{ events: import('./types').LogEvent[]; hasMore: boolean }> => {
+    ): Promise<{ events: import('./types').ChannelEvent[]; hasMore: boolean }> => {
       this.ensureConnected();
-      this.ensureCapability('log:create');
+      this.ensureCapability('channel:create');
 
-      const response = await this.sendRequest({ type: 'LOG_READ', logId, afterSeq, limit });
+      const response = await this.sendRequest({ type: 'CHANNEL_READ', channelId, afterSeq, limit });
 
-      if (response.type === 'LOG_READ_RESULT') {
+      if (response.type === 'CHANNEL_READ_RESULT') {
         return { events: response.events, hasMore: response.hasMore };
       }
       if (response.type === 'PERMISSION_DENIED') {
@@ -618,27 +619,28 @@ export class FederiseClient {
     },
 
     /**
-     * Create a capability token for sharing a log.
-     * @param logId - The log ID
-     * @param permissions - Permissions to grant ('read' and/or 'write')
-     * @param expiresInSeconds - Token expiry time (default 7 days)
+     * Create a capability token for sharing a channel.
+     * @param channelId - The channel ID
+     * @param permissions - Permissions to grant (e.g., 'read', 'append', 'delete:own', 'delete:any', 'read:deleted')
+     * @param options - Optional settings: displayName (user-provided name), expiresInSeconds
      */
     createToken: async (
-      logId: string,
-      permissions: ('read' | 'write')[],
-      expiresInSeconds?: number
+      channelId: string,
+      permissions: ChannelPermissionInput[],
+      options?: { displayName?: string; expiresInSeconds?: number }
     ): Promise<{ token: string; expiresAt: string; gatewayUrl: string }> => {
       this.ensureConnected();
-      this.ensureCapability('log:create');
+      this.ensureCapability('channel:create');
 
       const response = await this.sendRequest({
-        type: 'LOG_TOKEN_CREATE',
-        logId,
+        type: 'CHANNEL_TOKEN_CREATE',
+        channelId,
         permissions,
-        expiresInSeconds,
+        displayName: options?.displayName,
+        expiresInSeconds: options?.expiresInSeconds,
       });
 
-      if (response.type === 'LOG_TOKEN_CREATED') {
+      if (response.type === 'CHANNEL_TOKEN_CREATED') {
         return { token: response.token, expiresAt: response.expiresAt, gatewayUrl: response.gatewayUrl };
       }
       if (response.type === 'PERMISSION_DENIED') {
@@ -652,16 +654,44 @@ export class FederiseClient {
     },
 
     /**
-     * Delete a log and all its events.
-     * @param logId - The log ID to delete
+     * Soft-delete an event in a channel.
+     * @param channelId - The channel ID
+     * @param targetSeq - The sequence number of the event to delete
      */
-    delete: async (logId: string): Promise<void> => {
+    deleteEvent: async (channelId: string, targetSeq: number): Promise<import('./types').ChannelEvent> => {
       this.ensureConnected();
-      this.ensureCapability('log:delete');
+      this.ensureCapability('channel:create');
 
-      const response = await this.sendRequest({ type: 'LOG_DELETE', logId });
+      const response = await this.sendRequest({
+        type: 'CHANNEL_DELETE_EVENT',
+        channelId,
+        targetSeq,
+      });
 
-      if (response.type === 'LOG_DELETED') {
+      if (response.type === 'CHANNEL_EVENT_DELETED') {
+        return response.event;
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Delete a channel and all its events.
+     * @param channelId - The channel ID to delete
+     */
+    delete: async (channelId: string): Promise<void> => {
+      this.ensureConnected();
+      this.ensureCapability('channel:delete');
+
+      const response = await this.sendRequest({ type: 'CHANNEL_DELETE', channelId });
+
+      if (response.type === 'CHANNEL_DELETED') {
         return;
       }
       if (response.type === 'PERMISSION_DENIED') {

@@ -332,11 +332,11 @@ async function generateWranglerConfig(state: DeploymentState): Promise<void> {
         ],
         durable_objects: {
           bindings: [
-            { name: "LOG_DO", class_name: "LogStorageDO" },
+            { name: "CHANNEL_DO", class_name: "ChannelStorageDO" },
           ],
         },
         migrations: [
-          { tag: "v1", new_classes: ["LogStorageDO"] },
+          { tag: "v1", new_classes: ["ChannelStorageDO"] },
         ],
         vars: {
           BOOTSTRAP_API_KEY: "{{BOOTSTRAP_API_KEY}}",

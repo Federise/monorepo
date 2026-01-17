@@ -1,38 +1,38 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { GatewayEnv } from "../../context.js";
-import { verifyLogToken } from "../../lib/log-token.js";
+import { verifyChannelToken } from "../../lib/channel-token.js";
 
 /**
- * Register SSE subscription endpoint for real-time log updates.
+ * Register SSE subscription endpoint for real-time channel updates.
  *
  * Accepts token authentication via query parameter or header.
  * Streams new events as they arrive using Server-Sent Events.
  */
-export function registerLogSubscribeRoute(app: Hono<{ Variables: GatewayEnv }>) {
-  app.get("/log/subscribe", async (c) => {
-    const logStore = c.get("logStore");
+export function registerChannelSubscribeRoute(app: Hono<{ Variables: GatewayEnv }>) {
+  app.get("/channel/subscribe", async (c) => {
+    const channelStore = c.get("channelStore");
 
     // Get token from query or header
-    const token = c.req.query("token") || c.req.header("X-Log-Token");
+    const token = c.req.query("token") || c.req.header("X-Channel-Token");
     if (!token) {
       return c.json({ code: 401, message: "Token required" }, 401);
     }
 
-    // Get logId from query
-    const logId = c.req.query("logId");
-    if (!logId) {
-      return c.json({ code: 400, message: "logId required" }, 400);
+    // Get channelId from query
+    const channelId = c.req.query("channelId");
+    if (!channelId) {
+      return c.json({ code: 400, message: "channelId required" }, 400);
     }
 
-    // Get log metadata to retrieve secret
-    const meta = await logStore.getMetadata(logId);
+    // Get channel metadata to retrieve secret
+    const meta = await channelStore.getMetadata(channelId);
     if (!meta) {
-      return c.json({ code: 404, message: "Log not found" }, 404);
+      return c.json({ code: 404, message: "Channel not found" }, 404);
     }
 
     // Verify token
-    const verified = await verifyLogToken(token, meta.secret);
+    const verified = await verifyChannelToken(token, meta.secret);
     if (!verified) {
       return c.json({ code: 401, message: "Invalid or expired token" }, 401);
     }
@@ -48,7 +48,7 @@ export function registerLogSubscribeRoute(app: Hono<{ Variables: GatewayEnv }>) 
       // Send initial connection event
       await stream.writeSSE({
         event: "connected",
-        data: JSON.stringify({ logId, afterSeq: lastSeq }),
+        data: JSON.stringify({ channelId, afterSeq: lastSeq }),
       });
 
       // Poll interval (1 second for more responsive updates)
@@ -63,7 +63,7 @@ export function registerLogSubscribeRoute(app: Hono<{ Variables: GatewayEnv }>) 
       // Polling loop
       while (isActive) {
         try {
-          const result = await logStore.read(logId, { afterSeq: lastSeq, limit: 50 });
+          const result = await channelStore.read(channelId, { afterSeq: lastSeq, limit: 50 });
 
           for (const event of result.events) {
             await stream.writeSSE({

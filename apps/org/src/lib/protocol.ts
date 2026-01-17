@@ -36,8 +36,8 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   'kv:delete': 'Delete your stored data',
   'blob:read': 'Read your files',
   'blob:write': 'Upload files',
-  'log:create': 'Create and manage chat channels',
-  'log:delete': 'Delete chat channels',
+  'channel:create': 'Create and manage chat channels',
+  'channel:delete': 'Delete chat channels',
   'notifications': 'Send you notifications',
 };
 
@@ -86,18 +86,20 @@ export function isValidRequest(data: unknown): data is RequestMessage {
       );
     case 'TEST_CLEAR_PERMISSIONS':
       return true;
-    case 'LOG_CREATE':
+    case 'CHANNEL_CREATE':
       return typeof msg.name === 'string';
-    case 'LOG_LIST':
+    case 'CHANNEL_LIST':
       return true;
-    case 'LOG_APPEND':
-      return typeof msg.logId === 'string' && typeof msg.content === 'string';
-    case 'LOG_READ':
-      return typeof msg.logId === 'string';
-    case 'LOG_DELETE':
-      return typeof msg.logId === 'string';
-    case 'LOG_TOKEN_CREATE':
-      return typeof msg.logId === 'string' && Array.isArray(msg.permissions);
+    case 'CHANNEL_APPEND':
+      return typeof msg.channelId === 'string' && typeof msg.content === 'string';
+    case 'CHANNEL_READ':
+      return typeof msg.channelId === 'string';
+    case 'CHANNEL_DELETE':
+      return typeof msg.channelId === 'string';
+    case 'CHANNEL_TOKEN_CREATE':
+      return typeof msg.channelId === 'string' && Array.isArray(msg.permissions);
+    case 'CHANNEL_DELETE_EVENT':
+      return typeof msg.channelId === 'string' && typeof msg.targetSeq === 'number';
     default:
       return false;
   }

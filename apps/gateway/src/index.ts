@@ -5,15 +5,17 @@ import {
   registerGatewayRoutes,
   registerBlobDownloadRoute,
   registerPublicBlobRoute,
-  registerTokenLogRoutes,
-  registerLogSubscribeRoute,
+  registerTokenChannelRoutes,
+  registerChannelSubscribeRoute,
+  registerShortLinkResolveRoute,
   type GatewayEnv,
 } from "@federise/gateway-core";
 import { CloudflareKVAdapter } from "./adapters/cloudflare-kv";
 import { CloudflareR2Adapter } from "./adapters/cloudflare-r2";
 import { CloudflarePresigner } from "./adapters/cloudflare-presigner";
-import { CloudflareLogDOAdapter } from "./adapters/cloudflare-log-do";
-export { LogStorageDO } from "./durable-objects/log-storage";
+import { CloudflareChannelDOAdapter } from "./adapters/cloudflare-channel-do";
+import { CloudflareShortLinkAdapter } from "./adapters/cloudflare-shortlink";
+export { ChannelStorageDO } from "./durable-objects/channel-storage";
 
 // Create app with both Cloudflare bindings and our adapter variables
 const app = new Hono<{ Bindings: Env; Variables: GatewayEnv }>();
@@ -22,7 +24,8 @@ const app = new Hono<{ Bindings: Env; Variables: GatewayEnv }>();
 app.use("*", async (c, next) => {
   c.set("kv", new CloudflareKVAdapter(c.env.KV));
   c.set("blob", new CloudflareR2Adapter(c.env.R2));
-  c.set("logStore", new CloudflareLogDOAdapter(c.env.LOG_DO));
+  c.set("channelStore", new CloudflareChannelDOAdapter(c.env.CHANNEL_DO));
+  c.set("shortLink", new CloudflareShortLinkAdapter(c.env.KV));
 
   // Create presigner if credentials are configured
   if (c.env.R2_ACCOUNT_ID && c.env.R2_ACCESS_KEY_ID && c.env.R2_SECRET_ACCESS_KEY) {
@@ -51,7 +54,7 @@ app.use("*", (c, next) => {
   return cors({
     origin,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public", "X-Blob-Visibility", "X-Log-Token"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Blob-Namespace", "X-Blob-Key", "X-Blob-Public", "X-Blob-Visibility", "X-Channel-Token"],
     exposeHeaders: ["Content-Length", "Content-Disposition"],
     maxAge: 86400,
     credentials: false,
@@ -76,11 +79,14 @@ registerPublicBlobRoute(app);
 // Register authenticated blob download route BEFORE auth middleware
 registerBlobDownloadRoute(app);
 
-// Register token-based log routes BEFORE auth middleware (handles recipient access via token)
-registerTokenLogRoutes(app);
+// Register token-based channel routes BEFORE auth middleware (handles recipient access via token)
+registerTokenChannelRoutes(app);
 
 // Register SSE subscription route BEFORE auth middleware (uses token auth)
-registerLogSubscribeRoute(app);
+registerChannelSubscribeRoute(app);
+
+// Register short link resolve route BEFORE auth middleware (public access)
+registerShortLinkResolveRoute(app);
 
 // Auth middleware
 app.use("*", createAuthMiddleware());

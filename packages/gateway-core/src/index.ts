@@ -38,5 +38,24 @@ export {
 // Auth middleware
 export { createAuthMiddleware, type AuthMiddlewareOptions } from "./middleware/auth.js";
 
+// Channel token utilities
+export {
+  createChannelToken,
+  verifyChannelToken,
+  parseChannelToken,
+  type CreateTokenParams,
+  type VerifiedToken,
+} from "./lib/channel-token.js";
+
+// Base62 encoding utilities
+export { base62Encode, base62Decode, generateShortId } from "./lib/base62.js";
+
 // Routes
-export { registerGatewayRoutes, registerBlobDownloadRoute, registerPublicBlobRoute, registerTokenLogRoutes, registerLogSubscribeRoute } from "./routes.js";
+export {
+  registerGatewayRoutes,
+  registerBlobDownloadRoute,
+  registerPublicBlobRoute,
+  registerTokenChannelRoutes,
+  registerChannelSubscribeRoute,
+  registerShortLinkResolveRoute,
+} from "./routes.js";

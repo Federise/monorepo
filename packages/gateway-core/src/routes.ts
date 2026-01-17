@@ -23,15 +23,21 @@ import { BlobSetVisibilityEndpoint } from "./endpoints/blob/set-visibility.js";
 import { registerBlobDownloadRoute } from "./endpoints/blob/download.js";
 import { registerPublicBlobRoute } from "./endpoints/blob/public-download.js";
 import {
-  LogCreateEndpoint,
-  LogListEndpoint,
-  LogAppendEndpoint,
-  LogReadEndpoint,
-  LogDeleteEndpoint,
-  LogTokenCreateEndpoint,
-} from "./endpoints/log/index.js";
-import { registerTokenLogRoutes } from "./endpoints/log/token-routes.js";
-import { registerLogSubscribeRoute } from "./endpoints/log/subscribe.js";
+  ChannelCreateEndpoint,
+  ChannelListEndpoint,
+  ChannelAppendEndpoint,
+  ChannelReadEndpoint,
+  ChannelDeleteEndpoint,
+  ChannelDeleteEventEndpoint,
+  ChannelTokenCreateEndpoint,
+} from "./endpoints/channel/index.js";
+import { registerTokenChannelRoutes } from "./endpoints/channel/token-routes.js";
+import { registerChannelSubscribeRoute } from "./endpoints/channel/subscribe.js";
+import {
+  ShortLinkCreateEndpoint,
+  ShortLinkDeleteEndpoint,
+  registerShortLinkResolveRoute,
+} from "./endpoints/shortlink/index.js";
 
 /**
  * Register all gateway routes on a Hono app.
@@ -70,16 +76,27 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
   openapi.post("/blob/list", BlobListEndpoint);
   openapi.post("/blob/visibility", BlobSetVisibilityEndpoint);
 
-  // Log routes
-  openapi.post("/log/create", LogCreateEndpoint);
-  openapi.post("/log/list", LogListEndpoint);
-  openapi.post("/log/append", LogAppendEndpoint);
-  openapi.post("/log/read", LogReadEndpoint);
-  openapi.post("/log/delete", LogDeleteEndpoint);
-  openapi.post("/log/token/create", LogTokenCreateEndpoint);
+  // Channel routes
+  openapi.post("/channel/create", ChannelCreateEndpoint);
+  openapi.post("/channel/list", ChannelListEndpoint);
+  openapi.post("/channel/append", ChannelAppendEndpoint);
+  openapi.post("/channel/read", ChannelReadEndpoint);
+  openapi.post("/channel/delete", ChannelDeleteEndpoint);
+  openapi.post("/channel/delete-event", ChannelDeleteEventEndpoint);
+  openapi.post("/channel/token/create", ChannelTokenCreateEndpoint);
+
+  // Short link routes
+  openapi.post("/short", ShortLinkCreateEndpoint);
+  openapi.delete("/short/:id", ShortLinkDeleteEndpoint);
 
   return openapi;
 }
 
 // Re-export for direct access
-export { registerBlobDownloadRoute, registerPublicBlobRoute, registerTokenLogRoutes, registerLogSubscribeRoute };
+export {
+  registerBlobDownloadRoute,
+  registerPublicBlobRoute,
+  registerTokenChannelRoutes,
+  registerChannelSubscribeRoute,
+  registerShortLinkResolveRoute,
+};

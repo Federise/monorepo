@@ -10,7 +10,7 @@
   import { getPermissions, hasCapability, grantCapabilities, revokePermissions } from '../lib/permissions';
   import { getKV, setKV, deleteKV, listKVKeys } from '../lib/kv-storage';
   import { uploadBlob, getBlob, deleteBlob, listBlobs, getUploadUrlWithMetadata, setBlobVisibility } from '../lib/blob-storage';
-  import { createLog, listLogs, appendLog, readLog, deleteLog, createLogToken } from '../lib/log-storage';
+  import { createChannel, listChannels, appendChannel, readChannel, deleteChannel, deleteChannelEvent, createChannelToken } from '../lib/channel-storage';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured, getGatewayConfig } from '../utils/auth';
 
   // Track connected clients by origin (used by handleSyn)
@@ -360,164 +360,193 @@
     }
   }
 
-  async function handleLogCreate(
+  async function handleChannelCreate(
     source: MessageEventSource,
     origin: string,
-    msg: Extract<RequestMessage, { type: 'LOG_CREATE' }>
+    msg: Extract<RequestMessage, { type: 'CHANNEL_CREATE' }>
   ): Promise<void> {
-    if (!(await hasCapability(origin, 'log:create'))) {
+    if (!(await hasCapability(origin, 'channel:create'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
-        capability: 'log:create',
+        capability: 'channel:create',
       });
       return;
     }
 
     try {
-      const result = await createLog(origin, msg.name);
+      const result = await createChannel(origin, msg.name);
       sendResponse(source, origin, {
-        type: 'LOG_CREATED',
+        type: 'CHANNEL_CREATED',
         id: msg.id,
         metadata: result.metadata,
         secret: result.secret,
       });
     } catch (err) {
-      sendError(source, origin, msg.id, 'LOG_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create log');
+      sendError(source, origin, msg.id, 'CHANNEL_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create channel');
     }
   }
 
-  async function handleLogList(
+  async function handleChannelList(
     source: MessageEventSource,
     origin: string,
-    msg: Extract<RequestMessage, { type: 'LOG_LIST' }>
+    msg: Extract<RequestMessage, { type: 'CHANNEL_LIST' }>
   ): Promise<void> {
-    if (!(await hasCapability(origin, 'log:create'))) {
+    if (!(await hasCapability(origin, 'channel:create'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
-        capability: 'log:create',
+        capability: 'channel:create',
       });
       return;
     }
 
     try {
-      const logs = await listLogs(origin);
+      const channels = await listChannels(origin);
       sendResponse(source, origin, {
-        type: 'LOG_LIST_RESULT',
+        type: 'CHANNEL_LIST_RESULT',
         id: msg.id,
-        logs,
+        channels,
       });
     } catch (err) {
-      sendError(source, origin, msg.id, 'LOG_LIST_FAILED', err instanceof Error ? err.message : 'Failed to list logs');
+      sendError(source, origin, msg.id, 'CHANNEL_LIST_FAILED', err instanceof Error ? err.message : 'Failed to list channels');
     }
   }
 
-  async function handleLogAppend(
+  async function handleChannelAppend(
     source: MessageEventSource,
     origin: string,
-    msg: Extract<RequestMessage, { type: 'LOG_APPEND' }>
+    msg: Extract<RequestMessage, { type: 'CHANNEL_APPEND' }>
   ): Promise<void> {
-    if (!(await hasCapability(origin, 'log:create'))) {
+    if (!(await hasCapability(origin, 'channel:create'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
-        capability: 'log:create',
+        capability: 'channel:create',
       });
       return;
     }
 
     try {
-      const event = await appendLog(origin, msg.logId, msg.content);
+      const event = await appendChannel(origin, msg.channelId, msg.content);
       sendResponse(source, origin, {
-        type: 'LOG_APPENDED',
+        type: 'CHANNEL_APPENDED',
         id: msg.id,
         event,
       });
     } catch (err) {
-      sendError(source, origin, msg.id, 'LOG_APPEND_FAILED', err instanceof Error ? err.message : 'Failed to append to log');
+      sendError(source, origin, msg.id, 'CHANNEL_APPEND_FAILED', err instanceof Error ? err.message : 'Failed to append to channel');
     }
   }
 
-  async function handleLogRead(
+  async function handleChannelRead(
     source: MessageEventSource,
     origin: string,
-    msg: Extract<RequestMessage, { type: 'LOG_READ' }>
+    msg: Extract<RequestMessage, { type: 'CHANNEL_READ' }>
   ): Promise<void> {
-    if (!(await hasCapability(origin, 'log:create'))) {
+    if (!(await hasCapability(origin, 'channel:create'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
-        capability: 'log:create',
+        capability: 'channel:create',
       });
       return;
     }
 
     try {
-      const result = await readLog(origin, msg.logId, msg.afterSeq, msg.limit);
+      const result = await readChannel(origin, msg.channelId, msg.afterSeq, msg.limit);
       sendResponse(source, origin, {
-        type: 'LOG_READ_RESULT',
+        type: 'CHANNEL_READ_RESULT',
         id: msg.id,
         events: result.events,
         hasMore: result.hasMore,
       });
     } catch (err) {
-      sendError(source, origin, msg.id, 'LOG_READ_FAILED', err instanceof Error ? err.message : 'Failed to read log');
+      sendError(source, origin, msg.id, 'CHANNEL_READ_FAILED', err instanceof Error ? err.message : 'Failed to read channel');
     }
   }
 
-  async function handleLogDelete(
+  async function handleChannelDelete(
     source: MessageEventSource,
     origin: string,
-    msg: Extract<RequestMessage, { type: 'LOG_DELETE' }>
+    msg: Extract<RequestMessage, { type: 'CHANNEL_DELETE' }>
   ): Promise<void> {
-    if (!(await hasCapability(origin, 'log:delete'))) {
+    if (!(await hasCapability(origin, 'channel:delete'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
-        capability: 'log:delete',
+        capability: 'channel:delete',
       });
       return;
     }
 
     try {
-      await deleteLog(origin, msg.logId);
+      await deleteChannel(origin, msg.channelId);
       sendResponse(source, origin, {
-        type: 'LOG_DELETED',
+        type: 'CHANNEL_DELETED',
         id: msg.id,
       });
     } catch (err) {
-      sendError(source, origin, msg.id, 'LOG_DELETE_FAILED', err instanceof Error ? err.message : 'Failed to delete log');
+      sendError(source, origin, msg.id, 'CHANNEL_DELETE_FAILED', err instanceof Error ? err.message : 'Failed to delete channel');
     }
   }
 
-  async function handleLogTokenCreate(
+  async function handleChannelDeleteEvent(
     source: MessageEventSource,
     origin: string,
-    msg: Extract<RequestMessage, { type: 'LOG_TOKEN_CREATE' }>
+    msg: Extract<RequestMessage, { type: 'CHANNEL_DELETE_EVENT' }>
   ): Promise<void> {
-    if (!(await hasCapability(origin, 'log:create'))) {
+    if (!(await hasCapability(origin, 'channel:create'))) {
       sendResponse(source, origin, {
         type: 'PERMISSION_DENIED',
         id: msg.id,
-        capability: 'log:create',
+        capability: 'channel:create',
       });
       return;
     }
 
     try {
-      const result = await createLogToken(origin, msg.logId, msg.permissions, msg.expiresInSeconds);
+      const event = await deleteChannelEvent(origin, msg.channelId, msg.targetSeq);
+      sendResponse(source, origin, {
+        type: 'CHANNEL_EVENT_DELETED',
+        id: msg.id,
+        event,
+      });
+    } catch (err) {
+      sendError(source, origin, msg.id, 'CHANNEL_DELETE_EVENT_FAILED', err instanceof Error ? err.message : 'Failed to delete event');
+    }
+  }
+
+  async function handleChannelTokenCreate(
+    source: MessageEventSource,
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'CHANNEL_TOKEN_CREATE' }>
+  ): Promise<void> {
+    if (!(await hasCapability(origin, 'channel:create'))) {
+      sendResponse(source, origin, {
+        type: 'PERMISSION_DENIED',
+        id: msg.id,
+        capability: 'channel:create',
+      });
+      return;
+    }
+
+    try {
+      const result = await createChannelToken(origin, msg.channelId, msg.permissions, {
+        displayName: msg.displayName,
+        expiresInSeconds: msg.expiresInSeconds,
+      });
       await requestStorageAccess();
       const { url: gatewayUrl } = getGatewayConfig();
       sendResponse(source, origin, {
-        type: 'LOG_TOKEN_CREATED',
+        type: 'CHANNEL_TOKEN_CREATED',
         id: msg.id,
         token: result.token,
         expiresAt: result.expiresAt,
         gatewayUrl: gatewayUrl || '',
       });
     } catch (err) {
-      sendError(source, origin, msg.id, 'LOG_TOKEN_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create token');
+      sendError(source, origin, msg.id, 'CHANNEL_TOKEN_CREATE_FAILED', err instanceof Error ? err.message : 'Failed to create token');
     }
   }
 
@@ -608,23 +637,26 @@
       case 'BLOB_SET_VISIBILITY':
         await handleBlobSetVisibility(source, origin, message);
         break;
-      case 'LOG_CREATE':
-        await handleLogCreate(source, origin, message);
+      case 'CHANNEL_CREATE':
+        await handleChannelCreate(source, origin, message);
         break;
-      case 'LOG_LIST':
-        await handleLogList(source, origin, message);
+      case 'CHANNEL_LIST':
+        await handleChannelList(source, origin, message);
         break;
-      case 'LOG_APPEND':
-        await handleLogAppend(source, origin, message);
+      case 'CHANNEL_APPEND':
+        await handleChannelAppend(source, origin, message);
         break;
-      case 'LOG_READ':
-        await handleLogRead(source, origin, message);
+      case 'CHANNEL_READ':
+        await handleChannelRead(source, origin, message);
         break;
-      case 'LOG_DELETE':
-        await handleLogDelete(source, origin, message);
+      case 'CHANNEL_DELETE':
+        await handleChannelDelete(source, origin, message);
         break;
-      case 'LOG_TOKEN_CREATE':
-        await handleLogTokenCreate(source, origin, message);
+      case 'CHANNEL_DELETE_EVENT':
+        await handleChannelDeleteEvent(source, origin, message);
+        break;
+      case 'CHANNEL_TOKEN_CREATE':
+        await handleChannelTokenCreate(source, origin, message);
         break;
       case 'TEST_GRANT_PERMISSIONS':
         await handleTestGrantPermissions(source, origin, message);

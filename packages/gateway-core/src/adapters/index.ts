@@ -21,10 +21,13 @@ export type {
 } from "./presigner.js";
 
 export type {
-  ILogStore,
-  LogStoreMetadata,
-  LogStoreEvent,
-  LogAppendOptions,
-  LogReadOptions,
-  LogStoreReadResult,
-} from "./log.js";
+  IChannelStore,
+  ChannelStoreMetadata,
+  ChannelStoreEvent,
+  ChannelAppendOptions,
+  ChannelReadOptions,
+  ChannelStoreReadResult,
+  ChannelDeleteEventOptions,
+} from "./channel.js";
+
+export type { IShortLinkStore, ShortLink } from "./shortlink.js";

@@ -1,8 +1,8 @@
 // Main client
 export { FederiseClient } from './client';
 
-// Log client for direct gateway access (recipients)
-export { LogClient, type LogClientOptions } from './log-client';
+// Channel client for direct gateway access (recipients)
+export { ChannelClient, type ChannelClientOptions } from './channel-client';
 
 // Types
 export type {
@@ -11,10 +11,10 @@ export type {
   Capability,
   FederiseClientOptions,
   GrantResult,
-  LogEvent,
-  LogMeta,
-  LogCreateResult,
-  LogReadResult,
+  ChannelEvent,
+  ChannelMeta,
+  ChannelCreateResult,
+  ChannelReadResult,
   RequestMessage,
   RequestPayload,
   ResponseMessage,

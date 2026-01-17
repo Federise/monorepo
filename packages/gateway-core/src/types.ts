@@ -167,85 +167,124 @@ export const ErrorResponse = z.object({
   message: z.string(),
 });
 
-// Log schemas
-export const LogMeta = z.object({
-  logId: z.string(),
+// Channel schemas
+
+// Channel permission types
+export const ChannelPermission = z.enum([
+  "read",        // Read non-deleted events
+  "append",      // Append new events (renamed from 'write')
+  "read:deleted", // Read all events including soft-deleted
+  "delete:own",  // Soft-delete events with matching authorId
+  "delete:any",  // Soft-delete any event
+]);
+export type ChannelPermission = z.infer<typeof ChannelPermission>;
+
+// Legacy permission for backward compatibility
+export const LegacyChannelPermission = z.enum(["read", "write"]);
+export type LegacyChannelPermission = z.infer<typeof LegacyChannelPermission>;
+
+// Combined permission type (accepts both new and legacy)
+export const ChannelPermissionInput = z.enum([
+  "read", "append", "read:deleted", "delete:own", "delete:any", "write"
+]);
+export type ChannelPermissionInput = z.infer<typeof ChannelPermissionInput>;
+
+// Event type discriminator
+export const ChannelEventType = z.enum(["message", "deletion"]);
+export type ChannelEventType = z.infer<typeof ChannelEventType>;
+
+export const ChannelMeta = z.object({
+  channelId: z.string(),
   name: z.string(),
   ownerNamespace: NamespaceValue,
   createdAt: z.string().datetime(),
 });
 
-export const LogEvent = z.object({
+export const ChannelEvent = z.object({
   id: z.string(),
   seq: z.number().int(),
   authorId: z.string(),
-  content: z.string(),
+  type: ChannelEventType.optional().default("message"), // 'message' or 'deletion'
+  content: z.string().optional(), // Optional for deletion events
+  targetSeq: z.number().int().optional(), // Only for deletion events - the seq being deleted
+  deleted: z.boolean().optional(), // Flag when returning soft-deleted events with read:deleted
   createdAt: z.string().datetime(),
 });
 
-export const LogCreateRequest = z.object({
+export const ChannelCreateRequest = z.object({
   namespace: NamespaceValue,
   name: z.string().min(1).max(100),
 });
 
-export const LogCreateResponse = z.object({
-  metadata: LogMeta,
+export const ChannelCreateResponse = z.object({
+  metadata: ChannelMeta,
   secret: z.string(),
 });
 
-export const LogListRequest = z.object({
+export const ChannelListRequest = z.object({
   namespace: NamespaceValue,
 });
 
-export const LogListResponse = z.object({
-  logs: z.array(LogMeta),
+export const ChannelListResponse = z.object({
+  channels: z.array(ChannelMeta),
 });
 
-export const LogAppendRequest = z.object({
-  logId: z.string(),
+export const ChannelAppendRequest = z.object({
+  channelId: z.string(),
   content: z.string().max(10000),
   authorId: z.string().optional(), // Required for token auth, derived from API key auth
 });
 
-export const LogAppendResponse = z.object({
-  event: LogEvent,
+export const ChannelAppendResponse = z.object({
+  event: ChannelEvent,
 });
 
-export const LogReadRequest = z.object({
-  logId: z.string(),
+export const ChannelReadRequest = z.object({
+  channelId: z.string(),
   afterSeq: z.number().int().optional(),
   limit: z.number().int().min(1).max(100).default(50),
 });
 
-export const LogReadResponse = z.object({
-  events: z.array(LogEvent),
+export const ChannelReadResponse = z.object({
+  events: z.array(ChannelEvent),
   hasMore: z.boolean(),
 });
 
-export const LogDeleteRequest = z.object({
+export const ChannelDeleteRequest = z.object({
   namespace: NamespaceValue,
-  logId: z.string(),
+  channelId: z.string(),
 });
 
-export const LogDeleteResponse = z.object({
+export const ChannelDeleteResponse = z.object({
   success: z.boolean(),
 });
 
-export const LogTokenCreateRequest = z.object({
+export const ChannelTokenCreateRequest = z.object({
   namespace: NamespaceValue,
-  logId: z.string(),
-  permissions: z.array(z.enum(["read", "write"])),
+  channelId: z.string(),
+  permissions: z.array(ChannelPermissionInput),
+  displayName: z.string().max(32).optional(), // User-provided name for the token author
   expiresInSeconds: z.number().int().positive().default(604800), // 7 days
 });
 
-export const LogTokenCreateResponse = z.object({
+export const ChannelTokenCreateResponse = z.object({
   token: z.string(),
   expiresAt: z.string().datetime(),
 });
 
-// Log capability token structure V1 (legacy JSON format)
-export const LogCapabilityTokenV1 = z.object({
-  l: z.string(), // logId
+export const ChannelDeleteEventRequest = z.object({
+  channelId: z.string(),
+  targetSeq: z.number().int().positive(),
+  authorId: z.string().optional(), // Required for API key auth, derived from token
+});
+
+export const ChannelDeleteEventResponse = z.object({
+  event: ChannelEvent,
+});
+
+// Channel capability token structure V1 (legacy JSON format)
+export const ChannelCapabilityTokenV1 = z.object({
+  l: z.string(), // channelId (kept as 'l' for backwards compatibility)
   g: z.string(), // gatewayUrl
   p: z.array(z.enum(["r", "w"])), // permissions
   a: z.string(), // authorId
@@ -253,11 +292,11 @@ export const LogCapabilityTokenV1 = z.object({
   s: z.string(), // signature
 });
 
-// Log capability token structure V2 (compact binary format, no gatewayUrl)
-// Binary layout: version(1) + logId(8) + permissions(1) + authorId(4) + expiresAt(4) + signature(16) = 34 bytes
-export const LogCapabilityTokenV2 = z.object({
+// Channel capability token structure V2 (compact binary format, no gatewayUrl)
+// Binary layout: version(1) + channelId(8) + permissions(1) + authorId(4) + expiresAt(4) + signature(16) = 34 bytes
+export const ChannelCapabilityTokenV2 = z.object({
   v: z.literal(2), // version
-  l: z.string(), // logId (8 bytes hex = 16 chars)
+  l: z.string(), // channelId (8 bytes hex = 16 chars, kept as 'l' for backwards compatibility)
   p: z.number(), // permissions bitmap (1=read, 2=write, 3=both)
   a: z.string(), // authorId (4 bytes hex = 8 chars)
   e: z.number(), // expiresAt (unix timestamp)
@@ -289,21 +328,50 @@ export type BlobDeleteRequest = z.infer<typeof BlobDeleteRequest>;
 export type BlobListRequest = z.infer<typeof BlobListRequest>;
 export type BlobSetVisibilityRequest = z.infer<typeof BlobSetVisibilityRequest>;
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
-export type LogMeta = z.infer<typeof LogMeta>;
-export type LogEvent = z.infer<typeof LogEvent>;
-export type LogCreateRequest = z.infer<typeof LogCreateRequest>;
-export type LogCreateResponse = z.infer<typeof LogCreateResponse>;
-export type LogListRequest = z.infer<typeof LogListRequest>;
-export type LogListResponse = z.infer<typeof LogListResponse>;
-export type LogAppendRequest = z.infer<typeof LogAppendRequest>;
-export type LogAppendResponse = z.infer<typeof LogAppendResponse>;
-export type LogReadRequest = z.infer<typeof LogReadRequest>;
-export type LogReadResponse = z.infer<typeof LogReadResponse>;
-export type LogDeleteRequest = z.infer<typeof LogDeleteRequest>;
-export type LogDeleteResponse = z.infer<typeof LogDeleteResponse>;
-export type LogTokenCreateRequest = z.infer<typeof LogTokenCreateRequest>;
-export type LogTokenCreateResponse = z.infer<typeof LogTokenCreateResponse>;
-export type LogCapabilityTokenV1 = z.infer<typeof LogCapabilityTokenV1>;
-export type LogCapabilityTokenV2 = z.infer<typeof LogCapabilityTokenV2>;
+export type ChannelMeta = z.infer<typeof ChannelMeta>;
+export type ChannelEvent = z.infer<typeof ChannelEvent>;
+export type ChannelCreateRequest = z.infer<typeof ChannelCreateRequest>;
+export type ChannelCreateResponse = z.infer<typeof ChannelCreateResponse>;
+export type ChannelListRequest = z.infer<typeof ChannelListRequest>;
+export type ChannelListResponse = z.infer<typeof ChannelListResponse>;
+export type ChannelAppendRequest = z.infer<typeof ChannelAppendRequest>;
+export type ChannelAppendResponse = z.infer<typeof ChannelAppendResponse>;
+export type ChannelReadRequest = z.infer<typeof ChannelReadRequest>;
+export type ChannelReadResponse = z.infer<typeof ChannelReadResponse>;
+export type ChannelDeleteRequest = z.infer<typeof ChannelDeleteRequest>;
+export type ChannelDeleteResponse = z.infer<typeof ChannelDeleteResponse>;
+export type ChannelTokenCreateRequest = z.infer<typeof ChannelTokenCreateRequest>;
+export type ChannelTokenCreateResponse = z.infer<typeof ChannelTokenCreateResponse>;
+export type ChannelDeleteEventRequest = z.infer<typeof ChannelDeleteEventRequest>;
+export type ChannelDeleteEventResponse = z.infer<typeof ChannelDeleteEventResponse>;
+export type ChannelCapabilityTokenV1 = z.infer<typeof ChannelCapabilityTokenV1>;
+export type ChannelCapabilityTokenV2 = z.infer<typeof ChannelCapabilityTokenV2>;
 // Union type for backwards compatibility
-export type LogCapabilityToken = LogCapabilityTokenV1 | LogCapabilityTokenV2;
+export type ChannelCapabilityToken = ChannelCapabilityTokenV1 | ChannelCapabilityTokenV2;
+
+// Short Link schemas
+export const ShortLinkSchema = z.object({
+  id: z.string(),
+  targetUrl: z.string().url(),
+  createdAt: z.number().int(),
+});
+
+export const ShortLinkCreateRequest = z.object({
+  url: z.string().url(),
+});
+
+export const ShortLinkCreateResponse = z.object({
+  id: z.string(),
+  shortUrl: z.string().url(),
+  targetUrl: z.string().url(),
+});
+
+export const ShortLinkDeleteResponse = z.object({
+  success: z.boolean(),
+});
+
+// Short Link type exports
+export type ShortLinkSchema = z.infer<typeof ShortLinkSchema>;
+export type ShortLinkCreateRequest = z.infer<typeof ShortLinkCreateRequest>;
+export type ShortLinkCreateResponse = z.infer<typeof ShortLinkCreateResponse>;
+export type ShortLinkDeleteResponse = z.infer<typeof ShortLinkDeleteResponse>;

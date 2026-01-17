@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { IKVStore, IBlobStore, IPresigner, ILogStore } from "./adapters/index.js";
+import type { IKVStore, IBlobStore, IPresigner, IChannelStore, IShortLinkStore } from "./adapters/index.js";
 
 /**
  * Gateway configuration
@@ -22,10 +22,12 @@ export interface GatewayEnv {
   kv: IKVStore;
   /** Single blob store for all files */
   blob: IBlobStore;
-  /** Log store for atomic log operations */
-  logStore: ILogStore;
+  /** Channel store for atomic channel operations */
+  channelStore: IChannelStore;
   /** Presigner for direct S3-compatible uploads (optional) */
   presigner?: IPresigner;
+  /** Short link store for URL shortening */
+  shortLink: IShortLinkStore;
   config: GatewayConfig;
 }
 
@@ -49,10 +51,10 @@ export function getBlob(c: AppContext): IBlobStore {
 }
 
 /**
- * Helper to get log store from context
+ * Helper to get channel store from context
  */
-export function getLogStore(c: AppContext): ILogStore {
-  return c.get("logStore");
+export function getChannelStore(c: AppContext): IChannelStore {
+  return c.get("channelStore");
 }
 
 /**
@@ -67,4 +69,11 @@ export function getPresigner(c: AppContext): IPresigner | undefined {
  */
 export function getConfig(c: AppContext): GatewayConfig {
   return c.get("config");
+}
+
+/**
+ * Helper to get short link store from context
+ */
+export function getShortLink(c: AppContext): IShortLinkStore {
+  return c.get("shortLink");
 }
