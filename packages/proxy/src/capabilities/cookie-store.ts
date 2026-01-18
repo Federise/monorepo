@@ -105,6 +105,7 @@ export class CookieCapabilityStore implements CapabilityStore {
    * Grant capabilities to an origin.
    *
    * New capabilities are merged with existing ones.
+   * Also registers/updates an APP identity in the gateway.
    */
   async grantCapabilities(origin: string, capabilities: Capability[]): Promise<void> {
     const permissions = await this.loadPermissions();
@@ -122,6 +123,14 @@ export class CookieCapabilityStore implements CapabilityStore {
     };
 
     await this.savePermissions(permissions);
+
+    // Register/update APP identity in the gateway
+    try {
+      await this.backend.registerApp(origin, merged);
+    } catch (err) {
+      // Log but don't fail - permissions are still stored locally
+      console.error('[CookieCapabilityStore] Failed to register app identity:', err);
+    }
   }
 
   /**

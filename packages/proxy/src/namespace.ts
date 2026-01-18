@@ -2,20 +2,39 @@
  * Namespace utilities for origin-based isolation.
  *
  * Each origin gets its own namespace to prevent cross-origin data access.
- * The namespace is derived from a SHA-256 hash of the origin.
+ * The namespace is a human-readable, URL-safe version of the origin.
+ *
+ * Example: https://www.example-app.com → www_example-app_com
+ * Example: http://localhost:5174 → localhost_5174
  */
 
 /**
- * Build a namespaced key for origin isolation.
+ * Build a namespace from an origin URL.
  *
- * @param origin - The origin to create a namespace for (e.g., "http://localhost:5174")
- * @returns A namespace string like "origin_a1b2c3d4..."
+ * Transforms the origin to be human-readable and URL-safe:
+ * - Removes protocol (http://, https://)
+ * - Keeps port numbers (mapped via colon → underscore)
+ * - Removes trailing slashes
+ * - Replaces dots and colons with underscores
+ * - Removes any other unsafe characters
+ *
+ * @param origin - The origin to create a namespace for (e.g., "https://www.example-app.com")
+ * @returns A namespace string like "www_example-app_com" or "localhost_5174"
  */
-export async function buildNamespace(origin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(origin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  return `origin_${hashHex}`;
+export function buildNamespace(origin: string): string {
+  let namespace = origin;
+
+  // Remove protocol
+  namespace = namespace.replace(/^https?:\/\//, "");
+
+  // Remove trailing slash
+  namespace = namespace.replace(/\/$/, "");
+
+  // Replace dots and colons with underscores (keeps port as part of namespace)
+  namespace = namespace.replace(/[.:]/g, "_");
+
+  // Remove any characters that aren't alphanumeric, underscore, or hyphen
+  namespace = namespace.replace(/[^a-zA-Z0-9_-]/g, "");
+
+  return namespace;
 }

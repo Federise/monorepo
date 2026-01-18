@@ -1,5 +1,6 @@
 import { createGatewayClient, withAuth } from '../api/client';
 import { getGatewayConfig } from '../utils/auth';
+import { buildNamespace } from '@federise/proxy';
 
 /**
  * Get the gateway client and auth config.
@@ -14,25 +15,11 @@ function getClient() {
 }
 
 /**
- * Build a namespaced key for origin isolation.
- * Each origin gets its own namespace to prevent cross-origin data access.
- * Uses a hash of the origin to create a safe, consistent namespace.
- */
-async function buildNamespace(origin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(origin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return `origin_${hashHex}`;
-}
-
-/**
  * Get a value from KV storage for the given origin.
  */
 export async function getKV(origin: string, key: string): Promise<string | null> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/kv/get', {
     ...withAuth(apiKey),
@@ -52,7 +39,7 @@ export async function getKV(origin: string, key: string): Promise<string | null>
  */
 export async function setKV(origin: string, key: string, value: string): Promise<void> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { error } = await client.POST('/kv/set', {
     ...withAuth(apiKey),
@@ -70,7 +57,7 @@ export async function setKV(origin: string, key: string, value: string): Promise
  */
 export async function deleteKV(origin: string, key: string): Promise<void> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   // Use set with empty value to "delete" (or implement a delete endpoint)
   // For now, we set to empty string - gateway should handle actual deletion
@@ -90,7 +77,7 @@ export async function deleteKV(origin: string, key: string): Promise<void> {
  */
 export async function listKVKeys(origin: string, prefix?: string): Promise<string[]> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/kv/keys', {
     ...withAuth(apiKey),

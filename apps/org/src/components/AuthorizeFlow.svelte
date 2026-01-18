@@ -9,7 +9,9 @@
   let error = $state('');
 
   onMount(() => {
-    const params = new URLSearchParams(window.location.search);
+    // Parse parameters from hash (format: #app_origin=...&scope=...)
+    const hash = window.location.hash.slice(1); // Remove leading #
+    const params = new URLSearchParams(hash);
     const origin = params.get('app_origin');
     const scope = params.get('scope');
 

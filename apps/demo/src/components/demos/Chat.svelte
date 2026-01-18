@@ -1,16 +1,25 @@
 <script lang="ts">
-  import { getClient, hasChannelDeletePermissions } from '../../stores/federise.svelte';
+  import { getClient, hasChannelDeletePermissions, frameUrl } from '../../stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
-  import type { ChannelMeta, ChannelEvent } from '@federise/sdk';
+  import type { ChannelMeta, ChannelEvent, ChannelPermissionInput } from '@federise/sdk';
   import MessageList from '../chat/MessageList.svelte';
   import MessageInput from '../chat/MessageInput.svelte';
   import UsernameModal from '../chat/UsernameModal.svelte';
+  import { getNamespace } from '../../lib/namespace';
 
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
   const USERNAME_KEY = 'federise-demo:chatUsername';
 
   interface Channel extends ChannelMeta {
     secret?: string;
+  }
+
+  // Current app's namespace for checking channel ownership
+  const currentNamespace = getNamespace();
+
+  // Check if we own a channel
+  function isOwnChannel(channel: Channel): boolean {
+    return channel.ownerNamespace === currentNamespace;
   }
 
   let channels = $state<Channel[]>([]);
@@ -32,6 +41,7 @@
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   // Share modal state
+  let shareMode = $state<'quick-link' | 'create-account'>('quick-link');
   let shareDisplayName = $state('');
   let sharePermRead = $state(true);
   let sharePermAppend = $state(true);
@@ -203,6 +213,7 @@
     if (!selectedChannel) return;
     // Reset share modal state
     shareUrl = null;
+    shareMode = 'quick-link';
     shareDisplayName = '';
     sharePermRead = true;
     sharePermAppend = true;
@@ -220,7 +231,7 @@
     if (!client) return;
 
     // Build permissions array from toggles
-    const permissions: string[] = [];
+    const permissions: ChannelPermissionInput[] = [];
     if (sharePermRead) permissions.push('read');
     if (sharePermAppend) permissions.push('append');
     if (sharePermDeleteOwn) permissions.push('delete:own');
@@ -232,25 +243,51 @@
       return;
     }
 
+    // Validate display name for create-account mode
+    if (shareMode === 'create-account' && !shareDisplayName.trim()) {
+      alert('Display name is required for account invitations');
+      return;
+    }
+
     isGeneratingLink = true;
     try {
-      const result = await client.channel.createToken(
-        selectedChannel.channelId,
-        permissions,
-        {
-          expiresInSeconds: shareExpiryDays * 24 * 60 * 60,
-          displayName: shareDisplayName.trim() || undefined,
-        }
-      );
-
       const baseUrl = window.location.origin;
-      // Include both token and gateway URL in the share link
-      // Format: #<token>@<base64urlGatewayUrl>
-      const base64Gateway = btoa(result.gatewayUrl)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-      shareUrl = `${baseUrl}/channel#${result.token}@${base64Gateway}`;
+
+      if (shareMode === 'quick-link') {
+        // Quick link mode: create a channel token
+        const result = await client.channel.createToken(
+          selectedChannel.channelId,
+          permissions,
+          {
+            expiresInSeconds: shareExpiryDays * 24 * 60 * 60,
+            displayName: shareDisplayName.trim() || undefined,
+          }
+        );
+
+        // Format: /channel#<token>@<base64urlGatewayUrl>
+        const base64Gateway = btoa(result.gatewayUrl)
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+        shareUrl = `${baseUrl}/channel#${result.token}@${base64Gateway}`;
+      } else {
+        // Create account mode: create a claimable identity with channel grants
+        const result = await client.channel.inviteToChannel(
+          selectedChannel.channelId,
+          shareDisplayName.trim(),
+          permissions,
+          { expiresInSeconds: shareExpiryDays * 24 * 60 * 60 }
+        );
+
+        // Format: /claim#<tokenId>@<base64urlGatewayUrl>
+        // Use org app URL (derived from frameUrl) for claim page
+        const orgBaseUrl = frameUrl.value.replace(/\/frame\/?$/, '');
+        const base64Gateway = btoa(result.gatewayUrl)
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+        shareUrl = `${orgBaseUrl}/claim#${result.tokenId}@${base64Gateway}`;
+      }
     } catch (err) {
       console.error('Failed to create share link:', err);
     } finally {
@@ -265,10 +302,11 @@
     if (!client) return;
 
     isDeleting = true;
+    const channelToDelete = selectedChannel;
     try {
-      await client.channel.delete(selectedChannel.channelId);
+      await client.channel.delete(channelToDelete.channelId);
       // Remove from local list
-      channels = channels.filter(c => c.channelId !== selectedChannel.channelId);
+      channels = channels.filter(c => c.channelId !== channelToDelete.channelId);
       // Clear selection
       localStorage.removeItem(LAST_CHANNEL_KEY);
       selectedChannel = null;
@@ -336,9 +374,17 @@
           class="channel-item"
           class:active={selectedChannel?.channelId === channel.channelId}
           onclick={() => selectChannel(channel)}
+          title={isOwnChannel(channel) ? 'You own this channel' : `Owned by ${channel.ownerNamespace}`}
         >
           <span class="channel-icon">#</span>
           <span class="channel-name">{channel.name}</span>
+          {#if isOwnChannel(channel)}
+            <span class="owner-badge" title="You own this channel">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+              </svg>
+            </span>
+          {/if}
         </button>
       {/each}
     </div>
@@ -362,6 +408,15 @@
         <div class="chat-header-info">
           <span class="channel-icon">#</span>
           <span class="channel-name">{selectedChannel.name}</span>
+          {#if isOwnChannel(selectedChannel)}
+            <span class="ownership-badge own">Owner</span>
+          {:else}
+            <span class="ownership-badge" title={selectedChannel.ownerNamespace}>
+              {selectedChannel.ownerNamespace.length > 15
+                ? selectedChannel.ownerNamespace.slice(0, 12) + '...'
+                : selectedChannel.ownerNamespace}
+            </span>
+          {/if}
         </div>
         <div class="chat-header-actions">
           <button class="icon-btn" onclick={refreshMessages} disabled={isRefreshing} title="Refresh">
@@ -409,16 +464,51 @@
 
       {#if !shareUrl}
         <div class="share-config">
+          <div class="share-mode-toggle">
+            <button
+              class="mode-btn"
+              class:active={shareMode === 'quick-link'}
+              onclick={() => shareMode = 'quick-link'}
+            >
+              Quick Link
+            </button>
+            <button
+              class="mode-btn"
+              class:active={shareMode === 'create-account'}
+              onclick={() => shareMode = 'create-account'}
+            >
+              Create Account
+            </button>
+          </div>
+
+          <p class="mode-description">
+            {#if shareMode === 'quick-link'}
+              Anyone with this link can access the channel. No account needed.
+            {:else}
+              Creates an account invitation. Recipient will set up their own credentials.
+            {/if}
+          </p>
+
           <div class="form-group">
-            <label for="share-display-name">Display Name (optional)</label>
+            <label for="share-display-name">
+              Display Name {shareMode === 'create-account' ? '' : '(optional)'}
+              {#if shareMode === 'create-account'}<span class="required">*</span>{/if}
+            </label>
             <input
               id="share-display-name"
               type="text"
-              placeholder="e.g., Alice, Bob, Guest"
+              placeholder={shareMode === 'create-account' ? 'Name for the new account' : 'e.g., Alice, Bob, Guest'}
               bind:value={shareDisplayName}
               maxlength="32"
+              required={shareMode === 'create-account'}
             />
-            <p class="field-hint">Shown as the author when they send messages</p>
+            <p class="field-hint">
+              {#if shareMode === 'create-account'}
+                This will be the account holder's display name
+              {:else}
+                Shown as the author when they send messages
+              {/if}
+            </p>
           </div>
 
           <div class="form-group">
@@ -484,7 +574,11 @@
         </div>
       {:else}
         <div class="share-result">
-          <p>Share this link to grant access:</p>
+          {#if shareMode === 'quick-link'}
+            <p>Share this link to grant access:</p>
+          {:else}
+            <p>Send this invitation link. The recipient will create their account:</p>
+          {/if}
 
           <div class="permission-badges">
             {#if sharePermRead}<span class="badge">Read</span>{/if}
@@ -641,6 +735,16 @@
     white-space: nowrap;
   }
 
+  .owner-badge {
+    margin-left: auto;
+    color: var(--color-warning, #f59e0b);
+    flex-shrink: 0;
+  }
+
+  .channel-item.active .owner-badge {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
   .create-channel {
     display: flex;
     gap: 0.375rem;
@@ -703,6 +807,20 @@
     gap: 0.375rem;
     font-weight: 600;
     font-size: 0.9rem;
+  }
+
+  .ownership-badge {
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 0.15rem 0.4rem;
+    background: var(--color-surface-hover);
+    color: var(--color-text-muted);
+    border-radius: 999px;
+  }
+
+  .ownership-badge.own {
+    background: var(--color-warning, #f59e0b);
+    color: white;
   }
 
   .chat-header-actions {
@@ -772,6 +890,50 @@
 
   .share-modal {
     max-width: 450px;
+  }
+
+  .share-mode-toggle {
+    display: flex;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .mode-btn:hover:not(.active) {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+
+  .mode-btn.active {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .mode-description {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    padding: 0.5rem;
+    background: var(--color-bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+  }
+
+  .required {
+    color: var(--color-error, #ef4444);
   }
 
   .share-config,

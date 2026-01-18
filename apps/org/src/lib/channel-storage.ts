@@ -1,5 +1,6 @@
 import { createGatewayClient, withAuth } from '../api/client';
 import { getGatewayConfig } from '../utils/auth';
+import { buildNamespace } from '@federise/proxy';
 import type { ChannelMeta, ChannelEvent, ChannelCreateResult, ChannelReadResult, ChannelPermissionInput } from '@federise/sdk';
 
 /**
@@ -15,25 +16,11 @@ function getClient() {
 }
 
 /**
- * Build a namespaced key for origin isolation.
- * Each origin gets its own namespace to prevent cross-origin data access.
- * Uses a hash of the origin to create a safe, consistent namespace.
- */
-async function buildNamespace(origin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(origin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return `origin_${hashHex}`;
-}
-
-/**
  * Create a new channel for the given origin.
  */
 export async function createChannel(origin: string, name: string): Promise<ChannelCreateResult> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/channel/create', {
     ...withAuth(apiKey),
@@ -53,7 +40,7 @@ export async function createChannel(origin: string, name: string): Promise<Chann
  */
 export async function listChannels(origin: string): Promise<ChannelMeta[]> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/channel/list', {
     ...withAuth(apiKey),
@@ -124,7 +111,7 @@ export async function readChannel(
  */
 export async function deleteChannel(origin: string, channelId: string): Promise<void> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { error } = await client.POST('/channel/delete', {
     ...withAuth(apiKey),
@@ -173,7 +160,7 @@ export async function createChannelToken(
   options?: { displayName?: string; expiresInSeconds?: number }
 ): Promise<{ token: string; expiresAt: string }> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/channel/token/create', {
     ...withAuth(apiKey),

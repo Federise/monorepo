@@ -20,6 +20,8 @@ export type {
   ResponseMessage,
   UploadOptions,
   UploadProgress,
+  TokenActionType,
+  TokenHandleResult,
 } from './types';
 
 // Errors and utilities

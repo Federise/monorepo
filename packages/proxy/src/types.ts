@@ -15,6 +15,7 @@ import type {
   ChannelPermissionInput,
   RequestMessage,
   ResponseMessage,
+  TokenActionType,
 } from '@federise/sdk';
 
 // Re-export SDK types for consumers
@@ -28,6 +29,7 @@ export type {
   ChannelPermissionInput,
   RequestMessage,
   ResponseMessage,
+  TokenActionType,
 };
 
 /**
@@ -70,6 +72,50 @@ export interface TokenCreateOptions {
 export interface TokenResult {
   token: string;
   expiresAt: string;
+}
+
+/**
+ * Result of looking up a stateful token.
+ */
+export interface TokenLookupResult {
+  valid: boolean;
+  action?: string;
+  payload?: unknown;
+  error?: string;
+}
+
+/**
+ * Result of creating a channel invitation.
+ */
+export interface InviteToChannelResult {
+  tokenId: string;
+  identityId: string;
+  expiresAt: string;
+}
+
+/**
+ * App identity configuration.
+ */
+export interface AppIdentityConfig {
+  origin: string;
+  namespace: string;
+  grantedCapabilities: string[];
+  frameAccess: boolean;
+}
+
+/**
+ * Result of registering an APP identity.
+ */
+export interface RegisterAppResult {
+  identity: {
+    id: string;
+    type: string;
+    displayName: string;
+    status: string;
+    createdAt: string;
+    appConfig: AppIdentityConfig;
+  };
+  created: boolean;
 }
 
 /**
@@ -134,6 +180,19 @@ export interface ProxyBackend {
     permissions: ChannelPermissionInput[],
     options?: TokenCreateOptions
   ): Promise<TokenResult>;
+  channelInvite(
+    namespace: string,
+    channelId: string,
+    displayName: string,
+    permissions: ChannelPermissionInput[],
+    options?: { expiresInSeconds?: number }
+  ): Promise<InviteToChannelResult>;
+
+  // Token operations
+  tokenLookup(tokenId: string, gatewayUrl?: string): Promise<TokenLookupResult>;
+
+  // Identity operations
+  registerApp(origin: string, capabilities: string[], displayName?: string): Promise<RegisterAppResult>;
 }
 
 /**

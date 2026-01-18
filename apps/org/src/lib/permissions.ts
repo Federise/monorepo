@@ -115,6 +115,7 @@ export async function hasCapability(origin: string, capability: Capability): Pro
 
 /**
  * Grant capabilities to an origin. Merges with existing capabilities.
+ * Also registers/updates the APP identity in the gateway.
  */
 export async function grantCapabilities(origin: string, capabilities: Capability[]): Promise<PermissionRecord> {
   const existing = await getPermissions(origin);
@@ -127,6 +128,19 @@ export async function grantCapabilities(origin: string, capabilities: Capability
   };
 
   await setPermissions(origin, record);
+
+  // Also register the APP identity
+  try {
+    const { client, apiKey } = getClient();
+    await client.POST('/identity/app/register', {
+      ...withAuth(apiKey),
+      body: { origin, capabilities: merged },
+    });
+  } catch (err) {
+    // Log but don't fail - permissions are still saved
+    console.error('Failed to register app identity:', err);
+  }
+
   return record;
 }
 

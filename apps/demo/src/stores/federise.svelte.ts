@@ -2,6 +2,7 @@ import { FederiseClient, type Capability } from '@federise/sdk';
 import type { ConnectionState } from '../lib/types';
 
 const FRAME_URL_KEY = 'federise-demo:frameUrl';
+const FRAME_VERIFIED_KEY = 'federise-demo:frameVerified';
 const DEFAULT_FRAME_URL = 'http://localhost:4321/frame';
 
 // Reactive state using Svelte 5 runes
@@ -12,6 +13,10 @@ export const frameUrl = $state<{ value: string }>({
 });
 export const error = $state<{ value: string | null }>({ value: null });
 export const initialized = $state<{ value: boolean }>({ value: false });
+export const connectionFailed = $state<{ value: boolean }>({ value: false });
+export const frameVerified = $state<{ value: boolean }>({
+  value: localStorage.getItem(FRAME_VERIFIED_KEY) === 'true',
+});
 
 let client: FederiseClient | null = null;
 let initializationPromise: Promise<void> | null = null;
@@ -23,6 +28,14 @@ export function getClient(): FederiseClient | null {
 export function setFrameUrl(url: string): void {
   frameUrl.value = url;
   localStorage.setItem(FRAME_URL_KEY, url);
+  // Reset verified state when URL changes
+  frameVerified.value = false;
+  localStorage.removeItem(FRAME_VERIFIED_KEY);
+}
+
+function markFrameVerified(): void {
+  frameVerified.value = true;
+  localStorage.setItem(FRAME_VERIFIED_KEY, 'true');
 }
 
 export async function connect(): Promise<void> {
@@ -30,6 +43,7 @@ export async function connect(): Promise<void> {
 
   connectionState.value = 'connecting';
   error.value = null;
+  connectionFailed.value = false;
 
   try {
     client = new FederiseClient({
@@ -40,11 +54,33 @@ export async function connect(): Promise<void> {
     await client.connect();
     capabilities.value = client.getGrantedCapabilities();
     connectionState.value = 'connected';
+    markFrameVerified();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to connect';
     connectionState.value = 'disconnected';
+    connectionFailed.value = true;
     client = null;
     throw err;
+  }
+}
+
+/**
+ * Test connection to the frame URL without persisting.
+ * Used by Settings page to verify URL before saving.
+ */
+export async function testConnection(): Promise<boolean> {
+  const testClient = new FederiseClient({
+    frameUrl: frameUrl.value,
+    timeout: 10000,
+  });
+
+  try {
+    await testClient.connect();
+    testClient.disconnect();
+    markFrameVerified();
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -114,17 +150,17 @@ export async function initializeConnection(): Promise<void> {
 
 async function doInitialize(): Promise<void> {
   try {
-    // Only auto-connect if we have a saved frame URL
-    const savedUrl = localStorage.getItem(FRAME_URL_KEY);
-    if (!savedUrl) {
+    // Only auto-connect if the frame URL has been verified
+    if (!frameVerified.value) {
+      connectionFailed.value = true;
       return;
     }
 
     // Try to connect - this will restore capabilities from KV via the frame
     await connect();
   } catch {
-    // Auto-connect failed silently - user can manually connect
-    // This is expected if storage access hasn't been granted yet
+    // Auto-connect failed - mark as failed so we redirect to settings
+    connectionFailed.value = true;
   } finally {
     initialized.value = true;
     initializationPromise = null;

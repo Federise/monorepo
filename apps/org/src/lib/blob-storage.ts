@@ -1,5 +1,6 @@
 import { createGatewayClient, withAuth } from '../api/client';
 import { getGatewayConfig } from '../utils/auth';
+import { buildNamespace } from '@federise/proxy';
 import type { BlobMetadata, BlobVisibility } from './protocol';
 
 /**
@@ -12,20 +13,6 @@ function getClient() {
     throw new Error('Gateway not configured. API key and URL are required.');
   }
   return { client: createGatewayClient(url), apiKey, url };
-}
-
-/**
- * Build a namespaced key for origin isolation.
- * Each origin gets its own namespace to prevent cross-origin data access.
- * Uses a hash of the origin to create a safe, consistent namespace.
- */
-async function buildNamespace(origin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(origin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return `origin_${hashHex}`;
 }
 
 /**
@@ -49,7 +36,7 @@ export async function getPresignedUploadUrl(
   visibility: BlobVisibility = 'private'
 ): Promise<{ uploadUrl: string; expiresAt: string } | null> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/blob/presign-upload', {
     ...withAuth(apiKey),
@@ -92,7 +79,7 @@ export async function getUploadUrlWithMetadata(
     return null;
   }
 
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
   const metadata: BlobMetadata = {
     key,
     namespace,
@@ -142,7 +129,7 @@ export async function uploadBlob(
     }
 
     // Return metadata (already stored in KV by presign endpoint)
-    const namespace = await buildNamespace(origin);
+    const namespace = buildNamespace(origin);
     return {
       key,
       namespace,
@@ -155,7 +142,7 @@ export async function uploadBlob(
 
   // Fallback: Upload through gateway
   const { apiKey, url } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const response = await fetch(`${url}/blob/upload`, {
     method: 'POST',
@@ -187,7 +174,7 @@ export async function getBlob(
   key: string
 ): Promise<{ url: string; metadata: BlobMetadata; expiresAt?: string }> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/blob/get', {
     ...withAuth(apiKey),
@@ -215,7 +202,7 @@ export async function getBlob(
  */
 export async function deleteBlob(origin: string, key: string): Promise<void> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { error } = await client.POST('/blob/delete', {
     ...withAuth(apiKey),
@@ -233,7 +220,7 @@ export async function deleteBlob(origin: string, key: string): Promise<void> {
  */
 export async function listBlobs(origin: string): Promise<BlobMetadata[]> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/blob/list', {
     ...withAuth(apiKey),
@@ -257,7 +244,7 @@ export async function setBlobVisibility(
   visibility: BlobVisibility
 ): Promise<BlobMetadata> {
   const { client, apiKey } = getClient();
-  const namespace = await buildNamespace(origin);
+  const namespace = buildNamespace(origin);
 
   const { data, error } = await client.POST('/blob/visibility', {
     ...withAuth(apiKey),

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
-  type Section = 'connection' | 'overview' | 'permissions' | 'data' | 'settings' | 'recovery' | 'principals';
+  type Section = 'connection' | 'overview' | 'permissions' | 'data' | 'settings' | 'recovery' | 'identities';
 
   let { activeSection }: { activeSection: Section } = $props();
   let isConnected = $state(false);
@@ -25,7 +25,7 @@
     {
       label: 'System',
       items: [
-        { id: 'principals' as Section, label: 'Principals', icon: 'users', href: '/manage/principals' },
+        { id: 'identities' as Section, label: 'Identities', icon: 'users', href: '/manage/identities' },
         { id: 'settings' as Section, label: 'Settings', icon: 'gear', href: '/manage/settings' },
         { id: 'recovery' as Section, label: 'Recovery', icon: 'key', href: '/manage/recovery' },
       ],

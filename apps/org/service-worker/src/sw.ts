@@ -19,10 +19,15 @@ declare const self: ServiceWorkerGlobalScope;
 // Cache version - increment to force cache refresh
 const CACHE_VERSION = 'v1';
 
-// Precache all pages and assets from generated manifest
-// This happens during service worker installation, so all pages
-// are cached on the first visit to ANY page
-precacheAndRoute(manifest);
+// Filter manifest to exclude hashed _astro assets in development
+// These cause precaching failures when hashes change during hot reload
+const filteredManifest = manifest.filter(
+  (entry: { url: string }) => !entry.url.startsWith('/_astro/')
+);
+
+// Precache pages (not hashed assets which change during development)
+// Hashed assets are cached on-demand via CacheFirst strategy below
+precacheAndRoute(filteredManifest);
 
 // ===== ROUTING STRATEGIES =====
 

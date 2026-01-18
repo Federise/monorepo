@@ -31,20 +31,20 @@ wait_for_gateway() {
     return 1
 }
 
-# Provision a principal for local development
-provision_principal() {
+# Provision an identity for local development
+provision_identity() {
     echo ""
-    echo "Provisioning local development principal..."
+    echo "Provisioning local development identity..."
 
     # Retry a few times - gateway may return 503 while DOs initialize
     local response=""
     local attempt=1
     local max_attempts=5
     while [ $attempt -le $max_attempts ]; do
-        response=$(curl -s -X POST "$GATEWAY_URL/principal/create" \
+        response=$(curl -s -X POST "$GATEWAY_URL/identity/create" \
             -H "Content-Type: application/json" \
             -H "Authorization: ApiKey $BOOTSTRAP_API_KEY" \
-            -d '{"display_name": "local-dev"}')
+            -d '{"displayName": "local-dev"}')
 
         # Check if we got a valid response (contains "secret" or "Unauthorized")
         if echo "$response" | grep -q '"secret"'; then
@@ -69,8 +69,7 @@ provision_principal() {
         echo "=========================================="
         echo ""
         echo "To configure the Org app, run in browser console at http://localhost:$ORG_PORT:"
-        echo "  localStorage.setItem('federise:gateway:url', '$GATEWAY_URL')"
-        echo "  localStorage.setItem('federise:gateway:apiKey', '$api_key')"
+        echo "  localStorage.setItem('federise:gateway:url', '$GATEWAY_URL'); localStorage.setItem('federise:gateway:apiKey', '$api_key'); document.cookie = 'federise_gateway_url=$GATEWAY_URL; path=/; SameSite=Lax'; document.cookie = 'federise_gateway_apiKey=$api_key; path=/; SameSite=Lax';"
         echo ""
         echo "To configure the Demo app, run in browser console at http://localhost:$DEMO_PORT:"
         echo "  localStorage.setItem('federise-demo:frameUrl', 'http://localhost:$ORG_PORT/frame')"
@@ -78,9 +77,9 @@ provision_principal() {
     else
         echo ""
         echo "=========================================="
-        echo "  PRINCIPAL ALREADY EXISTS"
+        echo "  IDENTITY ALREADY EXISTS"
         echo "=========================================="
-        echo "  A principal was already created previously."
+        echo "  An identity was already created previously."
         echo "  Use your existing API key, or run with --reset to clear local data:"
         echo "    ./scripts/dev.sh start --reset"
         echo ""
@@ -166,9 +165,9 @@ start() {
     echo "View logs: ./scripts/dev.sh logs [gateway|org|demo|gateway-core|sdk]"
     echo "Stop with: ./scripts/dev.sh stop"
 
-    # Auto-provision principal
+    # Auto-provision identity
     if wait_for_gateway; then
-        provision_principal
+        provision_identity
     fi
 }
 

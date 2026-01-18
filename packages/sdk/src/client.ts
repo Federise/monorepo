@@ -7,6 +7,7 @@ import type {
   GrantResult,
   RequestPayload,
   ResponseMessage,
+  TokenHandleResult,
   UploadOptions,
   UploadProgress,
 } from './types';
@@ -238,6 +239,73 @@ export class FederiseClient {
       // Small delay to ensure KV write has propagated
       await new Promise((resolve) => setTimeout(resolve, 500));
       return this.requestCapabilities(capabilities);
+    }
+
+    if (response.type === 'ERROR') {
+      throw new FederiseError(response.message, response.code);
+    }
+
+    throw new FederiseError('Unexpected response', 'UNKNOWN');
+  }
+
+  /**
+   * Handle an opaque token (e.g., from a share link).
+   * This method inspects the token and takes appropriate action:
+   * - For identity claim tokens: opens a popup for the user to set credentials
+   * - For access tokens: returns the access information
+   *
+   * @param token - The opaque token ID (e.g., "tk_abc123")
+   * @param gatewayUrl - Optional gateway URL override
+   * @returns Result of handling the token
+   */
+  async handleToken(
+    token: string,
+    gatewayUrl?: string
+  ): Promise<{ action: string; actionUrl?: string; result?: unknown }> {
+    this.ensureConnected();
+
+    const response = await this.sendRequest({
+      type: 'HANDLE_TOKEN',
+      token,
+      gatewayUrl,
+    });
+
+    if (response.type === 'TOKEN_ACTION_REQUIRED') {
+      // Open popup for user action (e.g., identity claim)
+      const popup = window.open(
+        response.actionUrl,
+        'federise-token-action',
+        'width=450,height=600,popup=yes'
+      );
+
+      if (!popup) {
+        throw new FederiseError(
+          'Popup blocked. Please allow popups for this site.',
+          'POPUP_BLOCKED'
+        );
+      }
+
+      // Wait for popup to close
+      await this.waitForPopupClose(popup);
+
+      // Small delay to ensure any writes have propagated
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      return {
+        action: response.action,
+        actionUrl: response.actionUrl,
+      };
+    }
+
+    if (response.type === 'TOKEN_HANDLED') {
+      return {
+        action: response.result.action,
+        result: response.result,
+      };
+    }
+
+    if (response.type === 'TOKEN_INVALID') {
+      throw new FederiseError(response.reason, 'TOKEN_INVALID');
     }
 
     if (response.type === 'ERROR') {
@@ -642,6 +710,49 @@ export class FederiseClient {
 
       if (response.type === 'CHANNEL_TOKEN_CREATED') {
         return { token: response.token, expiresAt: response.expiresAt, gatewayUrl: response.gatewayUrl };
+      }
+      if (response.type === 'PERMISSION_DENIED') {
+        throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Create an invitation for someone to access a channel.
+     * Creates a claimable identity with channel grants.
+     * @param channelId - The channel ID
+     * @param displayName - Display name for the invited user (required)
+     * @param permissions - Permissions to grant (e.g., 'read', 'append', 'delete:own', 'delete:any', 'read:deleted')
+     * @param options - Optional settings: expiresInSeconds
+     */
+    inviteToChannel: async (
+      channelId: string,
+      displayName: string,
+      permissions: ChannelPermissionInput[],
+      options?: { expiresInSeconds?: number }
+    ): Promise<{ tokenId: string; identityId: string; expiresAt: string; gatewayUrl: string }> => {
+      this.ensureConnected();
+      this.ensureCapability('channel:create');
+
+      const response = await this.sendRequest({
+        type: 'CHANNEL_INVITE',
+        channelId,
+        displayName,
+        permissions,
+        expiresInSeconds: options?.expiresInSeconds,
+      });
+
+      if (response.type === 'CHANNEL_INVITE_CREATED') {
+        return {
+          tokenId: response.tokenId,
+          identityId: response.identityId,
+          expiresAt: response.expiresAt,
+          gatewayUrl: response.gatewayUrl,
+        };
       }
       if (response.type === 'PERMISSION_DENIED') {
         throw new PermissionDeniedError(response.capability);

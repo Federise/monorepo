@@ -1,0 +1,20 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ClaimFlow from '../components/ClaimFlow.svelte';
+---
+
+<Layout>
+  <main class="claim-page">
+    <ClaimFlow client:only="svelte" />
+  </main>
+</Layout>
+
+<style>
+  .claim-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+</style>

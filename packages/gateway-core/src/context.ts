@@ -1,5 +1,7 @@
 import type { Context } from "hono";
 import type { IKVStore, IBlobStore, IPresigner, IChannelStore, IShortLinkStore } from "./adapters/index.js";
+import type { Identity } from "./lib/identity.js";
+import type { Credential } from "./lib/credential.js";
 
 /**
  * Gateway configuration
@@ -29,6 +31,10 @@ export interface GatewayEnv {
   /** Short link store for URL shortening */
   shortLink: IShortLinkStore;
   config: GatewayConfig;
+  /** Current authenticated identity (set by auth middleware) */
+  identity?: Identity;
+  /** Current credential used for authentication (set by auth middleware) */
+  credential?: Credential;
 }
 
 /**

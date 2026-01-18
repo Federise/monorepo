@@ -1,11 +1,13 @@
 <script lang="ts">
   import {
     connectionState,
-    connect,
+    capabilities,
     requestPermissions,
     hasKVPermissions,
     hasBlobPermissions,
+    hasChannelPermissions,
   } from '../stores/federise.svelte';
+  import { getNamespace, getNamespaceDisplayName } from '../lib/namespace';
 
   interface Props {
     currentView: 'notes' | 'files' | 'chat' | 'settings';
@@ -16,9 +18,10 @@
 
   let isRequesting = $state(false);
 
-  async function handleConnect() {
-    await connect();
-  }
+  const namespace = $derived(getNamespace());
+  const namespaceDisplay = $derived(getNamespaceDisplayName());
+  const isConnected = $derived(connectionState.value === 'connected');
+  const hasAllPermissions = $derived(hasKVPermissions() && hasBlobPermissions() && hasChannelPermissions());
 
   async function handleRequestPermissions() {
     isRequesting = true;
@@ -85,43 +88,61 @@
   </nav>
 
   <div class="connection-section">
-    <div class="connection-row">
-      <div class="connection-status">
+    <!-- Identity Card -->
+    <div class="identity-card" class:connected={isConnected}>
+      <div class="identity-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      </div>
+      <div class="identity-info">
+        <span class="identity-label">App Identity</span>
+        <span class="identity-namespace" title={namespace}>{namespaceDisplay}</span>
+      </div>
+      <div class="identity-status">
         <span
           class="status-dot"
-          class:connected={connectionState.value === 'connected'}
+          class:connected={isConnected}
           class:connecting={connectionState.value === 'connecting'}
           class:disconnected={connectionState.value === 'disconnected'}
         ></span>
-        <span class="status-text">
-          {connectionState.value === 'connected'
-            ? 'Connected'
-            : connectionState.value === 'connecting'
-              ? 'Connecting...'
-              : 'Disconnected'}
-        </span>
       </div>
-      <button class="settings-btn" onclick={() => navigate('settings')} aria-label="Settings">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
     </div>
 
+    <!-- Capabilities -->
+    {#if isConnected && capabilities.value.length > 0}
+      <div class="capabilities">
+        <span class="capabilities-label">Permissions</span>
+        <div class="capability-badges">
+          {#each capabilities.value as cap}
+            <span class="capability-badge">{cap}</span>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    <!-- Actions -->
     <div class="connection-actions">
-      {#if connectionState.value === 'disconnected'}
-        <button class="btn btn-primary full-width" onclick={handleConnect}>
-          Connect
+      {#if connectionState.value === 'connecting'}
+        <button class="btn btn-secondary full-width" disabled>
+          Connecting...
         </button>
-      {:else if connectionState.value === 'connected'}
-        {#if !hasKVPermissions() || !hasBlobPermissions()}
-          <button class="btn btn-primary full-width" onclick={handleRequestPermissions} disabled={isRequesting}>
-            {isRequesting ? 'Requesting...' : 'Grant Permissions'}
-          </button>
-        {/if}
+      {:else if isConnected && !hasAllPermissions}
+        <button class="btn btn-primary full-width" onclick={handleRequestPermissions} disabled={isRequesting}>
+          {isRequesting ? 'Requesting...' : 'Grant Permissions'}
+        </button>
       {/if}
     </div>
+
+    <!-- Settings Link -->
+    <button class="settings-link" onclick={() => navigate('settings')}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+      Settings
+    </button>
   </div>
 </aside>
 
@@ -231,42 +252,98 @@
   }
 
   .connection-section {
-    padding: 1rem;
+    padding: 0.75rem;
     border-top: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
   }
 
-  .connection-row {
+  .identity-card {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-  }
-
-  .connection-status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .status-text {
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-  }
-
-  .settings-btn {
-    padding: 0.375rem;
-    background: transparent;
-    border: none;
-    color: var(--color-text-muted);
+    gap: 0.625rem;
+    padding: 0.625rem;
+    background: var(--color-bg);
     border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    transition: border-color 0.2s ease;
+  }
+
+  .identity-card.connected {
+    border-color: var(--color-primary);
+  }
+
+  .identity-icon {
+    width: 28px;
+    height: 28px;
+    background: var(--color-surface-hover);
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--color-text-muted);
   }
 
-  .settings-btn:hover {
-    background: var(--color-surface-hover);
+  .identity-card.connected .identity-icon {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .identity-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .identity-label {
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .identity-namespace {
+    font-size: 0.8rem;
+    font-weight: 500;
     color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .identity-status {
+    display: flex;
+    align-items: center;
+  }
+
+  .capabilities {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .capabilities-label {
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .capability-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .capability-badge {
+    font-size: 0.65rem;
+    padding: 0.125rem 0.375rem;
+    background: var(--color-surface-hover);
+    border-radius: 4px;
+    color: var(--color-text-muted);
   }
 
   .connection-actions {
@@ -277,6 +354,24 @@
 
   .full-width {
     width: 100%;
+  }
+
+  .settings-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    transition: all 0.15s ease;
+  }
+
+  .settings-link:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
   }
 
   .overlay {

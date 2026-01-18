@@ -199,6 +199,16 @@
         {:else}
           <span class="badge readonly">Read Only</span>
         {/if}
+        <span class="shared-badge" title="You're viewing this channel via a shared link">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+          </svg>
+          Shared
+        </span>
       </div>
       <div class="channel-actions">
         {#if tokenDisplayName}
@@ -337,6 +347,18 @@
 
   .badge.readonly {
     background: var(--color-text-muted);
+  }
+
+  .shared-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 0.15rem 0.4rem;
+    background: var(--color-surface-hover);
+    color: var(--color-text-muted);
+    border-radius: 999px;
   }
 
   .identity-badge {

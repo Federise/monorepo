@@ -111,9 +111,11 @@ export type ChannelAppendPayload = { type: 'CHANNEL_APPEND'; channelId: string; 
 export type ChannelReadPayload = { type: 'CHANNEL_READ'; channelId: string; afterSeq?: number; limit?: number };
 export type ChannelDeletePayload = { type: 'CHANNEL_DELETE'; channelId: string };
 export type ChannelTokenCreatePayload = { type: 'CHANNEL_TOKEN_CREATE'; channelId: string; permissions: ChannelPermissionInput[]; displayName?: string; expiresInSeconds?: number };
+export type ChannelInvitePayload = { type: 'CHANNEL_INVITE'; channelId: string; displayName: string; permissions: ChannelPermissionInput[]; expiresInSeconds?: number };
 export type ChannelDeleteEventPayload = { type: 'CHANNEL_DELETE_EVENT'; channelId: string; targetSeq: number };
 export type TestGrantPermissionsPayload = { type: 'TEST_GRANT_PERMISSIONS'; capabilities: Capability[] };
 export type TestClearPermissionsPayload = { type: 'TEST_CLEAR_PERMISSIONS' };
+export type HandleTokenPayload = { type: 'HANDLE_TOKEN'; token: string; gatewayUrl?: string };
 
 export type RequestPayload =
   | SynPayload
@@ -135,8 +137,10 @@ export type RequestPayload =
   | ChannelDeletePayload
   | ChannelDeleteEventPayload
   | ChannelTokenCreatePayload
+  | ChannelInvitePayload
   | TestGrantPermissionsPayload
-  | TestClearPermissionsPayload;
+  | TestClearPermissionsPayload
+  | HandleTokenPayload;
 
 // Request messages from SDK to Frame (with id)
 export type RequestMessage = RequestPayload & { id: string };
@@ -163,9 +167,23 @@ export type ResponseMessage =
   | { type: 'CHANNEL_DELETED'; id: string }
   | { type: 'CHANNEL_EVENT_DELETED'; id: string; event: ChannelEvent }
   | { type: 'CHANNEL_TOKEN_CREATED'; id: string; token: string; expiresAt: string; gatewayUrl: string }
+  | { type: 'CHANNEL_INVITE_CREATED'; id: string; tokenId: string; identityId: string; expiresAt: string; gatewayUrl: string }
   | { type: 'ERROR'; id: string; code: string; message: string }
   | { type: 'TEST_PERMISSIONS_GRANTED'; id: string }
-  | { type: 'TEST_PERMISSIONS_CLEARED'; id: string };
+  | { type: 'TEST_PERMISSIONS_CLEARED'; id: string }
+  | { type: 'TOKEN_ACTION_REQUIRED'; id: string; action: TokenActionType; actionUrl: string }
+  | { type: 'TOKEN_INVALID'; id: string; reason: string }
+  | { type: 'TOKEN_HANDLED'; id: string; result: TokenHandleResult };
+
+// Token action types
+export type TokenActionType = 'identity_setup' | 'blob_access' | 'channel_access';
+
+// Result of handling a token
+export interface TokenHandleResult {
+  action: TokenActionType | 'already_claimed' | 'direct_access';
+  actionUrl?: string;
+  data?: unknown;
+}
 
 // Client options
 export interface FederiseClientOptions {
@@ -269,8 +287,12 @@ export function isValidRequest(data: unknown): data is RequestMessage {
       return typeof msg.channelId === 'string';
     case 'CHANNEL_TOKEN_CREATE':
       return typeof msg.channelId === 'string' && Array.isArray(msg.permissions);
+    case 'CHANNEL_INVITE':
+      return typeof msg.channelId === 'string' && typeof msg.displayName === 'string' && Array.isArray(msg.permissions);
     case 'CHANNEL_DELETE_EVENT':
       return typeof msg.channelId === 'string' && typeof msg.targetSeq === 'number';
+    case 'HANDLE_TOKEN':
+      return typeof msg.token === 'string';
     default:
       return false;
   }

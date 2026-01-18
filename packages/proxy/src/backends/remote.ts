@@ -11,6 +11,9 @@ import type {
   ChannelCreateResult,
   TokenCreateOptions,
   TokenResult,
+  TokenLookupResult,
+  InviteToChannelResult,
+  RegisterAppResult,
   BlobMetadata,
   ChannelMeta,
   ChannelEvent,
@@ -264,5 +267,63 @@ export class RemoteBackend implements ProxyBackend {
       token: data.token,
       expiresAt: data.expiresAt,
     };
+  }
+
+  async channelInvite(
+    namespace: string,
+    channelId: string,
+    displayName: string,
+    permissions: ChannelPermissionInput[],
+    options?: { expiresInSeconds?: number }
+  ): Promise<InviteToChannelResult> {
+    // Gateway expects namespace, channelId, displayName, permissions, expiresInSeconds
+    return this.post<InviteToChannelResult>('/identity/invite', {
+      namespace,
+      channelId,
+      displayName,
+      permissions,
+      expiresInSeconds: options?.expiresInSeconds,
+    });
+  }
+
+  // Token Operations
+
+  async tokenLookup(tokenId: string, gatewayUrl?: string): Promise<TokenLookupResult> {
+    // Use provided gateway URL or fall back to configured one
+    const baseUrl = gatewayUrl ? gatewayUrl.replace(/\/$/, '') : this.gatewayUrl;
+
+    try {
+      const response = await fetch(`${baseUrl}/token/lookup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Note: Token lookup may not require auth - the token itself is the secret
+        },
+        body: JSON.stringify({ tokenId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }));
+        return { valid: false, error: error.message || `HTTP ${response.status}` };
+      }
+
+      return response.json();
+    } catch (err) {
+      return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    }
+  }
+
+  // Identity Operations
+
+  async registerApp(
+    origin: string,
+    capabilities: string[],
+    displayName?: string
+  ): Promise<RegisterAppResult> {
+    return this.post<RegisterAppResult>('/identity/app/register', {
+      origin,
+      capabilities,
+      displayName,
+    });
   }
 }

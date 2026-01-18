@@ -1,0 +1,8 @@
+---
+import ManageLayout from '../../layouts/ManageLayout.astro';
+import IdentitiesManager from '../../components/manage/IdentitiesManager.svelte';
+---
+
+<ManageLayout title="Identities" activeSection="identities">
+  <IdentitiesManager client:load />
+</ManageLayout>

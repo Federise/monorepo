@@ -74,7 +74,7 @@
         // Build the scope from capabilities that aren't already granted
         const needsApproval = requestedCapabilities.filter((c) => !alreadyGranted.includes(c));
         const scope = needsApproval.join(',');
-        const authUrl = `/authorize?app_origin=${encodeURIComponent(origin)}&scope=${encodeURIComponent(scope)}`;
+        const authUrl = `/authorize#app_origin=${encodeURIComponent(origin)}&scope=${encodeURIComponent(scope)}`;
         return new URL(authUrl, window.location.origin).href;
       },
       getGatewayUrl: () => url,

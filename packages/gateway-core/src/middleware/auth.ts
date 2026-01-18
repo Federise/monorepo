@@ -2,6 +2,10 @@ import type { Next } from "hono";
 import { hashApiKey } from "../lib/crypto.js";
 import type { AppContext } from "../context.js";
 import { getKV, getConfig } from "../context.js";
+import type { Credential } from "../lib/credential.js";
+import type { Identity } from "../lib/identity.js";
+import { CredentialStatus } from "../lib/credential.js";
+import { IdentityStatus } from "../lib/identity.js";
 
 /**
  * Options for the auth middleware
@@ -15,12 +19,27 @@ export interface AuthMiddlewareOptions {
 }
 
 /**
+ * Context added by auth middleware
+ */
+export interface AuthContext {
+  identity?: Identity;
+  credential?: Credential;
+}
+
+/**
  * Creates an auth middleware with the given options.
  */
 export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
   return async function authMiddleware(c: AppContext, next: Next) {
-    // Skip authentication for OpenAPI documentation
-    if (c.req.path.startsWith("/openapi")) {
+    // Skip authentication for public endpoints
+    const publicPaths = [
+      "/openapi",
+      "/ping",
+      "/token/lookup",
+      "/token/claim",
+    ];
+
+    if (publicPaths.some((path) => c.req.path.startsWith(path))) {
       await next();
       return;
     }
@@ -43,9 +62,9 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
         return;
       }
 
-      // Principal create only when no principals exist
-      if (c.req.path.startsWith("/principal/create")) {
-        const list = await kv.list({ prefix: "__PRINCIPAL:" });
+      // Identity create only when no identities exist
+      if (c.req.path.startsWith("/identity/create")) {
+        const list = await kv.list({ prefix: "__IDENTITY:" });
         if (list.keys.length === 0) {
           await next();
           return;
@@ -56,24 +75,55 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
       return c.json({ code: 401, message: "Unauthorized" }, 401);
     }
 
-    // Check regular principal auth
-    const apiKeyHash = await hashApiKey(apiKey);
-    const val = await kv.get(`__PRINCIPAL:${apiKeyHash}`);
+    // Look up credential by secret hash
+    const secretHash = await hashApiKey(apiKey);
+    const credentialVal = await kv.get(`__CREDENTIAL:${secretHash}`);
 
-    if (!val) {
+    if (!credentialVal) {
       return c.json({ code: 401, message: "Unauthorized" }, 401);
     }
 
-    let principal: { active: boolean };
+    let credential: Credential;
     try {
-      principal = JSON.parse(val);
+      credential = JSON.parse(credentialVal);
     } catch {
       return c.json({ code: 401, message: "Unauthorized" }, 401);
     }
 
-    if (!principal.active) {
+    // Check credential status
+    if (credential.status === CredentialStatus.REVOKED) {
+      return c.json({ code: 401, message: "Credential revoked" }, 401);
+    }
+
+    // Check credential expiry
+    if (credential.expiresAt) {
+      const expiresAt = new Date(credential.expiresAt).getTime();
+      if (Date.now() > expiresAt) {
+        return c.json({ code: 401, message: "Credential expired" }, 401);
+      }
+    }
+
+    // Look up identity
+    const identityVal = await kv.get(`__IDENTITY:${credential.identityId}`);
+    if (!identityVal) {
+      return c.json({ code: 401, message: "Identity not found" }, 401);
+    }
+
+    let identity: Identity;
+    try {
+      identity = JSON.parse(identityVal);
+    } catch {
       return c.json({ code: 401, message: "Unauthorized" }, 401);
     }
+
+    // Check identity status
+    if (identity.status !== IdentityStatus.ACTIVE) {
+      return c.json({ code: 401, message: "Identity not active" }, 401);
+    }
+
+    // Store auth context for downstream handlers
+    c.set("identity", identity);
+    c.set("credential", credential);
 
     await next();
   };

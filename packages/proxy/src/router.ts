@@ -13,6 +13,7 @@ import type {
   ProxyBackend,
   CapabilityStore,
   TokenCreateOptions,
+  TokenActionType,
 } from './types';
 import { buildNamespace } from './namespace';
 
@@ -30,6 +31,14 @@ export interface MessageRouterOptions {
     origin: string,
     requestedCapabilities: Capability[],
     alreadyGranted: Capability[]
+  ) => Promise<string>;
+  /**
+   * Called when a token action is required (e.g., identity claim).
+   * Should return the action URL to open in a popup.
+   */
+  onTokenActionRequired?: (
+    tokenId: string,
+    action: string
   ) => Promise<string>;
   /**
    * Get the gateway URL for token creation responses.
@@ -59,6 +68,7 @@ export class MessageRouter {
   private backend: ProxyBackend;
   private capabilities: CapabilityStore;
   private onAuthRequired?: MessageRouterOptions['onAuthRequired'];
+  private onTokenActionRequired?: MessageRouterOptions['onTokenActionRequired'];
   private getGatewayUrl?: () => string;
   private enableTestMessages: boolean;
   private testMessageOrigins: Set<string>;
@@ -73,6 +83,7 @@ export class MessageRouter {
     this.backend = options.backend;
     this.capabilities = options.capabilities;
     this.onAuthRequired = options.onAuthRequired;
+    this.onTokenActionRequired = options.onTokenActionRequired;
     this.getGatewayUrl = options.getGatewayUrl;
     this.enableTestMessages = options.enableTestMessages ?? false;
     this.testMessageOrigins = new Set(options.testMessageOrigins ?? []);
@@ -174,11 +185,17 @@ export class MessageRouter {
       case 'CHANNEL_TOKEN_CREATE':
         return this.handleChannelTokenCreate(origin, namespace, msg);
 
+      case 'CHANNEL_INVITE':
+        return this.handleChannelInvite(origin, namespace, msg);
+
       case 'TEST_GRANT_PERMISSIONS':
         return this.handleTestGrantPermissions(origin, msg);
 
       case 'TEST_CLEAR_PERMISSIONS':
         return this.handleTestClearPermissions(origin, msg);
+
+      case 'HANDLE_TOKEN':
+        return this.handleToken(origin, msg);
 
       default:
         return {
@@ -577,6 +594,34 @@ export class MessageRouter {
     };
   }
 
+  private async handleChannelInvite(
+    origin: string,
+    namespace: string,
+    msg: Extract<RequestMessage, { type: 'CHANNEL_INVITE' }>
+  ): Promise<ResponseMessage> {
+    const denied = await this.checkCapability(origin, 'channel:create', msg.id);
+    if (denied) return denied;
+
+    const result = await this.backend.channelInvite(
+      namespace,
+      msg.channelId,
+      msg.displayName,
+      msg.permissions,
+      { expiresInSeconds: msg.expiresInSeconds }
+    );
+
+    const gatewayUrl = this.getGatewayUrl?.() ?? '';
+
+    return {
+      type: 'CHANNEL_INVITE_CREATED',
+      id: msg.id,
+      tokenId: result.tokenId,
+      identityId: result.identityId,
+      expiresAt: result.expiresAt,
+      gatewayUrl,
+    };
+  }
+
   private async handleTestGrantPermissions(
     origin: string,
     msg: Extract<RequestMessage, { type: 'TEST_GRANT_PERMISSIONS' }>
@@ -616,6 +661,61 @@ export class MessageRouter {
     return {
       type: 'TEST_PERMISSIONS_CLEARED',
       id: msg.id,
+    };
+  }
+
+  /**
+   * Handle a HANDLE_TOKEN message.
+   * Looks up the token and determines what action to take.
+   */
+  private async handleToken(
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'HANDLE_TOKEN' }>
+  ): Promise<ResponseMessage> {
+    const { token, gatewayUrl } = msg;
+
+    // Look up the token via the backend
+    const lookupResult = await this.backend.tokenLookup(token, gatewayUrl);
+
+    if (!lookupResult.valid) {
+      return {
+        type: 'TOKEN_INVALID',
+        id: msg.id,
+        reason: lookupResult.error || 'Invalid or expired token',
+      };
+    }
+
+    // Determine action based on token type
+    const action = lookupResult.action as TokenActionType | undefined;
+
+    // If we have an action handler, use it to get the action URL
+    if (this.onTokenActionRequired && action) {
+      try {
+        const actionUrl = await this.onTokenActionRequired(token, action);
+        return {
+          type: 'TOKEN_ACTION_REQUIRED',
+          id: msg.id,
+          action,
+          actionUrl,
+        };
+      } catch (err) {
+        return {
+          type: 'ERROR',
+          id: msg.id,
+          code: 'TOKEN_ACTION_ERROR',
+          message: err instanceof Error ? err.message : 'Failed to get action URL',
+        };
+      }
+    }
+
+    // No action handler configured - return handled with data
+    return {
+      type: 'TOKEN_HANDLED',
+      id: msg.id,
+      result: {
+        action: (lookupResult.action as TokenActionType) || 'direct_access',
+        data: lookupResult.payload,
+      },
     };
   }
 

@@ -4,30 +4,48 @@
     setFrameUrl,
     connectionState,
     disconnect,
+    connect,
+    testConnection,
+    frameVerified,
   } from '../stores/federise.svelte';
 
   let inputValue = $state(frameUrl.value);
-  let saved = $state(false);
+  let isTesting = $state(false);
+  let testResult = $state<'success' | 'failed' | null>(null);
 
-  function handleSave() {
-    // Disconnect if connected before changing URL
+  async function handleTest() {
+    // Save the URL first
     if (connectionState.value !== 'disconnected') {
       disconnect();
     }
-
     setFrameUrl(inputValue);
-    saved = true;
-    setTimeout(() => {
-      saved = false;
-    }, 2000);
+
+    // Test the connection
+    isTesting = true;
+    testResult = null;
+
+    const success = await testConnection();
+    testResult = success ? 'success' : 'failed';
+    isTesting = false;
+
+    // If successful, auto-connect
+    if (success) {
+      try {
+        await connect();
+      } catch {
+        // Ignore - we already showed success for the test
+      }
+    }
   }
 
   function setLocal() {
     inputValue = 'http://localhost:4321/frame';
+    testResult = null;
   }
 
   function setProduction() {
     inputValue = 'https://federise.org/frame';
+    testResult = null;
   }
 </script>
 
@@ -55,10 +73,30 @@
     />
 
     <div class="actions">
-      <button class="btn btn-primary" onclick={handleSave}>
-        {saved ? 'Saved!' : 'Save'}
+      <button class="btn btn-primary" onclick={handleTest} disabled={isTesting}>
+        {#if isTesting}
+          Testing...
+        {:else if testResult === 'success'}
+          Connected!
+        {:else}
+          Test Connection
+        {/if}
       </button>
     </div>
+
+    {#if testResult === 'failed'}
+      <p class="error-message">
+        Failed to connect. Check the URL and ensure the frame is running.
+      </p>
+    {:else if testResult === 'success'}
+      <p class="success-message">
+        Connection verified! You can now use the app.
+      </p>
+    {:else if !frameVerified.value}
+      <p class="info-message">
+        Test the connection to enable the app.
+      </p>
+    {/if}
   </div>
 </div>
 
@@ -94,6 +132,24 @@
   }
 
   .actions {
+    margin-top: 0.5rem;
+  }
+
+  .error-message {
+    color: var(--color-error, #ef4444);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+  }
+
+  .success-message {
+    color: var(--color-success, #22c55e);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+  }
+
+  .info-message {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
     margin-top: 0.5rem;
   }
 </style>

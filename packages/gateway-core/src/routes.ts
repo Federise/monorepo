@@ -4,9 +4,13 @@ import type { GatewayEnv } from "./context.js";
 
 // Endpoints
 import { PingEndpoint } from "./endpoints/ping.js";
-import { PrincipalListEndpoint } from "./endpoints/principal/list.js";
-import { PrincipalCreateEndpoint } from "./endpoints/principal/create.js";
-import { PrincipalDeleteEndpoint } from "./endpoints/principal/delete.js";
+import {
+  IdentityCreateEndpoint,
+  IdentityListEndpoint,
+  IdentityDeleteEndpoint,
+  IdentityInviteEndpoint,
+  IdentityRegisterAppEndpoint,
+} from "./endpoints/identity/index.js";
 import { KVListNamespacesEndpoint } from "./endpoints/kv/list-namespaces.js";
 import { KVListKeysEndpoint } from "./endpoints/kv/list-keys.js";
 import { KVGetEndpoint } from "./endpoints/kv/get.js";
@@ -38,6 +42,12 @@ import {
   ShortLinkDeleteEndpoint,
   registerShortLinkResolveRoute,
 } from "./endpoints/shortlink/index.js";
+import {
+  TokenLookupEndpoint,
+  TokenClaimEndpoint,
+  TokenRevokeEndpoint,
+  TokenListEndpoint,
+} from "./endpoints/token/index.js";
 
 /**
  * Register all gateway routes on a Hono app.
@@ -54,10 +64,12 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
   // Health routes
   openapi.get("/ping", PingEndpoint);
 
-  // Principal routes
-  openapi.post("/principal/list", PrincipalListEndpoint);
-  openapi.post("/principal/create", PrincipalCreateEndpoint);
-  openapi.post("/principal/delete", PrincipalDeleteEndpoint);
+  // Identity routes
+  openapi.post("/identity/list", IdentityListEndpoint);
+  openapi.post("/identity/create", IdentityCreateEndpoint);
+  openapi.post("/identity/delete", IdentityDeleteEndpoint);
+  openapi.post("/identity/invite", IdentityInviteEndpoint);
+  openapi.post("/identity/app/register", IdentityRegisterAppEndpoint);
 
   // KV routes
   openapi.post("/kv/get", KVGetEndpoint);
@@ -88,6 +100,12 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
   // Short link routes
   openapi.post("/short", ShortLinkCreateEndpoint);
   openapi.delete("/short/:id", ShortLinkDeleteEndpoint);
+
+  // Stateful token routes
+  openapi.post("/token/lookup", TokenLookupEndpoint);
+  openapi.post("/token/claim", TokenClaimEndpoint);
+  openapi.post("/token/revoke", TokenRevokeEndpoint);
+  openapi.post("/token/list", TokenListEndpoint);
 
   return openapi;
 }

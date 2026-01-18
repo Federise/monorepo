@@ -3,34 +3,6 @@ import { z } from "zod";
 // Authorization
 export const AuthorizationHeader = z.string().describe("API Key authorization header in format: ApiKey <key>");
 
-// Principal schemas
-export const Principal = z.object({
-  secret_hash: z.string(),
-  display_name: z.string(),
-  created_at: z.string().datetime(),
-  active: z.boolean(),
-});
-
-export const PrincipalList = z.object({
-  items: z.array(Principal),
-});
-
-export const PrincipalCreateRequest = z.object({
-  display_name: z.string(),
-});
-
-export const PrincipalCreateResponse = z.object({
-  secret_hash: z.string(),
-  display_name: z.string(),
-  created_at: z.string().datetime(),
-  active: z.boolean(),
-  secret: z.string(),
-});
-
-export const PrincipalDeleteRequest = z.object({
-  secret_hash: z.string(),
-});
-
 // KV schemas
 export const NamespaceValue = z.string();
 
@@ -179,13 +151,9 @@ export const ChannelPermission = z.enum([
 ]);
 export type ChannelPermission = z.infer<typeof ChannelPermission>;
 
-// Legacy permission for backward compatibility
-export const LegacyChannelPermission = z.enum(["read", "write"]);
-export type LegacyChannelPermission = z.infer<typeof LegacyChannelPermission>;
-
-// Combined permission type (accepts both new and legacy)
+// Channel permission input type
 export const ChannelPermissionInput = z.enum([
-  "read", "append", "read:deleted", "delete:own", "delete:any", "write"
+  "read", "append", "read:deleted", "delete:own", "delete:any"
 ]);
 export type ChannelPermissionInput = z.infer<typeof ChannelPermissionInput>;
 
@@ -282,26 +250,6 @@ export const ChannelDeleteEventResponse = z.object({
   event: ChannelEvent,
 });
 
-// Channel capability token structure V1 (legacy JSON format)
-export const ChannelCapabilityTokenV1 = z.object({
-  l: z.string(), // channelId (kept as 'l' for backwards compatibility)
-  g: z.string(), // gatewayUrl
-  p: z.array(z.enum(["r", "w"])), // permissions
-  a: z.string(), // authorId
-  e: z.number(), // expiresAt (unix timestamp)
-  s: z.string(), // signature
-});
-
-// Channel capability token structure V2 (compact binary format, no gatewayUrl)
-// Binary layout: version(1) + channelId(8) + permissions(1) + authorId(4) + expiresAt(4) + signature(16) = 34 bytes
-export const ChannelCapabilityTokenV2 = z.object({
-  v: z.literal(2), // version
-  l: z.string(), // channelId (8 bytes hex = 16 chars, kept as 'l' for backwards compatibility)
-  p: z.number(), // permissions bitmap (1=read, 2=write, 3=both)
-  a: z.string(), // authorId (4 bytes hex = 8 chars)
-  e: z.number(), // expiresAt (unix timestamp)
-  s: z.string(), // signature
-});
 
 // Admin schemas
 export const AdminCheckResponse = z.object({
@@ -311,10 +259,6 @@ export const AdminCheckResponse = z.object({
 });
 
 // Type exports for use in code
-export type Principal = z.infer<typeof Principal>;
-export type PrincipalCreateRequest = z.infer<typeof PrincipalCreateRequest>;
-export type PrincipalCreateResponse = z.infer<typeof PrincipalCreateResponse>;
-export type PrincipalDeleteRequest = z.infer<typeof PrincipalDeleteRequest>;
 export type KVEntry = z.infer<typeof KVEntry>;
 export type GetRequest = z.infer<typeof GetRequest>;
 export type SetRequest = z.infer<typeof SetRequest>;
@@ -344,10 +288,6 @@ export type ChannelTokenCreateRequest = z.infer<typeof ChannelTokenCreateRequest
 export type ChannelTokenCreateResponse = z.infer<typeof ChannelTokenCreateResponse>;
 export type ChannelDeleteEventRequest = z.infer<typeof ChannelDeleteEventRequest>;
 export type ChannelDeleteEventResponse = z.infer<typeof ChannelDeleteEventResponse>;
-export type ChannelCapabilityTokenV1 = z.infer<typeof ChannelCapabilityTokenV1>;
-export type ChannelCapabilityTokenV2 = z.infer<typeof ChannelCapabilityTokenV2>;
-// Union type for backwards compatibility
-export type ChannelCapabilityToken = ChannelCapabilityTokenV1 | ChannelCapabilityTokenV2;
 
 // Short Link schemas
 export const ShortLinkSchema = z.object({

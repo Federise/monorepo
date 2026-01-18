@@ -5,10 +5,17 @@
   import Files from './components/demos/Files.svelte';
   import Chat from './components/demos/Chat.svelte';
   import ChannelView from './components/demos/ChannelView.svelte';
-  import { connectionState, hasKVPermissions, hasBlobPermissions, hasChannelPermissions, initialized, initializeConnection } from './stores/federise.svelte';
+  import { connectionState, hasKVPermissions, hasBlobPermissions, hasChannelPermissions, initialized, initializeConnection, connectionFailed, frameVerified } from './stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
 
   type View = 'notes' | 'files' | 'chat' | 'channel' | 'settings';
+
+  // Redirect to settings if connection failed after initialization
+  $effect(() => {
+    if (initialized.value && connectionFailed.value && currentView !== 'settings' && currentView !== 'channel') {
+      currentView = 'settings';
+    }
+  });
 
   // Channel view state (from URL path)
   let channelToken = $state<string | null>(null);
@@ -123,12 +130,8 @@
                 </svg>
               </div>
               <h2>Notes Demo</h2>
-              <p>Connect to Federise and grant KV permissions to use the notes demo.</p>
-              {#if connectionState.value === 'disconnected'}
-                <p class="hint">Click "Connect" in the sidebar to get started.</p>
-              {:else if connectionState.value === 'connected'}
-                <p class="hint">Click "Grant Permissions" to enable KV access.</p>
-              {/if}
+              <p>Grant KV permissions to use the notes demo.</p>
+              <p class="hint">Click "Grant Permissions" in the sidebar to enable KV access.</p>
             </div>
           {/if}
         {:else if currentView === 'files'}
@@ -142,12 +145,8 @@
                 </svg>
               </div>
               <h2>Files Demo</h2>
-              <p>Connect to Federise and grant blob permissions to use the files demo.</p>
-              {#if connectionState.value === 'disconnected'}
-                <p class="hint">Click "Connect" in the sidebar to get started.</p>
-              {:else if connectionState.value === 'connected'}
-                <p class="hint">Click "Grant Permissions" to enable file access.</p>
-              {/if}
+              <p>Grant blob permissions to use the files demo.</p>
+              <p class="hint">Click "Grant Permissions" in the sidebar to enable file access.</p>
             </div>
           {/if}
         {:else if currentView === 'chat'}
@@ -161,12 +160,8 @@
                 </svg>
               </div>
               <h2>Chat Demo</h2>
-              <p>Connect to Federise and grant channel permissions to create and share channels.</p>
-              {#if connectionState.value === 'disconnected'}
-                <p class="hint">Click "Connect" in the sidebar to get started.</p>
-              {:else if connectionState.value === 'connected'}
-                <p class="hint">Click "Grant Permissions" to enable chat.</p>
-              {/if}
+              <p>Grant channel permissions to create and share channels.</p>
+              <p class="hint">Click "Grant Permissions" in the sidebar to enable chat.</p>
             </div>
           {/if}
         {/if}
