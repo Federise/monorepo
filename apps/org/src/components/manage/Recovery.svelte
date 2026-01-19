@@ -12,8 +12,9 @@
   // Recovery state
   let bootstrapKey = $state('');
   let showBootstrapKey = $state(false);
-  let newPrincipalUrl = $state('');
-  let newPrincipalKey = $state('');
+  let newGatewayUrl = $state('');
+  let newApiKey = $state('');
+  let newIdentityId = $state('');
   let recoveryStatus = $state<'idle' | 'processing' | 'success' | 'error'>('idle');
   let recoveryMessage = $state('');
   let loaded = $state(false);
@@ -39,67 +40,69 @@
     showToast('Bootstrap key generated');
   }
 
-  async function createFirstPrincipal() {
-    if (!newPrincipalUrl || !bootstrapKey) {
+  async function createFirstIdentity() {
+    if (!newGatewayUrl || !bootstrapKey) {
       recoveryStatus = 'error';
       recoveryMessage = 'Gateway URL and bootstrap key are required';
       return;
     }
 
     recoveryStatus = 'processing';
-    recoveryMessage = 'Creating first principal...';
+    recoveryMessage = 'Creating first identity...';
 
     try {
-      const client = createGatewayClient(newPrincipalUrl);
-      const { data, error } = await client.POST('/principal/create', {
+      const client = createGatewayClient(newGatewayUrl);
+      const { data, error } = await client.POST('/identity/create', {
         ...withAuth(bootstrapKey),
-        body: { display_name: 'Recovery Principal' },
+        body: { displayName: 'Recovery Identity', type: 'user' },
       });
 
       if (error) {
         recoveryStatus = 'error';
-        recoveryMessage = error.message || 'Failed to create principal';
+        recoveryMessage = error.message || 'Failed to create identity';
         return;
       }
 
-      if (data?.secret) {
-        newPrincipalKey = data.secret;
+      if (data?.secret && data?.identity?.id) {
+        newApiKey = data.secret;
+        newIdentityId = data.identity.id;
         recoveryStatus = 'success';
-        recoveryMessage = 'First principal created! Save this API key.';
+        recoveryMessage = 'First identity created! Save this API key.';
       } else {
         recoveryStatus = 'error';
         recoveryMessage = 'Unexpected response from gateway';
       }
     } catch (e) {
       recoveryStatus = 'error';
-      recoveryMessage = 'Failed to create principal. Verify the bootstrap key matches your worker configuration and that all principals have been deleted.';
+      recoveryMessage = 'Failed to create identity. Verify the bootstrap key matches your worker configuration and that all identities have been deleted.';
     }
   }
 
   function saveRecoveredCredentials() {
-    if (!newPrincipalUrl || !newPrincipalKey) return;
+    if (!newGatewayUrl || !newApiKey || !newIdentityId) return;
 
     // Save to vault
     const vault = createVaultStorage(localStorage);
     vault.add({
-      identityId: 'owner_' + Date.now(),
-      displayName: 'Recovery Principal',
+      identityId: newIdentityId,
+      displayName: 'Recovery Identity',
       identityType: 'user',
-      gatewayUrl: newPrincipalUrl,
-      apiKey: newPrincipalKey,
+      gatewayUrl: newGatewayUrl,
+      apiKey: newApiKey,
       source: 'owner',
       capabilities: [],
       forcePrimary: true,
     });
 
-    gatewayUrl = newPrincipalUrl;
-    apiKey = newPrincipalKey;
+    gatewayUrl = newGatewayUrl;
+    apiKey = newApiKey;
     isConnected = false;
 
     // Reset recovery state
     bootstrapKey = '';
-    newPrincipalUrl = '';
-    newPrincipalKey = '';
+    newGatewayUrl = '';
+    newApiKey = '';
+    newIdentityId = '';
     recoveryStatus = 'idle';
     recoveryMessage = '';
 
@@ -117,15 +120,15 @@
 <div class="page">
   <header class="page-header">
     <h1>Recovery</h1>
-    <p>Recover access to your gateway by generating a new bootstrap key and creating a new first principal.</p>
+    <p>Recover access to your gateway by generating a new bootstrap key and creating a new first identity.</p>
   </header>
 
   <section class="card warning-zone">
     <h2>⚠️ Warning</h2>
-    <p class="card-desc">This recovery process requires you to manually delete all existing principals from your gateway. Only use this if you've lost access to your gateway. You must have access to:</p>
+    <p class="card-desc">This recovery process requires you to manually delete all existing identities from your gateway. Only use this if you've lost access to your gateway. You must have access to:</p>
     <ul style="color: var(--color-text); margin: var(--space-md) 0 0 var(--space-xl); line-height: 1.6;">
       <li>Update your Cloudflare Worker's environment variables</li>
-      <li>Access your gateway's KV storage to delete principals manually</li>
+      <li>Access your gateway's KV storage to delete identities manually</li>
     </ul>
   </section>
 
@@ -172,8 +175,8 @@
 
   {#if bootstrapKey}
     <section class="card danger-zone">
-      <h2>Step 2: Delete All Principals Manually</h2>
-      <p class="card-desc">You need to manually delete all principals from your gateway's KV storage before creating a new first principal.</p>
+      <h2>Step 2: Delete All Identities Manually</h2>
+      <p class="card-desc">You need to manually delete all identities from your gateway's KV storage before creating a new first identity.</p>
 
       <div class="info-banner warning">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -187,18 +190,18 @@
             <li>Go to your Cloudflare Dashboard</li>
             <li>Navigate to Workers & Pages → KV</li>
             <li>Open your gateway's KV namespace</li>
-            <li>Delete all principal keys (they start with "principal:")</li>
-            <li>Return here to create the first principal</li>
+            <li>Delete all identity and credential keys (they start with "__IDENTITY:" and "__CREDENTIAL:")</li>
+            <li>Return here to create the first identity</li>
           </ol>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2>Step 3: Create First Principal</h2>
-      <p class="card-desc">After updating the bootstrap key and deleting all principals, create a new first principal.</p>
+      <h2>Step 3: Create First Identity</h2>
+      <p class="card-desc">After updating the bootstrap key and deleting all identities, create a new first identity.</p>
 
-      {#if newPrincipalKey}
+      {#if newApiKey}
         <div class="test-result success">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -208,16 +211,16 @@
         </div>
 
         <div class="form-group">
-          <label for="new-principal-key">New API Key (save this!)</label>
+          <label for="new-api-key">New API Key (save this!)</label>
           <div class="input-group">
             <input
-              id="new-principal-key"
+              id="new-api-key"
               type="text"
-              value={newPrincipalKey}
+              value={newApiKey}
               readonly
               class="input"
             />
-            <button class="btn-icon" onclick={() => copyToClipboard(newPrincipalKey, 'API key')}>
+            <button class="btn-icon" onclick={() => copyToClipboard(newApiKey, 'API key')}>
               Copy
             </button>
           </div>
@@ -235,11 +238,11 @@
         {/if}
 
         <div class="form-group">
-          <label for="new-principal-url">Gateway URL</label>
+          <label for="new-gateway-url">Gateway URL</label>
           <input
-            id="new-principal-url"
+            id="new-gateway-url"
             type="url"
-            bind:value={newPrincipalUrl}
+            bind:value={newGatewayUrl}
             placeholder="https://your-gateway.workers.dev"
             class="input"
           />
@@ -247,16 +250,16 @@
 
         <button
           class="btn btn-primary"
-          onclick={createFirstPrincipal}
+          onclick={createFirstIdentity}
           disabled={recoveryStatus === 'processing'}
         >
-          {recoveryStatus === 'processing' ? 'Creating...' : 'Create First Principal'}
+          {recoveryStatus === 'processing' ? 'Creating...' : 'Create First Identity'}
         </button>
       {/if}
     </section>
   {/if}
 
-  {#if newPrincipalKey}
+  {#if newApiKey}
     <section class="card">
       <h2>Step 4: Save Credentials</h2>
       <p class="card-desc">Save the new credentials to connect to your gateway.</p>

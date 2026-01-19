@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Org application is the user-facing administration dashboard for the Federise platform. It provides gateway deployment, permission management, principal (API key) management, and data browsing capabilities. The app also hosts the Frame Enforcer component that brokers communication between third-party applications and the gateway.
+The Org application is the user-facing administration dashboard for the Federise platform. It provides gateway deployment, permission management, identity (API key) management, and data browsing capabilities. The app also hosts the Frame Enforcer component that brokers communication between third-party applications and the gateway.
 
 ## Technical Specifications
 
@@ -31,7 +31,7 @@ src/pages/
     ├── overview.astro       # Gateway statistics
     ├── permissions.astro    # App permissions UI
     ├── data.astro           # Storage browser
-    ├── principals.astro     # API key management
+    ├── identitys.astro     # API key management
     ├── settings.astro       # User preferences
     └── recovery.astro       # Account recovery
 ```
@@ -48,7 +48,7 @@ src/components/
 └── manage/
     ├── Sidebar.svelte       # Navigation sidebar
     ├── Permissions.svelte   # App permissions UI
-    ├── PrincipalsManager.svelte # API key CRUD
+    ├── IdentitysManager.svelte # API key CRUD
     ├── GatewayConnection.svelte # Gateway config
     ├── GatewayOverview.svelte   # Stats display
     ├── DataBrowser.svelte   # KV/Blob browser
@@ -309,7 +309,7 @@ export async function uploadBlob(
 | SEC-002 | HIGH | Test endpoints accessible in dev mode | `FrameEnforcer.svelte:530` |
 | SEC-003 | MEDIUM | No CSRF protection on permission grants | `AuthorizeFlow.svelte:38-51` |
 | SEC-004 | MEDIUM | Storage Access API fallback assumes success | `auth.ts:138-143` |
-| SEC-005 | LOW | No input validation on principal names | `PrincipalsManager.svelte:43-58` |
+| SEC-005 | LOW | No input validation on identity names | `IdentitysManager.svelte:43-58` |
 
 ### Test Endpoint Exposure
 

@@ -29,7 +29,7 @@ This will:
 - Generate a bootstrap API key
 - Deploy the worker
 
-On first deployment, save the bootstrap API key - you'll need it to create principals.
+On first deployment, save the bootstrap API key - you'll need it to create identities.
 
 ### 3. Test
 
@@ -65,7 +65,7 @@ Set these in `wrangler.jsonc` or via `wrangler secret put`:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BOOTSTRAP_API_KEY` | Yes | Initial API key for creating principals |
+| `BOOTSTRAP_API_KEY` | Yes | Initial API key for creating identities |
 | `CORS_ORIGIN` | No | Allowed CORS origin (default: `*`) |
 | `PUBLIC_DOMAIN` | No | Custom domain for public blob URLs |
 | `R2_ACCOUNT_ID` | No* | For presigned URLs |
@@ -117,7 +117,7 @@ The deployment script stores resource IDs in `.federise-state.json` (gitignored)
 ```
 Cloudflare Workers
 ├── KV Namespace (federise-kv)
-│   ├── Principals (__PRINCIPAL:*)
+│   ├── Identities (__IDENTITY:*)
 │   ├── Blob metadata (__BLOB:*)
 │   └── User KV data (namespace:key)
 ├── R2 Bucket (federise-private)

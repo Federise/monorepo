@@ -9,14 +9,12 @@ export function createGatewayClient(baseUrl: string) {
 }
 
 /**
- * Helper to create authorization header params
+ * Helper to create authorization header options
  */
 export function withAuth(apiKey: string) {
   return {
-    params: {
-      header: {
-        authorization: `ApiKey ${apiKey}`,
-      },
+    headers: {
+      authorization: `ApiKey ${apiKey}`,
     },
   } as const;
 }

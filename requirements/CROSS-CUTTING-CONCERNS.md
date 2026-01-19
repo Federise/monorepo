@@ -323,7 +323,7 @@ async function buildNamespace(origin: string): Promise<string> {
 
 | ID | Component | Issue | Impact |
 |----|-----------|-------|--------|
-| BUG-009 | gateway-core | Principal listing is N+1 pattern | Performance |
+| BUG-009 | gateway-core | Identity listing is N+1 pattern | Performance |
 | BUG-010 | apps/demo | Poll interval not configurable | Fixed overhead |
 | BUG-011 | SDK | No request retry logic | Reliability |
 | BUG-012 | gateway-core | SSE 1-second poll interval | Load generation |
@@ -334,7 +334,7 @@ async function buildNamespace(origin: string): Promise<string> {
 |----|-----------|-------|--------|
 | BUG-013 | SDK | No batch operations | API overhead |
 | BUG-014 | SDK | No caching layer | Repeated requests |
-| BUG-015 | apps/org | No input validation on principal names | Data quality |
+| BUG-015 | apps/org | No input validation on identity names | Data quality |
 
 ---
 

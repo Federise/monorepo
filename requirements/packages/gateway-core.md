@@ -35,7 +35,7 @@ src/
 │   ├── kv/                 # KV operations
 │   ├── blob/               # Blob operations
 │   ├── channel/            # Channel operations
-│   └── principal/          # Principal management
+│   └── identity/          # Identity management
 ├── middleware/
 │   └── auth.ts             # Authentication middleware
 └── lib/
@@ -252,13 +252,13 @@ const BlobVisibility = z.enum(['public', 'presigned', 'private']);
 | /channel/token/create | ChannelTokenCreateEndpoint | POST | Create share token |
 | /channel/subscribe | - | GET | SSE stream |
 
-### Principal Endpoints
+### Identity Endpoints
 
 | Endpoint | Class | Method | Purpose |
 |----------|-------|--------|---------|
-| /principal/create | PrincipalCreateEndpoint | POST | Create principal |
-| /principal/list | PrincipalListEndpoint | POST | List principals |
-| /principal/delete | PrincipalDeleteEndpoint | POST | Deactivate principal |
+| /identity/create | IdentityCreateEndpoint | POST | Create identity |
+| /identity/list | IdentityListEndpoint | POST | List identitys |
+| /identity/delete | IdentityDeleteEndpoint | POST | Deactivate identity |
 
 ## Middleware
 
@@ -277,22 +277,22 @@ export function createAuthMiddleware(options?: AuthMiddlewareOptions): Middlewar
 
     const apiKey = authHeader.slice(7);  // Remove "ApiKey "
 
-    // Check bootstrap key (first principal creation only)
+    // Check bootstrap key (first identity creation only)
     if (config.bootstrapApiKey && apiKey === config.bootstrapApiKey) {
-      // Only allow if no principals exist AND path is /principal/create
+      // Only allow if no identitys exist AND path is /identity/create
     }
 
-    // Check principal key
+    // Check identity key
     const hash = await hashApiKey(apiKey);
-    const principalJson = await kv.get(`__PRINCIPAL:${hash}`);
+    const identityJson = await kv.get(`__IDENTITY:${hash}`);
 
-    if (!principalJson) {
+    if (!identityJson) {
       return c.json({ code: 401, message: 'Unauthorized' }, 401);
     }
 
-    const principal = JSON.parse(principalJson);
-    if (!principal.active) {
-      return c.json({ code: 401, message: 'Principal is not active' }, 401);
+    const identity = JSON.parse(identityJson);
+    if (!identity.active) {
+      return c.json({ code: 401, message: 'Identity is not active' }, 401);
     }
 
     return next();
@@ -441,8 +441,8 @@ export async function generateAlias(namespace: string): Promise<string> {
 ### Zod Schemas (`types.ts`)
 
 ```typescript
-// Principal
-export const Principal = z.object({
+// Identity
+export const Identity = z.object({
   secret_hash: z.string(),
   display_name: z.string(),
   created_at: z.string().datetime(),
@@ -485,10 +485,10 @@ export function registerGatewayRoutes(app: Hono<{ Variables: GatewayEnv }>) {
     docs_url: '/openapi'
   });
 
-  // Principal routes
-  openAPIApp.post('/principal/create', PrincipalCreateEndpoint);
-  openAPIApp.post('/principal/list', PrincipalListEndpoint);
-  openAPIApp.post('/principal/delete', PrincipalDeleteEndpoint);
+  // Identity routes
+  openAPIApp.post('/identity/create', IdentityCreateEndpoint);
+  openAPIApp.post('/identity/list', IdentityListEndpoint);
+  openAPIApp.post('/identity/delete', IdentityDeleteEndpoint);
 
   // KV routes
   openAPIApp.post('/kv/get', KVGetEndpoint);
@@ -557,7 +557,7 @@ export {
 |-------|-------------|----------|
 | No Rate Limiting | Auth endpoints vulnerable | `middleware/auth.ts` |
 | No Token Revocation | Tokens valid until expiry | `lib/channel-token.ts` |
-| N+1 Principal List | Inefficient fetching | `endpoints/principal/list.ts:26-45` |
+| N+1 Identity List | Inefficient fetching | `endpoints/identity/list.ts:26-45` |
 
 ## Performance Considerations
 
@@ -594,7 +594,7 @@ const POLL_INTERVAL = 1000;  // 1 second
 
 | Issue | Description | Location |
 |-------|-------------|----------|
-| N+1 Principal List | Fetches each value separately | `principal/list.ts:29` |
+| N+1 Identity List | Fetches each value separately | `identity/list.ts:29` |
 | No SSE Heartbeat | Connections timeout | `subscribe.ts:55` |
 | SIGNING_SECRET | Defined but unused | Referenced in config |
 
@@ -623,7 +623,7 @@ const POLL_INTERVAL = 1000;  // 1 second
 
 ### Performance
 
-4. Fix N+1 principal listing (batch fetch)
+4. Fix N+1 identity listing (batch fetch)
 5. Add SSE heartbeat for long connections
 6. Implement adaptive polling intervals
 

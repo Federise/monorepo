@@ -60,7 +60,7 @@ class CloudflareKVAdapter implements IKVStore {
 
 **KV Data Schema:**
 ```
-__PRINCIPAL:{SHA256_HASH} → { display_name, created_at, active }
+__IDENTITY:{SHA256_HASH} → { display_name, created_at, active }
 __BLOB:{namespace}:{key} → { size, contentType, visibility, uploadedAt }
 __CHANNEL_INDEX:{namespace}:{channelId} → { name, createdAt }
 __CHANNEL_OWNER:{channelId} → { ownerNamespace }
@@ -178,7 +178,7 @@ async append(options: LogAppendOptions): Promise<LogStoreEvent> {
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| BOOTSTRAP_API_KEY | Yes | - | Initial admin key for principal creation |
+| BOOTSTRAP_API_KEY | Yes | - | Initial admin key for identity creation |
 | CORS_ORIGIN | No | `"*"` | CORS allowed origins |
 | R2_BUCKET | No | `"federise-objects"` | R2 bucket name |
 | R2_ACCOUNT_ID | No | - | For presigned URLs |
@@ -260,13 +260,13 @@ Request → Extract Authorization header
         ↓
         Parse "ApiKey {key}" format (regex validation)
         ↓
-        Bootstrap key? → Only if /principal/create AND no principals exist
+        Bootstrap key? → Only if /identity/create AND no identitys exist
         ↓
         Hash key with SHA-256
         ↓
-        Lookup __PRINCIPAL:{hash} in KV
+        Lookup __IDENTITY:{hash} in KV
         ↓
-        Validate principal.active === true
+        Validate identity.active === true
         ↓
         Pass to endpoint handler
 ```
@@ -299,7 +299,7 @@ Request → Check X-Channel-Token header
 
 | Operation | KV Reads | KV Writes | R2 Class A | R2 Class B | DO Requests |
 |-----------|----------|-----------|------------|------------|-------------|
-| Principal Create | 1 | 1 | - | - | - |
+| Identity Create | 1 | 1 | - | - | - |
 | KV Get | 1 | - | - | - | - |
 | KV Set | - | 1 | - | - | - |
 | Blob Upload | 1 | 2 | 1 | - | - |
@@ -355,7 +355,7 @@ Total: ~$34.50/month
 
 | Issue | Description | Location |
 |-------|-------------|----------|
-| N+1 Principal List | Lists keys then fetches each value | `principal/list.ts:26-45` |
+| N+1 Identity List | Lists keys then fetches each value | `identity/list.ts:26-45` |
 | No Rate Limiting | Auth endpoints vulnerable to brute force | `middleware/auth.ts` |
 | Race Condition | Bootstrap key check uses eventual consistency | `auth.ts:48-52` |
 
@@ -426,7 +426,7 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md#api-surface) for full API documentation
 | Token | POST | /channel/read | Read channel events |
 | Token | POST | /channel/append | Append channel event |
 | Token | GET | /channel/subscribe | SSE subscription |
-| Key | POST | /principal/* | Principal management |
+| Key | POST | /identity/* | Identity management |
 | Key | POST | /kv/* | KV operations |
 | Key | POST | /blob/* | Blob operations |
 | Key | POST | /channel/* | Log operations |

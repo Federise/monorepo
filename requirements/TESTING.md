@@ -47,8 +47,8 @@ describe('KV Gateway E2E Tests', () => {
     await Promise.all(list.keys.map(k => env.KV.delete(k.name)));
   });
 
-  it('should create principal', async () => {
-    const response = await SELF.fetch('http://localhost/principal/create', {
+  it('should create identity', async () => {
+    const response = await SELF.fetch('http://localhost/identity/create', {
       method: 'POST',
       headers: { Authorization: `ApiKey ${BOOTSTRAP_KEY}` },
       body: JSON.stringify({ display_name: 'Admin' })
@@ -113,14 +113,14 @@ export default defineConfig({
 
 ## Test Coverage Areas
 
-### Principal Management
+### Identity Management
 
 | Test | Gateway | Self-Hosted | Browser |
 |------|---------|-------------|---------|
-| Bootstrap principal creation | ✓ | ✓ | - |
-| Principal listing | ✓ | ✓ | - |
-| Additional principal creation | ✓ | ✓ | - |
-| Principal deletion | ✓ | - | - |
+| Bootstrap identity creation | ✓ | ✓ | - |
+| Identity listing | ✓ | ✓ | - |
+| Additional identity creation | ✓ | ✓ | - |
+| Identity deletion | ✓ | - | - |
 | Auth rejection (invalid key) | ✓ | ✓ | ✓ |
 | Auth rejection (malformed header) | ✓ | ✓ | - |
 | Bootstrap key isolation | ✓ | - | - |
@@ -190,7 +190,7 @@ export function uniqueNamespace(prefix = 'test'): string {
 }
 ```
 
-### Principal Caching
+### Identity Caching
 
 ```typescript
 // test/self-test/setup.ts:19-56
@@ -207,7 +207,7 @@ export async function getOrCreateAdminKey(): Promise<string> {
   }
 
   // Bootstrap creation
-  const response = await testFetch('/principal/create', { ... });
+  const response = await testFetch('/identity/create', { ... });
   cachedAdminKey = data.secret;
   return data.secret;
 }
@@ -221,7 +221,7 @@ export async function getOrCreateAdminKey(): Promise<string> {
 |----------|---------|---------|
 | TEST_BASE_URL | Self-hosted gateway URL | `http://localhost:3000` |
 | BOOTSTRAP_API_KEY | Bootstrap key for tests | `testbootstrapkey123` |
-| TEST_API_KEY | Pre-existing principal key | - |
+| TEST_API_KEY | Pre-existing identity key | - |
 | CI | CI environment flag | - |
 
 ### Playwright Web Servers
@@ -294,9 +294,9 @@ webServer: [
    ```typescript
    test.beforeAll(async () => {
      try {
-       principalApiKey = await createPrincipal();
+       identityApiKey = await createIdentity();
      } catch (e) {
-       console.warn('Could not create principal:', e);
+       console.warn('Could not create identity:', e);
        // Tests continue with undefined key
      }
    });

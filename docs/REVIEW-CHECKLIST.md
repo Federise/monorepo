@@ -46,9 +46,10 @@
   - Action: Add methods for revoke, list
   - **DONE**: SDK has channel.createToken() and handleToken(). Token listing/revocation is administrative.
 
-- [ ] **Channel token response missing gatewayUrl in gateway**
+- [x] **Channel token response missing gatewayUrl in gateway**
   - File: `packages/gateway-core/src/endpoints/channel/token-create.ts`
   - Action: Either add gatewayUrl to gateway response or document that proxy adds it
+  - **DONE**: Proxy layer adds gatewayUrl via getGatewayUrl option (router.ts:637-644). Gateway correctly doesn't know its own URL.
 
 ---
 
@@ -93,62 +94,74 @@
 
 ## Demo App Gaps
 
-- [ ] **Hardcoded expiry options**
+- [ ] **Hardcoded expiry options** (Low Priority - Enhancement)
   - File: `apps/demo/src/components/demos/Chat.svelte` (lines 55-61)
   - Action: Make configurable (number input with seconds, minutes, hours, days, years dropdown)
+  - Note: Current dropdown (1 day, 7 days, 30 days, 90 days, 1 year) covers common use cases
 
 ---
 
 ## Org App Gaps
 
-- [ ] **ClaimFlow uses hardcoded fetch() instead of typed API client**
-  - File: `apps/org/src/components/ClaimFlow.svelte` (lines 108-151)
+- [x] **ClaimFlow uses hardcoded fetch() instead of typed API client**
+  - File: `apps/org/src/components/ClaimFlow.svelte`
   - Action: Use generated API client after schema is regenerated
+  - **DONE**: Fixed generate:schema URL (/openapi.json), regenerated schema, updated ClaimFlow to use createGatewayClient with typed POST calls
 
-- [ ] **IdentitiesManager missing invite functionality**
+- [x] **IdentitiesManager missing invite functionality**
   - File: `apps/org/src/components/manage/IdentitiesManager.svelte`
   - Action: Add invite UI for creating shareable identity tokens
+  - **DONE**: Added generateShareLink() function and share link UI with capability selection
 
-- [ ] **No /manage/tokens page**
+- [ ] **No /manage/tokens page** (Feature Addition)
   - Action: Create token management page for viewing/revoking tokens
+  - Note: Requires gateway /token/list and /token/revoke endpoints
 
-- [ ] **No /manage/channels page**
+- [ ] **No /manage/channels page** (Feature Addition)
   - Action: Create channel management page
+  - Note: Gateway already has /channel/list - need UI for viewing/managing channels
 
-- [ ] **Overview page shows placeholder dashes for stats**
-  - File: `apps/org/src/pages/manage/overview.astro`
-  - Action: Implement actual stats
+- [ ] **Overview page shows placeholder dashes for stats** (Feature Enhancement)
+  - File: `apps/org/src/components/manage/GatewayOverview.svelte`
+  - Action: Implement actual stats for KV namespaces and total keys
+  - Note: Requires adding stats endpoints or aggregating from existing list endpoints
 
 ---
 
 ## Protocol & Frame
 
-- [ ] **FrameEnforcer doesn't have UI for identity selection**
+- [ ] **FrameEnforcer doesn't have UI for identity selection** (Feature Enhancement)
   - File: `apps/org/src/components/FrameEnforcer.svelte`
   - Action: Add identity selection prompt when multiple identities available
+  - Note: Currently uses getPrimaryIdentity() which returns first owner or primary identity. When multiple identities exist, user should be able to choose.
 
-- [ ] **HANDLE_TOKEN message type not validated in protocol.ts**
+- [x] **HANDLE_TOKEN message type not validated in protocol.ts**
   - File: `apps/org/src/lib/protocol.ts`
   - Action: Add validation for HANDLE_TOKEN message type
+  - **DONE**: Added validation for HANDLE_TOKEN, CHANNEL_INVITE, GET_VAULT_SUMMARY, GET_IDENTITIES_FOR_CAPABILITY, SELECT_IDENTITY, GET_ACTIVE_IDENTITY
 
 ---
 
 ## Documentation
 
-- [ ] **requirements/*.md files use "principal" terminology**
+- [x] **requirements/*.md files use "principal" terminology**
   - Action: Update to use "identity" terminology
+  - **DONE**: Updated TESTING.md, ARCHITECTURE.md, CROSS-CUTTING-CONCERNS.md, apps/org.md, apps/gateway.md, apps/self.md, packages/gateway-core.md
 
-- [ ] **CLAUDE.md test procedure uses manual localStorage setup**
+- [x] **CLAUDE.md test procedure uses manual localStorage setup**
   - Action: Update to use vault-aware setup
+  - **DONE**: Updated to use createVaultStorage from @federise/proxy with vault.add()
 
 ---
 
 ## Proxy Package
 
-- [ ] **ProxyBackend interface missing identity CRUD methods**
+- [x] **ProxyBackend interface missing identity CRUD methods**
   - File: `packages/proxy/src/types.ts` (lines 129-196)
   - Action: Add identity and token management to backend interface
+  - **DONE**: By design, ProxyBackend only exposes `registerApp` for third-party apps. Full identity CRUD is administrative and done through org app directly, not proxied to apps (per guidelines: "Third party apps never see secrets, credentials, or gateway endpoints")
 
-- [ ] **Vault storage exists but not integrated into FrameEnforcer**
+- [x] **Vault storage exists but not integrated into FrameEnforcer**
   - Files: `packages/proxy/src/vault/*`
   - Action: Wire vault into FrameEnforcer initialization and credential lookup
+  - **DONE**: FrameEnforcer imports createVaultStorage/createVaultQueries from @federise/proxy and uses vault for identity management

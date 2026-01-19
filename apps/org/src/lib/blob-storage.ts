@@ -55,7 +55,7 @@ export async function getPresignedUploadUrl(
 
   if (error) {
     // 503 means R2 credentials not configured - fall back to gateway upload
-    if ('code' in error && error.code === 503) {
+    if ('code' in error && String(error.code) === '503') {
       console.log('[Blob] Presigned URLs not available, will use gateway upload');
       return null;
     }

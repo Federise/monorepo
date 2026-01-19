@@ -466,7 +466,7 @@ Returns system health status:
   "r2_private": { "ok": true },
   "r2_public": { "ok": true },
   "presigned_ready": true,
-  "principals_exist": true
+  "identitys_exist": true
 }
 ```
 
@@ -475,7 +475,7 @@ Returns system health status:
 2. Private blob storage (list objects)
 3. Public blob storage (list objects)
 4. Presigner configuration status
-5. Principal existence check
+5. Identity existence check
 
 ## Dependencies
 

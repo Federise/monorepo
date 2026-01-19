@@ -77,15 +77,15 @@
     try {
       const client = createGatewayClient(workerUrl);
 
-      // Create principal with bootstrap token
-      const { data, error } = await client.POST('/principal/create', {
+      // Create identity with bootstrap token
+      const { data, error } = await client.POST('/identity/create', {
         ...withAuth(bootstrapToken),
-        body: { display_name: 'Federise Gateway' },
+        body: { displayName: 'Federise Gateway', type: 'user' },
       });
 
       if (error || !data) {
         connectionStatus = 'error';
-        connectionMessage = error?.message || 'Failed to create principal';
+        connectionMessage = error?.message || 'Failed to create identity';
         return;
       }
 

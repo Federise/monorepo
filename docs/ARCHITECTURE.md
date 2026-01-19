@@ -118,7 +118,7 @@ The org app is the main Federise web application providing:
 
 **Management Components** (`src/components/manage/`)
 - DataBrowser: Browse and manage KV data
-- PrincipalsManager: Manage API principals
+- IdentitiesManager: Manage identities
 - Permissions: View and revoke permissions
 - Settings: Application settings
 - Recovery: Account recovery options
@@ -171,10 +171,10 @@ The gateway provides the RESTful API backend.
 **Health:**
 - `GET /ping` - Health check
 
-**Principals (API Keys):**
-- `POST /principal/list` - List all principals
-- `POST /principal/create` - Create new principal
-- `POST /principal/delete` - Delete principal
+**Identities (API Keys):**
+- `POST /identity/list` - List all identities
+- `POST /identity/create` - Create new identity
+- `POST /identity/delete` - Delete identity
 
 **Key-Value Storage:**
 - `POST /kv/get` - Get value by key
@@ -204,7 +204,7 @@ API Key-based authentication via `Authorization: ApiKey <key>` header.
                                                   ┌──────────────┐
                                                   │ Hash ApiKey  │
                                                   │ Check KV for │
-                                                  │   principal  │
+                                                  │   identity   │
                                                   └──────────────┘
 ```
 
@@ -476,7 +476,7 @@ Used for:
 ### Cloudflare KV (Server-Side)
 
 Used for:
-- Principal (API key) storage
+- Identity (API key) storage
 - User data synchronization
 - Application configuration
 

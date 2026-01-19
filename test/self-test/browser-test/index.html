@@ -125,11 +125,11 @@
     <label for="gatewayUrl">Gateway URL:</label>
     <input type="text" id="gatewayUrl" value="http://localhost:3000">
 
-    <label for="apiKey">API Key (principal secret or bootstrap key):</label>
+    <label for="apiKey">API Key (identity secret or bootstrap key):</label>
     <input type="text" id="apiKey" value="your-bootstrap-key-here">
 
     <button onclick="runAllTests()">Run All Tests</button>
-    <button class="secondary" onclick="createPrincipal()">Create Principal</button>
+    <button class="secondary" onclick="createIdentity()">Create Identity</button>
     <button class="secondary" onclick="clearLog()">Clear Log</button>
   </div>
 
@@ -515,31 +515,31 @@
       summaryEl.textContent = `Tests complete: ${passed} passed, ${failed} failed`;
     }
 
-    async function createPrincipal() {
+    async function createIdentity() {
       try {
         const { gatewayUrl } = getConfig();
         const bootstrapKey = document.getElementById("apiKey").value;
 
-        log("Creating principal with bootstrap key...", "info");
+        log("Creating identity with bootstrap key...", "info");
 
-        const response = await fetch(`${gatewayUrl}/principal/create`, {
+        const response = await fetch(`${gatewayUrl}/identity/create`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `ApiKey ${bootstrapKey}`,
           },
-          body: JSON.stringify({ display_name: "browser-test-principal" }),
+          body: JSON.stringify({ displayName: "browser-test-identity", type: "user" }),
         });
 
         const data = await response.json();
 
         if (response.ok) {
           document.getElementById("apiKey").value = data.secret;
-          log(`Principal created! Secret: ${data.secret}`, "success");
-          alert(`Principal created!\n\nSecret (now in API Key field):\n${data.secret}`);
+          log(`Identity created! Secret: ${data.secret}`, "success");
+          alert(`Identity created!\n\nSecret (now in API Key field):\n${data.secret}`);
         } else {
           log(`Failed: ${data.message}`, "error");
-          alert(`Failed to create principal: ${data.message}`);
+          alert(`Failed to create identity: ${data.message}`);
         }
       } catch (e) {
         log(`Error: ${e.message}`, "error");

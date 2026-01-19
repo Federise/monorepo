@@ -175,17 +175,17 @@
     </div>
 
     <script>
-      const confirmEl = document.getElementById('confirm');
-      const pendingEl = document.getElementById('pending');
-      const doneEl = document.getElementById('done');
-      const resetBtn = document.getElementById('resetBtn');
+      const confirmEl = document.getElementById('confirm') as HTMLElement | null;
+      const pendingEl = document.getElementById('pending') as HTMLElement | null;
+      const doneEl = document.getElementById('done') as HTMLElement | null;
+      const resetBtn = document.getElementById('resetBtn') as HTMLElement | null;
 
       // Parse hash params (e.g., #gatewayUrl=...&apiKey=...)
-      function parseHashParams() {
+      function parseHashParams(): { gatewayUrl: string; apiKey: string } | null {
         const hash = window.location.hash.slice(1);
         if (!hash) return null;
 
-        const params = {};
+        const params: Record<string, string> = {};
         for (const part of hash.split('&')) {
           const [key, value] = part.split('=');
           if (key && value) {
@@ -194,7 +194,7 @@
         }
 
         if (params.gatewayUrl && params.apiKey) {
-          return params;
+          return { gatewayUrl: params.gatewayUrl, apiKey: params.apiKey };
         }
         return null;
       }
@@ -202,7 +202,7 @@
       const hashParams = parseHashParams();
 
       // If we have hash params, auto-execute the reset
-      if (hashParams) {
+      if (hashParams && confirmEl && pendingEl && doneEl) {
         confirmEl.style.display = 'none';
         pendingEl.classList.add('show');
 
@@ -232,25 +232,29 @@
           doneEl.classList.add('show');
 
           // Update the done message
-          document.querySelector('#done p').textContent =
-            'Storage cleared and configured with gateway credentials.';
+          const doneMsg = document.querySelector('#done p');
+          if (doneMsg) {
+            doneMsg.textContent = 'Storage cleared and configured with gateway credentials.';
+          }
         }, 300);
       }
 
-      resetBtn.addEventListener('click', () => {
-        // Show pending state
-        confirmEl.style.display = 'none';
-        pendingEl.classList.add('show');
+      if (resetBtn && confirmEl && pendingEl && doneEl) {
+        resetBtn.addEventListener('click', () => {
+          // Show pending state
+          confirmEl.style.display = 'none';
+          pendingEl.classList.add('show');
 
-        // Clear all localStorage
-        setTimeout(() => {
-          localStorage.clear();
+          // Clear all localStorage
+          setTimeout(() => {
+            localStorage.clear();
 
-          // Show done state
-          pendingEl.classList.remove('show');
-          doneEl.classList.add('show');
-        }, 500);
-      });
+            // Show done state
+            pendingEl.classList.remove('show');
+            doneEl.classList.add('show');
+          }, 500);
+        });
+      }
     </script>
   </body>
 </html>

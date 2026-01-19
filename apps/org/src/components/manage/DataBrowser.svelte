@@ -21,7 +21,7 @@
     size: number;
     contentType: string;
     uploadedAt: string;
-    isPublic: boolean;
+    visibility: 'public' | 'presigned' | 'private';
   }
 
   let activeTab = $state<Tab>('kv');
@@ -299,7 +299,7 @@
                             <span>{formatBytes(blob.size)}</span>
                             <span class="separator">•</span>
                             <span>{formatDate(blob.uploadedAt)}</span>
-                            {#if blob.isPublic}
+                            {#if blob.visibility === 'public'}
                               <span class="separator">•</span>
                               <span class="public-badge">Public</span>
                             {/if}

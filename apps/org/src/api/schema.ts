@@ -21,24 +21,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principal/list": {
+    "/identity/whoami": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get current identity
+         * @description Returns information about the identity associated with the current API key
+         */
+        get: operations["get_IdentityWhoAmIEndpoint"];
         put?: never;
-        /** List all principals */
-        post: operations["post_PrincipalListEndpoint"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/principal/create": {
+    "/identity/list": {
         parameters: {
             query?: never;
             header?: never;
@@ -47,15 +50,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a new principal */
-        post: operations["post_PrincipalCreateEndpoint"];
+        /** List all identities */
+        post: operations["post_IdentityListEndpoint"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/principal/delete": {
+    "/identity/create": {
         parameters: {
             query?: never;
             header?: never;
@@ -64,8 +67,62 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Delete a principal */
-        post: operations["post_PrincipalDeleteEndpoint"];
+        /** Create a new identity with credentials */
+        post: operations["post_IdentityCreateEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/identity/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete an identity and its credentials */
+        post: operations["post_IdentityDeleteEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/identity/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a claimable identity with channel access grants */
+        post: operations["post_IdentityInviteEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/identity/app/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register or update an APP identity
+         * @description Creates a new APP identity or updates capabilities for an existing one
+         */
+        post: operations["post_IdentityRegisterAppEndpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -217,7 +274,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Get a presigned URL for direct upload to R2 */
+        /** Get a presigned URL for direct upload to storage */
         post: operations["post_BlobPresignUploadEndpoint"];
         delete?: never;
         options?: never;
@@ -276,6 +333,268 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/blob/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change blob visibility
+         * @description Update the visibility level of an existing blob. Requires blob:write capability.
+         */
+        post: operations["post_BlobSetVisibilityEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channel/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a new channel */
+        post: operations["post_ChannelCreateEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channel/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List channels for a namespace */
+        post: operations["post_ChannelListEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channel/append": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append an event to a channel
+         * @description Authenticated via API key or capability token (X-Channel-Token header)
+         */
+        post: operations["post_ChannelAppendEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channel/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read events from a channel
+         * @description Authenticated via API key or capability token (X-Channel-Token header)
+         */
+        post: operations["post_ChannelReadEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channel/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete a channel and all its events */
+        post: operations["post_ChannelDeleteEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channel/delete-event": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Soft-delete an event in a channel
+         * @description Authenticated via API key or capability token (X-Channel-Token header). Requires delete:own (can only delete own events) or delete:any permission.
+         */
+        post: operations["post_ChannelDeleteEventEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channel/token/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a capability token for sharing a channel */
+        post: operations["post_ChannelTokenCreateEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/short": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a short link */
+        post: operations["post_ShortLinkCreateEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/short/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a short link */
+        delete: operations["delete_ShortLinkDeleteEndpoint"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/token/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Look up a stateful token
+         * @description Look up token information. Used by the Frame to determine what action to take.
+         */
+        post: operations["post_TokenLookupEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/token/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim an identity using a token
+         * @description Use an identity claim token to activate a PENDING_CLAIM identity and create credentials.
+         */
+        post: operations["post_TokenClaimEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/token/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke a stateful token
+         * @description Revoke a token so it can no longer be used.
+         */
+        post: operations["post_TokenRevokeEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/token/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List tokens created by the authenticated identity
+         * @description List all stateful tokens created by the authenticated identity.
+         */
+        post: operations["post_TokenListEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -291,9 +610,7 @@ export interface operations {
     get_PingEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -318,6 +635,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    get_IdentityWhoAmIEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current identity information */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        identityId: string;
+                        displayName: string;
+                        type: string;
+                        status: string;
+                        createdAt: string;
+                        appConfig?: {
+                            origin: string;
+                            namespace: string;
+                            grantedCapabilities: string[];
+                            frameAccess: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - no valid API key provided */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         code: number;
                         message: string;
                     };
@@ -325,30 +686,34 @@ export interface operations {
             };
         };
     };
-    post_PrincipalListEndpoint: {
+    post_IdentityListEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The request has succeeded. */
+            /** @description List of identities */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        items: {
-                            secret_hash: string;
-                            display_name: string;
-                            /** Format: date-time */
-                            created_at: string;
-                            active: boolean;
+                        identities: {
+                            id: string;
+                            type: string;
+                            displayName: string;
+                            status: string;
+                            createdAt: string;
+                            appConfig?: {
+                                origin: string;
+                                namespace: string;
+                                grantedCapabilities: string[];
+                                frameAccess: boolean;
+                            };
                         }[];
                     };
                 };
@@ -367,35 +732,44 @@ export interface operations {
             };
         };
     };
-    post_PrincipalCreateEndpoint: {
+    post_IdentityCreateEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: {
             content: {
                 "application/json": {
-                    display_name: string;
+                    displayName: string;
+                    /**
+                     * @default user
+                     * @enum {string}
+                     */
+                    type?: "user" | "service" | "agent";
                 };
             };
         };
         responses: {
-            /** @description The request has succeeded. */
+            /** @description Identity created successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        secret_hash: string;
-                        display_name: string;
-                        /** Format: date-time */
-                        created_at: string;
-                        active: boolean;
+                        identity: {
+                            id: string;
+                            type: string;
+                            displayName: string;
+                            status: string;
+                            createdAt: string;
+                        };
+                        credential: {
+                            id: string;
+                            type: string;
+                        };
                         secret: string;
                     };
                 };
@@ -414,29 +788,31 @@ export interface operations {
             };
         };
     };
-    post_PrincipalDeleteEndpoint: {
+    post_IdentityDeleteEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: {
             content: {
                 "application/json": {
-                    secret_hash: string;
+                    identityId: string;
                 };
             };
         };
         responses: {
-            /** @description No content */
-            204: {
+            /** @description Identity deleted */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
             };
             /** @description Unauthorized */
             401: {
@@ -450,8 +826,124 @@ export interface operations {
                     };
                 };
             };
-            /** @description Not found */
+            /** @description Identity not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_IdentityInviteEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    displayName: string;
+                    channelId: string;
+                    namespace: string;
+                    permissions: ("read" | "append" | "delete:own" | "delete:any" | "read:deleted")[];
+                    /** @default 604800 */
+                    expiresInSeconds?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Invitation created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tokenId: string;
+                        identityId: string;
+                        /** Format: date-time */
+                        expiresAt: string;
+                    };
+                };
+            };
+            /** @description Not the channel owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Channel not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_IdentityRegisterAppEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: uri */
+                    origin: string;
+                    displayName?: string;
+                    capabilities: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description APP identity registered/updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        identity: {
+                            id: string;
+                            type: string;
+                            displayName: string;
+                            status: string;
+                            createdAt: string;
+                            appConfig: {
+                                origin: string;
+                                namespace: string;
+                                grantedCapabilities: string[];
+                                frameAccess: boolean;
+                            };
+                        };
+                        created: boolean;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -467,9 +959,7 @@ export interface operations {
     post_KVGetEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -501,7 +991,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -513,7 +1003,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -523,9 +1013,7 @@ export interface operations {
     post_KVSetEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -553,7 +1041,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -563,9 +1051,7 @@ export interface operations {
     post_KVListKeysEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -593,7 +1079,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -605,7 +1091,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -615,9 +1101,7 @@ export interface operations {
     post_KVBulkGetEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -651,7 +1135,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -661,9 +1145,7 @@ export interface operations {
     post_KVBulkSetEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -698,7 +1180,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -708,9 +1190,7 @@ export interface operations {
     post_KVListNamespacesEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -732,7 +1212,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -742,9 +1222,7 @@ export interface operations {
     post_KVDumpEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -772,7 +1250,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -782,16 +1260,7 @@ export interface operations {
     post_BlobUploadEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-                "content-type": string;
-                /** @description Namespace for the blob */
-                "x-blob-namespace": string;
-                /** @description Key/filename for the blob */
-                "x-blob-key": string;
-                /** @description Set to 'true' for public storage */
-                "x-blob-public"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -811,7 +1280,8 @@ export interface operations {
                             contentType: string;
                             /** Format: date-time */
                             uploadedAt: string;
-                            isPublic: boolean;
+                            /** @enum {string} */
+                            visibility: "public" | "presigned" | "private";
                         };
                     };
                 };
@@ -823,7 +1293,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -835,7 +1305,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -845,9 +1315,7 @@ export interface operations {
     post_BlobPresignUploadEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -858,7 +1326,8 @@ export interface operations {
                     key: string;
                     contentType: string;
                     size: number;
-                    /** @default false */
+                    /** @enum {string} */
+                    visibility?: "public" | "presigned" | "private";
                     isPublic?: boolean;
                 };
             };
@@ -885,7 +1354,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -897,19 +1366,19 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
             };
-            /** @description R2 credentials not configured */
+            /** @description Presigning not configured */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -919,9 +1388,7 @@ export interface operations {
     post_BlobGetEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -950,7 +1417,8 @@ export interface operations {
                             contentType: string;
                             /** Format: date-time */
                             uploadedAt: string;
-                            isPublic: boolean;
+                            /** @enum {string} */
+                            visibility: "public" | "presigned" | "private";
                         };
                         /** Format: date-time */
                         expiresAt?: string;
@@ -964,7 +1432,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -976,7 +1444,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -986,9 +1454,7 @@ export interface operations {
     post_BlobDeleteEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1015,7 +1481,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -1027,7 +1493,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        code: number;
+                        code: string;
                         message: string;
                     };
                 };
@@ -1037,9 +1503,7 @@ export interface operations {
     post_BlobListEndpoint: {
         parameters: {
             query?: never;
-            header: {
-                authorization: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1065,7 +1529,851 @@ export interface operations {
                             contentType: string;
                             /** Format: date-time */
                             uploadedAt: string;
-                            isPublic: boolean;
+                            /** @enum {string} */
+                            visibility: "public" | "presigned" | "private";
+                        }[];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_BlobSetVisibilityEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    namespace: string;
+                    key: string;
+                    /** @enum {string} */
+                    visibility: "public" | "presigned" | "private";
+                };
+            };
+        };
+        responses: {
+            /** @description Visibility updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        metadata: {
+                            key: string;
+                            namespace: string;
+                            size: number;
+                            contentType: string;
+                            /** Format: date-time */
+                            uploadedAt: string;
+                            /** @enum {string} */
+                            visibility: "public" | "presigned" | "private";
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Blob not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ChannelCreateEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    namespace: string;
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Channel created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        metadata: {
+                            channelId: string;
+                            name: string;
+                            ownerNamespace: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                        };
+                        secret: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ChannelListEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    namespace: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Channels retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        channels: {
+                            channelId: string;
+                            name: string;
+                            ownerNamespace: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ChannelAppendEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    channelId: string;
+                    content: string;
+                    authorId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Event appended successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        event: {
+                            id: string;
+                            seq: number;
+                            authorId: string;
+                            /**
+                             * @default message
+                             * @enum {string}
+                             */
+                            type: "message" | "deletion";
+                            content?: string;
+                            targetSeq?: number;
+                            deleted?: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden - insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Channel not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ChannelReadEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    channelId: string;
+                    afterSeq?: number;
+                    /** @default 50 */
+                    limit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Events retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: {
+                            id: string;
+                            seq: number;
+                            authorId: string;
+                            /**
+                             * @default message
+                             * @enum {string}
+                             */
+                            type: "message" | "deletion";
+                            content?: string;
+                            targetSeq?: number;
+                            deleted?: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                        }[];
+                        hasMore: boolean;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden - insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Channel not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ChannelDeleteEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    namespace: string;
+                    channelId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Channel deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden - not the channel owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Channel not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ChannelDeleteEventEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    channelId: string;
+                    targetSeq: number;
+                    authorId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deletion marker created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        event: {
+                            id: string;
+                            seq: number;
+                            authorId: string;
+                            /**
+                             * @default message
+                             * @enum {string}
+                             */
+                            type: "message" | "deletion";
+                            content?: string;
+                            targetSeq?: number;
+                            deleted?: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden - insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Channel or event not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ChannelTokenCreateEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    namespace: string;
+                    channelId: string;
+                    permissions: ("read" | "append" | "read:deleted" | "delete:own" | "delete:any")[];
+                    displayName?: string;
+                    /** @default 604800 */
+                    expiresInSeconds?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Token created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token: string;
+                        /** Format: date-time */
+                        expiresAt: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden - not the channel owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Channel not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_ShortLinkCreateEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: uri */
+                    url: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Short link created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        /** Format: uri */
+                        shortUrl: string;
+                        /** Format: uri */
+                        targetUrl: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    delete_ShortLinkDeleteEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Short link ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Short link deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Short link not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_TokenLookupEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    tokenId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Token lookup result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        valid: boolean;
+                        action?: string;
+                        label?: string;
+                        expiresAt?: string;
+                        identityInfo?: {
+                            displayName: string;
+                            type: string;
+                        };
+                        error?: string;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_TokenClaimEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    tokenId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Claim result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        identity?: {
+                            id: string;
+                            type: string;
+                            displayName: string;
+                            status: string;
+                        };
+                        credential?: {
+                            id: string;
+                            type: string;
+                        };
+                        secret?: string;
+                        grants?: {
+                            grantId: string;
+                            capability: string;
+                            resourceType?: string;
+                            resourceId?: string;
+                        }[];
+                        error?: string;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_TokenRevokeEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    tokenId: string;
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Revocation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        error?: string;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_TokenListEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    includeUsed?: boolean;
+                    /** @default false */
+                    includeRevoked?: boolean;
+                    /** @default false */
+                    includeExpired?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description List of tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tokens: {
+                            id: string;
+                            action: string;
+                            label?: string;
+                            createdAt: string;
+                            expiresAt: string;
+                            /** @enum {string} */
+                            status: "valid" | "used" | "revoked" | "expired";
                         }[];
                     };
                 };

@@ -177,7 +177,8 @@ export async function createChannelToken(
     body: {
       namespace,
       channelId,
-      permissions,
+      // Cast permissions - gateway handles 'write' → 'append' conversion
+      permissions: permissions as ('read' | 'append' | 'delete:own' | 'delete:any' | 'read:deleted')[],
       displayName: options?.displayName,
       expiresInSeconds: options?.expiresInSeconds,
     },

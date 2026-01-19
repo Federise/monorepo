@@ -6,7 +6,7 @@ test.describe("Channel Share Flow", () => {
     page,
     context,
   }) => {
-    // Setup: create principal and configure apps
+    // Setup: create identity and configure apps
     await fullSetup(page);
 
     // Navigate to chat page

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createVaultStorage, type VaultCapability } from '@federise/proxy';
+  import { createGatewayClient } from '../api/client';
 
   // Flow states
   type FlowState = 'loading' | 'ready' | 'claiming' | 'success' | 'error';
@@ -54,7 +55,7 @@
     returnUrl?: string;
   }
 
-  let state = $state<FlowState>('loading');
+  let flowState = $state<FlowState>('loading');
   let mode = $state<FlowMode>('token');
   let token = $state('');
   let gatewayUrl = $state('');
@@ -89,7 +90,7 @@
 
       if (!decoded) {
         error = 'Invalid share link format';
-        state = 'error';
+        flowState = 'error';
         return;
       }
 
@@ -98,15 +99,15 @@
 
         if (!sharePayload.identityId || !sharePayload.apiKey || !sharePayload.gatewayUrl) {
           error = 'Invalid share link: missing required fields';
-          state = 'error';
+          flowState = 'error';
           return;
         }
 
         gatewayUrl = sharePayload.gatewayUrl;
-        state = 'ready';
+        flowState = 'ready';
       } catch {
         error = 'Invalid share link: could not parse data';
-        state = 'error';
+        flowState = 'error';
       }
       return;
     }
@@ -133,7 +134,7 @@
 
     if (!tokenParam) {
       error = 'Missing token parameter';
-      state = 'error';
+      flowState = 'error';
       return;
     }
 
@@ -142,7 +143,7 @@
     // Gateway URL must come from the link
     if (!gatewayParam) {
       error = 'Missing gateway URL';
-      state = 'error';
+      flowState = 'error';
       return;
     }
 
@@ -151,64 +152,62 @@
 
     // Look up token info
     try {
-      const response = await fetch(`${gatewayUrl}/token/lookup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tokenId: token }),
+      const client = createGatewayClient(gatewayUrl);
+      const { data: info, error: apiError } = await client.POST('/token/lookup', {
+        body: { tokenId: token },
       });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        error = data.message || `Failed to look up token: HTTP ${response.status}`;
-        state = 'error';
+      if (apiError) {
+        error = apiError.message || 'Failed to look up token';
+        flowState = 'error';
         return;
       }
 
-      const info = await response.json() as TokenInfo;
+      if (!info) {
+        error = 'No response from token lookup';
+        flowState = 'error';
+        return;
+      }
 
       if (!info.valid) {
         error = info.error || 'This invitation is invalid or has expired';
-        state = 'error';
+        flowState = 'error';
         return;
       }
 
       if (info.action !== 'identity:claim') {
         error = `Unexpected token action: ${info.action}`;
-        state = 'error';
+        flowState = 'error';
         return;
       }
 
       tokenInfo = info;
-      state = 'ready';
+      flowState = 'ready';
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to validate invitation';
-      state = 'error';
+      flowState = 'error';
     }
   });
 
   async function handleAccept(): Promise<void> {
-    state = 'claiming';
+    flowState = 'claiming';
     error = '';
 
     try {
-      const response = await fetch(`${gatewayUrl}/token/claim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tokenId: token }),
+      const client = createGatewayClient(gatewayUrl);
+      const { data: result, error: apiError } = await client.POST('/token/claim', {
+        body: { tokenId: token },
       });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        error = data.message || `Failed to accept: HTTP ${response.status}`;
-        state = 'ready';
+      if (apiError) {
+        error = apiError.message || 'Failed to accept invitation';
+        flowState = 'ready';
         return;
       }
 
-      const result = await response.json() as ClaimResult;
-
-      if (!result.success || !result.secret || !result.identity) {
-        error = result.error || 'Failed to accept invitation';
-        state = 'ready';
+      if (!result || !result.success || !result.secret || !result.identity) {
+        error = 'Failed to accept invitation';
+        flowState = 'ready';
         return;
       }
 
@@ -252,7 +251,7 @@
         return;
       }
 
-      state = 'success';
+      flowState = 'success';
 
       // Redirect to manage page after a brief delay
       setTimeout(() => {
@@ -260,25 +259,25 @@
       }, 1500);
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to accept invitation';
-      state = 'ready';
+      flowState = 'ready';
     }
   }
 
   function handleAcceptShare(): void {
     if (!sharePayload) {
       error = 'No share data available';
-      state = 'error';
+      flowState = 'error';
       return;
     }
 
-    state = 'claiming';
+    flowState = 'claiming';
     error = '';
 
     try {
       const vault = createVaultStorage(localStorage);
 
       // Convert capability strings to VaultCapability format
-      const capabilities: VaultCapability[] = (sharePayload.capabilities || []).map((cap) => ({
+      const capabilities: VaultCapability[] = (sharePayload.capabilities || []).map((cap: string) => ({
         capability: cap,
         grantedAt: new Date().toISOString(),
       }));
@@ -301,7 +300,7 @@
         return;
       }
 
-      state = 'success';
+      flowState = 'success';
 
       // Redirect to manage page after a brief delay
       setTimeout(() => {
@@ -309,7 +308,7 @@
       }, 1500);
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to save identity';
-      state = 'ready';
+      flowState = 'ready';
     }
   }
 
@@ -324,12 +323,12 @@
 </script>
 
 <div class="claim-container">
-  {#if state === 'loading'}
+  {#if flowState === 'loading'}
     <div class="loading-state">
       <div class="spinner"></div>
       <p>Loading invitation...</p>
     </div>
-  {:else if state === 'error'}
+  {:else if flowState === 'error'}
     <div class="error-state">
       <div class="error-icon">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -341,7 +340,7 @@
       <h2>Unable to Proceed</h2>
       <p>{error}</p>
     </div>
-  {:else if state === 'ready' || state === 'claiming'}
+  {:else if flowState === 'ready' || flowState === 'claiming'}
     <div class="header">
       <div class="logo">
         <span class="logo-icon">F</span>
@@ -381,14 +380,14 @@
     {/if}
 
     <div class="actions">
-      <button class="btn btn-secondary" type="button" onclick={handleDecline} disabled={state === 'claiming'}>
+      <button class="btn btn-secondary" type="button" onclick={handleDecline} disabled={flowState === 'claiming'}>
         Decline
       </button>
-      <button class="btn btn-primary" type="button" onclick={mode === 'share' ? handleAcceptShare : handleAccept} disabled={state === 'claiming'}>
-        {state === 'claiming' ? 'Adding...' : 'Add to Vault'}
+      <button class="btn btn-primary" type="button" onclick={mode === 'share' ? handleAcceptShare : handleAccept} disabled={flowState === 'claiming'}>
+        {flowState === 'claiming' ? 'Adding...' : 'Add to Vault'}
       </button>
     </div>
-  {:else if state === 'success'}
+  {:else if flowState === 'success'}
     <div class="success-state">
       <div class="success-icon">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

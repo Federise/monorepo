@@ -100,6 +100,22 @@ export function isValidRequest(data: unknown): data is RequestMessage {
       return typeof msg.channelId === 'string' && Array.isArray(msg.permissions);
     case 'CHANNEL_DELETE_EVENT':
       return typeof msg.channelId === 'string' && typeof msg.targetSeq === 'number';
+    case 'CHANNEL_INVITE':
+      return (
+        typeof msg.channelId === 'string' &&
+        typeof msg.displayName === 'string' &&
+        Array.isArray(msg.permissions)
+      );
+    case 'HANDLE_TOKEN':
+      return typeof msg.token === 'string';
+    case 'GET_VAULT_SUMMARY':
+      return true;
+    case 'GET_IDENTITIES_FOR_CAPABILITY':
+      return typeof msg.capability === 'string';
+    case 'SELECT_IDENTITY':
+      return typeof msg.identityId === 'string';
+    case 'GET_ACTIVE_IDENTITY':
+      return true;
     default:
       return false;
   }

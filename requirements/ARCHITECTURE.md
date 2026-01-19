@@ -41,7 +41,7 @@ Federise is a federated data storage and synchronization platform providing mult
 │  ┌────────────────────────────────────────────────────────────────────┐ │
 │  │                    gateway-core (shared logic)                     │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │ │
-│  │  │   KV     │  │   Blob   │  │ Channel  │  │    Principal     │  │ │
+│  │  │   KV     │  │   Blob   │  │ Channel  │  │    Identity     │  │ │
 │  │  │ Endpoints│  │ Endpoints│  │ Endpoints│  │    Management    │  │ │
 │  │  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘  │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
@@ -80,7 +80,7 @@ The gateway provides the HTTP API for all data operations. Two implementations e
 
 Platform-agnostic business logic shared between gateway implementations:
 
-- **Endpoints**: KV, Blob, Log, Principal CRUD operations
+- **Endpoints**: KV, Blob, Log, Identity CRUD operations
 - **Middleware**: Authentication, CORS, token validation
 - **Adapters**: Interface definitions for storage backends
 - **Utilities**: HMAC signing, token generation, namespace aliasing
@@ -150,7 +150,7 @@ type Capability =
 
 ### 3. Namespace Isolation
 
-All data is isolated by origin/principal:
+All data is isolated by origin/identity:
 
 ```
 Namespace Format: origin_{SHA256_HASH}
@@ -225,9 +225,9 @@ Recipient → ChannelClient → Gateway
 
 | Category | Endpoint | Auth | Purpose |
 |----------|----------|------|---------|
-| Principal | POST /principal/create | Bootstrap/API Key | Create API credentials |
-| Principal | POST /principal/list | API Key | List all principals |
-| Principal | POST /principal/delete | API Key | Deactivate principal |
+| Identity | POST /identity/create | Bootstrap/API Key | Create API credentials |
+| Identity | POST /identity/list | API Key | List all identities |
+| Identity | POST /identity/delete | API Key | Deactivate identity |
 | KV | POST /kv/get | API Key | Get value |
 | KV | POST /kv/set | API Key | Set value |
 | KV | POST /kv/keys | API Key | List keys |

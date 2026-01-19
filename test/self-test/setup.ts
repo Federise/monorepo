@@ -9,7 +9,7 @@
  * Environment variables:
  * - TEST_BASE_URL: Server URL (default: http://localhost:3000)
  * - BOOTSTRAP_API_KEY: Bootstrap key matching server config
- * - TEST_API_KEY: Optional - use existing principal's key instead of creating new ones
+ * - TEST_API_KEY: Optional - use existing identity's key instead of creating new ones
  */
 
 // Test configuration
@@ -32,7 +32,7 @@ export async function testFetch(
 
 /**
  * Get or create an admin API key for testing.
- * This handles the case where principals may already exist from previous test runs.
+ * This handles the case where identities may already exist from previous test runs.
  */
 export async function getOrCreateAdminKey(): Promise<string> {
   // Return cached key if available
@@ -44,7 +44,7 @@ export async function getOrCreateAdminKey(): Promise<string> {
   const envKey = Deno.env.get("TEST_API_KEY");
   if (envKey) {
     // Verify the key works
-    const verifyRes = await testFetch("/principal/list", {
+    const verifyRes = await testFetch("/identity/list", {
       method: "POST",
       headers: { Authorization: `ApiKey ${envKey}` },
     });
@@ -55,28 +55,28 @@ export async function getOrCreateAdminKey(): Promise<string> {
     throw new Error("TEST_API_KEY provided but is invalid");
   }
 
-  // Try to create a new principal using bootstrap key
-  const createRes = await testFetch("/principal/create", {
+  // Try to create a new identity using bootstrap key
+  const createRes = await testFetch("/identity/create", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
     },
-    body: JSON.stringify({ display_name: "IntegrationTestAdmin" }),
+    body: JSON.stringify({ displayName: "IntegrationTestAdmin", type: "user" }),
   });
 
   if (createRes.status === 200) {
     const data = await createRes.json() as { secret: string };
     cachedAdminKey = data.secret;
-    console.log("Created new test principal");
+    console.log("Created new test identity");
     return data.secret;
   }
 
-  // Bootstrap key failed - principals likely already exist
+  // Bootstrap key failed - identities likely already exist
   // In this case, user needs to provide TEST_API_KEY
   throw new Error(
-    "Could not create principal with bootstrap key (principals may already exist). " +
-    "Please set TEST_API_KEY environment variable with an existing principal's API key, " +
+    "Could not create identity with bootstrap key (identities may already exist). " +
+    "Please set TEST_API_KEY environment variable with an existing identity's API key, " +
     "or clear the KV store and restart the server."
   );
 }

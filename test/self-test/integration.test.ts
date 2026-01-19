@@ -8,8 +8,8 @@
  * 2. Ensure S3/MinIO is running for blob operations
  * 3. Set environment variables as needed (see .env.example)
  *
- * If principals already exist from previous runs, set TEST_API_KEY env var
- * with an existing principal's API key.
+ * If identities already exist from previous runs, set TEST_API_KEY env var
+ * with an existing identity's API key.
  */
 
 import {
@@ -47,15 +47,15 @@ Deno.test({
 });
 
 // ============================================================================
-// Principal Management Tests
+// Identity Management Tests
 // ============================================================================
 
 Deno.test({
-  name: "Principal: should list principals",
+  name: "Identity: should list identities",
   async fn() {
     const adminApiKey = await getOrCreateAdminKey();
 
-    const response = await testFetch("/principal/list", {
+    const response = await testFetch("/identity/list", {
       method: "POST",
       headers: { Authorization: `ApiKey ${adminApiKey}` },
     });
@@ -64,7 +64,7 @@ Deno.test({
     const data = await response.json() as { items: Array<Record<string, unknown>> };
     assertExists(data.items);
     assertEquals(Array.isArray(data.items), true);
-    // Should have at least one principal (the one we're using)
+    // Should have at least one identity (the one we're using)
     assertEquals(data.items.length >= 1, true);
   },
   sanitizeOps: false,
@@ -72,33 +72,32 @@ Deno.test({
 });
 
 Deno.test({
-  name: "Principal: should create additional principals when authenticated",
+  name: "Identity: should create additional identities when authenticated",
   async fn() {
     const adminApiKey = await getOrCreateAdminKey();
 
-    const response = await testFetch("/principal/create", {
+    const response = await testFetch("/identity/create", {
       method: "POST",
       headers: {
         Authorization: `ApiKey ${adminApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ display_name: `TestUser_${Date.now()}` }),
+      body: JSON.stringify({ displayName: `TestUser_${Date.now()}`, type: "user" }),
     });
 
     assertEquals(response.status, 200);
     const data = await response.json() as Record<string, unknown>;
-    assertExists(data.display_name);
+    assertExists(data.identity);
     assertExists(data.secret);
-    assertExists(data.secret_hash);
   },
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
-  name: "Principal: should reject requests without valid auth",
+  name: "Identity: should reject requests without valid auth",
   async fn() {
-    const response = await testFetch("/principal/list", {
+    const response = await testFetch("/identity/list", {
       method: "POST",
       headers: { Authorization: "ApiKey invalid_key_12345" },
     });
@@ -110,9 +109,9 @@ Deno.test({
 });
 
 Deno.test({
-  name: "Principal: should reject requests with malformed auth header",
+  name: "Identity: should reject requests with malformed auth header",
   async fn() {
-    const response = await testFetch("/principal/list", {
+    const response = await testFetch("/identity/list", {
       method: "POST",
       headers: { Authorization: "Bearer some_token" },
     });
@@ -602,7 +601,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "Admin: should check system status with principal key",
+  name: "Admin: should check system status with identity key",
   async fn() {
     const adminApiKey = await getOrCreateAdminKey();
     const response = await testFetch("/admin/check", {

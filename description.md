@@ -53,9 +53,9 @@ The `apps/gateway` is a Cloudflare Workers API built with:
 **Endpoints:**
 | Category | Endpoint | Description |
 |----------|----------|-------------|
-| Principal | `POST /principal/list` | List all API principals |
-| Principal | `POST /principal/create` | Create new API key |
-| Principal | `POST /principal/delete` | Delete a principal |
+| Identity | `POST /identity/list` | List all identities |
+| Identity | `POST /identity/create` | Create new identity |
+| Identity | `POST /identity/delete` | Delete an identity |
 | KV | `POST /kv/get` | Get a value |
 | KV | `POST /kv/set` | Set a value |
 | KV | `POST /kv/keys` | List keys with prefix |
@@ -91,7 +91,7 @@ Manage and configure existing Federise instance:
 - **Overview** (`/manage/overview`) - Gateway status and health
 - **Connection** (`/manage/connection`) - Gateway connection setup and configuration
 - **Settings** (`/manage/settings`) - App-level settings
-- **Principals** (`/manage/principals`) - API key management
+- **Identities** (`/manage/identities`) - Identity management
 - **Permissions** (`/manage/permissions`) - Origin-based permission grants
 - **Data** (`/manage/data`) - KV data browser and management
 - **Recovery** (`/manage/recovery`) - Account recovery options
@@ -214,13 +214,13 @@ flowchart TB
 
     subgraph CloudflareInfra["Cloudflare Infrastructure"]
         subgraph Gateway["Gateway (Workers)"]
-            API["OpenAPI Endpoints<br/>/kv/* /blob/* /principal/*"]
+            API["OpenAPI Endpoints<br/>/kv/* /blob/* /identity/*"]
             Auth["Auth Middleware<br/>API Key validation"]
         end
 
         subgraph Storage["Persistent Storage"]
             subgraph KV["Cloudflare KV"]
-                KV_Principal["__PRINCIPAL:<br/>API Keys (hashed)"]
+                KV_Identity["__IDENTITY:<br/>Identities (hashed)"]
                 KV_Org["__ORG<br/>Permission Grants"]
                 KV_Blob["__BLOB:<br/>File Metadata"]
                 KV_Data["[origin-hash]:<br/>App KV Data"]
@@ -256,7 +256,7 @@ flowchart TB
 
     class HostApp,SDK app
     class Frame,Manage,Authorize trusted
-    class LS,Cookies,KV,R2,KV_Principal,KV_Org,KV_Blob,KV_Data,R2_Private,R2_Public storage
+    class LS,Cookies,KV,R2,KV_Identity,KV_Org,KV_Blob,KV_Data,R2_Private,R2_Public storage
     class Gateway,API,Auth infra
 ```
 
@@ -314,7 +314,7 @@ flowchart LR
         NS1["abc123:*<br/>App A's data"]
         NS2["def456:*<br/>App B's data"]
         NS3["ghi789:*<br/>App C's data"]
-        NSP["__PRINCIPAL:*<br/>API Keys"]
+        NSI["__IDENTITY:*<br/>Identities"]
         NSO["__ORG<br/>Permissions"]
         NSB["__BLOB:*<br/>File metadata"]
     end
@@ -332,7 +332,7 @@ flowchart LR
     O3 --> NS3
     O3 --> R3
 
-    style NSP fill:#ffcdd2
+    style NSI fill:#ffcdd2
     style NSO fill:#ffcdd2
     style NSB fill:#ffcdd2
 ```
@@ -374,7 +374,7 @@ Each application (identified by origin) gets its own isolated namespace:
 - Prevents cross-origin data access
 
 Special namespaces:
-- `__PRINCIPAL:` - API key storage
+- `__IDENTITY:` - Identity storage
 - `__BLOB:` - Blob metadata
 - `__ORG` - Permission grants
 
