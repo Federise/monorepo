@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createGatewayClient, withAuth } from '../../api/client';
-  import { getGatewayConfig } from '../../utils/auth';
+  import { getPrimaryIdentity } from '../../utils/vault';
 
   type Tab = 'kv' | 'blob';
 
@@ -53,18 +53,18 @@
   }
 
   async function loadData() {
-    const config = getGatewayConfig();
-    if (!config.apiKey || !config.url) {
+    const identity = getPrimaryIdentity();
+    if (!identity) {
       isConnected = false;
       loading = false;
       return;
     }
 
     try {
-      const client = createGatewayClient(config.url);
+      const client = createGatewayClient(identity.gatewayUrl);
 
       // Check connection
-      const { data: pingData } = await client.GET('/ping', withAuth(config.apiKey));
+      const { data: pingData } = await client.GET('/ping', withAuth(identity.apiKey));
       if (pingData?.message !== 'pong') {
         isConnected = false;
         loading = false;
@@ -73,7 +73,7 @@
       isConnected = true;
 
       // Load KV dump
-      const { data: kvData, error: kvError } = await client.POST('/kv/dump', withAuth(config.apiKey));
+      const { data: kvData, error: kvError } = await client.POST('/kv/dump', withAuth(identity.apiKey));
       if (kvError) {
         console.error('KV dump error:', kvError);
       } else if (kvData) {
@@ -82,7 +82,7 @@
 
       // Load blobs
       const { data: blobData, error: blobError } = await client.POST('/blob/list', {
-        ...withAuth(config.apiKey),
+        ...withAuth(identity.apiKey),
         body: {},
       });
       if (blobError) {

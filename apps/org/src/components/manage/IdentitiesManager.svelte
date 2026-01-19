@@ -1,14 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createGatewayClient, withAuth } from '../../api/client';
-  import {
-    createVaultStorage,
-    createVaultQueries,
-  } from '@federise/proxy';
-  import type { IdentityInfo, VaultSummary } from '@federise/proxy';
-
-  const STORAGE_KEY_API = 'federise:gateway:apiKey';
-  const STORAGE_KEY_URL = 'federise:gateway:url';
+  import { createVaultStorage } from '@federise/proxy';
+  import type { VaultEntry, VaultCapability } from '@federise/proxy';
+  import { getPrimaryIdentity } from '../../utils/vault';
 
   interface AppConfig {
     origin: string;
@@ -26,19 +21,48 @@
     appConfig?: AppConfig;
   }
 
+  // Extended vault summary for management UI (not the restricted SDK type)
+  interface ManageVaultSummary {
+    totalIdentities: number;
+    totalGateways: number;
+    ownerIdentities: number;
+    grantedIdentities: number;
+    identitiesByGateway: Record<string, VaultEntry[]>;
+  }
+
+  // Available capabilities for identities
+  const AVAILABLE_CAPABILITIES = [
+    { id: 'kv:read', name: 'KV Read', desc: 'Read key-value data' },
+    { id: 'kv:write', name: 'KV Write', desc: 'Write key-value data' },
+    { id: 'kv:delete', name: 'KV Delete', desc: 'Delete key-value data' },
+    { id: 'blob:read', name: 'Blob Read', desc: 'Read blob/file data' },
+    { id: 'blob:write', name: 'Blob Write', desc: 'Upload blob/file data' },
+    { id: 'channel:create', name: 'Channel Create', desc: 'Create new channels' },
+    { id: 'channel:delete', name: 'Channel Delete', desc: 'Delete channels' },
+  ] as const;
+
   let identities = $state<Identity[]>([]);
   let loading = $state(true);
   let showCreateForm = $state(false);
   let newIdentityName = $state('');
   let newIdentityType = $state<'user' | 'service'>('user');
   let newIdentitySecret = $state('');
+  let newIdentityId = $state('');
   let toast = $state({ show: false, message: '', type: 'success' as 'success' | 'error' });
   let loaded = $state(false);
   let activeTab = $state<'users' | 'apps' | 'vault'>('users');
 
-  // Vault state
-  let vaultSummary = $state<VaultSummary | null>(null);
-  let vaultIdentities = $state<IdentityInfo[]>([]);
+  // Capability toggles - all enabled by default for new identities
+  let selectedCapabilities = $state<Set<string>>(new Set(AVAILABLE_CAPABILITIES.map(c => c.id)));
+
+  // Result states
+  let showResultModal = $state(false);
+  let isCreating = $state(false);
+  let shareUrl = $state<string>('');
+
+  // Vault state - using full entries for management UI
+  let vaultSummary = $state<ManageVaultSummary | null>(null);
+  let vaultIdentities = $state<VaultEntry[]>([]);
 
   let apiKey = $state<string | null>(null);
   let gatewayUrl = $state<string | null>(null);
@@ -74,6 +98,16 @@
     loading = false;
   }
 
+  function toggleCapability(capId: string) {
+    const newSet = new Set(selectedCapabilities);
+    if (newSet.has(capId)) {
+      newSet.delete(capId);
+    } else {
+      newSet.add(capId);
+    }
+    selectedCapabilities = newSet;
+  }
+
   async function createIdentity() {
     if (!newIdentityName.trim()) {
       showToast('Please enter a name', 'error');
@@ -85,8 +119,11 @@
       return;
     }
 
+    isCreating = true;
+
     try {
       const client = createGatewayClient(gatewayUrl);
+
       const { data, error } = await client.POST('/identity/create', {
         ...withAuth(apiKey),
         body: { displayName: newIdentityName, type: newIdentityType },
@@ -94,16 +131,107 @@
 
       if (data) {
         newIdentitySecret = data.secret;
+        newIdentityId = data.identity.id;
+        showResultModal = true;
         showToast('Identity created!', 'success');
         await loadIdentities();
-        newIdentityName = '';
       } else {
         showToast(error?.message || 'Failed to create identity', 'error');
       }
     } catch (error) {
       console.error('Failed to create identity:', error);
       showToast('Failed to create identity', 'error');
+    } finally {
+      isCreating = false;
     }
+  }
+
+  function saveToVault() {
+    if (!newIdentitySecret || !gatewayUrl || !newIdentityId) {
+      showToast('Cannot save to vault: missing credentials', 'error');
+      return;
+    }
+
+    try {
+      const vault = createVaultStorage(localStorage);
+
+      // Convert selected capabilities to VaultCapability format
+      const capabilities: VaultCapability[] = Array.from(selectedCapabilities).map(cap => ({
+        capability: cap,
+        grantedAt: new Date().toISOString(),
+      }));
+
+      vault.add({
+        identityId: newIdentityId,
+        displayName: newIdentityName,
+        identityType: newIdentityType,
+        gatewayUrl: gatewayUrl,
+        apiKey: newIdentitySecret,
+        source: 'owner',
+        capabilities,
+      });
+
+      loadVault();
+      showToast('Identity saved to vault!', 'success');
+      closeResultModal();
+    } catch (err) {
+      console.error('Failed to save to vault:', err);
+      showToast('Failed to save to vault', 'error');
+    }
+  }
+
+  function closeResultModal() {
+    showResultModal = false;
+    newIdentitySecret = '';
+    newIdentityId = '';
+    newIdentityName = '';
+    shareUrl = '';
+    showCreateForm = false;
+  }
+
+  function generateShareLink() {
+    if (!newIdentitySecret || !gatewayUrl || !newIdentityId) {
+      showToast('Cannot generate share link: missing credentials', 'error');
+      return;
+    }
+
+    // Create share payload with all the info needed to add to vault
+    const sharePayload = {
+      identityId: newIdentityId,
+      displayName: newIdentityName,
+      identityType: newIdentityType,
+      apiKey: newIdentitySecret,
+      gatewayUrl: gatewayUrl,
+      capabilities: Array.from(selectedCapabilities),
+    };
+
+    // Encode as base64url
+    const jsonStr = JSON.stringify(sharePayload);
+    const base64 = btoa(jsonStr)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    // Create share URL - format: /claim#share@<base64payload>
+    const orgBaseUrl = window.location.origin;
+    shareUrl = `${orgBaseUrl}/claim#share@${base64}`;
+  }
+
+  function copyToClipboard(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    showToast(`${label} copied to clipboard`, 'success');
+  }
+
+  function resetCreateForm() {
+    newIdentityName = '';
+    newIdentityType = 'user';
+    // Reset capabilities to all enabled by default
+    selectedCapabilities = new Set(AVAILABLE_CAPABILITIES.map(c => c.id));
+  }
+
+  function openCreateForm() {
+    resetCreateForm();
+    showCreateForm = true;
   }
 
   async function deleteIdentity(identityId: string, displayName: string) {
@@ -142,15 +270,6 @@
     }, 3000);
   }
 
-  function copySecret() {
-    navigator.clipboard.writeText(newIdentitySecret);
-    showToast('API key copied to clipboard', 'success');
-  }
-
-  function closeSecretModal() {
-    newIdentitySecret = '';
-  }
-
   function formatCapabilities(caps: string[]): string {
     return caps.map(c => c.replace(':', ' ')).join(', ');
   }
@@ -158,22 +277,31 @@
   function loadVault() {
     try {
       const vault = createVaultStorage(localStorage);
-      const queries = createVaultQueries(vault);
+      const entries = vault.getAll();
 
-      // Get summary
-      const summary = queries.getSummary();
-      const grouped = queries.groupByGateway();
+      // Group entries by gateway for management UI
+      const grouped: Record<string, VaultEntry[]> = {};
+      for (const entry of entries) {
+        if (!grouped[entry.gatewayUrl]) {
+          grouped[entry.gatewayUrl] = [];
+        }
+        grouped[entry.gatewayUrl].push(entry);
+      }
+
+      // Calculate summary stats
+      const ownerCount = entries.filter(e => e.source === 'owner').length;
+      const grantedCount = entries.filter(e => e.source === 'granted').length;
 
       vaultSummary = {
-        totalIdentities: summary.totalIdentities,
-        totalGateways: summary.totalGateways,
-        ownerIdentities: summary.ownerIdentities,
-        grantedIdentities: summary.grantedIdentities,
+        totalIdentities: entries.length,
+        totalGateways: Object.keys(grouped).length,
+        ownerIdentities: ownerCount,
+        grantedIdentities: grantedCount,
         identitiesByGateway: grouped,
       };
 
-      // Get all vault entries as safe info
-      vaultIdentities = vault.getAll().map((entry) => vault.toSafeInfo(entry));
+      // Use full entries for management UI (not restricted safe info)
+      vaultIdentities = entries;
     } catch (error) {
       console.error('Failed to load vault:', error);
       vaultSummary = null;
@@ -210,8 +338,13 @@
   }
 
   onMount(async () => {
-    apiKey = localStorage.getItem(STORAGE_KEY_API);
-    gatewayUrl = localStorage.getItem(STORAGE_KEY_URL);
+    // Get credentials from vault's primary identity
+    const identity = getPrimaryIdentity();
+    if (identity) {
+      apiKey = identity.apiKey;
+      gatewayUrl = identity.gatewayUrl;
+    }
+
     loadVault();
     await loadIdentities();
     loaded = true;
@@ -228,7 +361,7 @@
   {:else}
     <div class="header">
       <h2>Identities</h2>
-      <button onclick={() => (showCreateForm = !showCreateForm)} class="create-button">
+      <button onclick={() => showCreateForm ? (showCreateForm = false) : openCreateForm()} class="create-button">
         {showCreateForm ? 'Cancel' : '+ Create Identity'}
       </button>
     </div>
@@ -236,19 +369,55 @@
     {#if showCreateForm}
       <div class="create-form">
         <h3>Create New Identity</h3>
-        <div class="form-row">
+
+        <!-- Basic info fields -->
+        <div class="form-group">
+          <label for="identity-name">Display Name</label>
           <input
+            id="identity-name"
             type="text"
             bind:value={newIdentityName}
-            placeholder="Display name"
+            placeholder="Enter display name"
             class="name-input"
           />
-          <select bind:value={newIdentityType} class="type-select">
+        </div>
+
+        <div class="form-group">
+          <label for="identity-type">Identity Type</label>
+          <select id="identity-type" bind:value={newIdentityType} class="type-select">
             <option value="user">User</option>
             <option value="service">Service</option>
           </select>
         </div>
-        <button onclick={createIdentity} class="submit-button">Create</button>
+
+        <!-- Capability toggles -->
+        <div class="form-group">
+          <span class="form-label">Capabilities</span>
+          <p class="form-hint">Select the capabilities this identity should have access to.</p>
+          <div class="permission-toggles">
+            {#each AVAILABLE_CAPABILITIES as cap}
+              <label class="permission-toggle">
+                <input
+                  type="checkbox"
+                  checked={selectedCapabilities.has(cap.id)}
+                  onchange={() => toggleCapability(cap.id)}
+                />
+                <span class="toggle-label">
+                  <span class="toggle-name">{cap.name}</span>
+                  <span class="toggle-desc">{cap.desc}</span>
+                </span>
+              </label>
+            {/each}
+          </div>
+        </div>
+
+        <button
+          onclick={createIdentity}
+          class="submit-button"
+          disabled={isCreating || !newIdentityName.trim()}
+        >
+          {isCreating ? 'Creating...' : 'Create Identity'}
+        </button>
       </div>
     {/if}
 
@@ -299,7 +468,7 @@
                 </span>
               </div>
               <div class="identity-meta">
-                <span class="meta-item">Created {new Date(identity.createdAt).toLocaleDateString()}</span>
+                <span class="meta-item">Created {new Date(identity.createdAt).toLocaleString()}</span>
               </div>
               <div class="identity-actions">
                 <button
@@ -343,7 +512,7 @@
                 </div>
               {/if}
               <div class="identity-meta">
-                <span class="meta-item">Connected {new Date(identity.createdAt).toLocaleDateString()}</span>
+                <span class="meta-item">Connected {new Date(identity.createdAt).toLocaleString()}</span>
                 <span class="meta-item">Namespace: {identity.appConfig?.namespace}</span>
               </div>
               <div class="identity-actions">
@@ -412,7 +581,7 @@
                         {identity.source}
                       </span>
                     </div>
-                    {#if identity.capabilities.length > 0}
+                    {#if identity.capabilities?.length > 0}
                       <div class="capabilities">
                         <span class="capabilities-label">Capabilities:</span>
                         <div class="capability-badges">
@@ -453,20 +622,77 @@
     {/if}
   {/if}
 
-  {#if newIdentitySecret}
+  {#if showResultModal}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-overlay" onclick={closeSecretModal} role="button" tabindex="-1">
+    <div class="modal-overlay" onclick={closeResultModal} role="button" tabindex="-1">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
+      <div class="modal result-modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
         <h3>Identity Created!</h3>
-        <p class="warning">Save this API key now! It won't be shown again.</p>
-        <div class="secret-display">
-          <input type="text" readonly value={newIdentitySecret} class="secret-input" />
-          <button onclick={copySecret} class="copy-button">Copy</button>
+        <p class="success-text">
+          <strong>{newIdentityName}</strong> has been created successfully.
+        </p>
+
+        <div class="result-section">
+          <span class="section-label">API Key</span>
+          <p class="warning">Save this API key now! It won't be shown again.</p>
+          <div class="secret-display">
+            <input type="text" readonly value={newIdentitySecret} class="secret-input" />
+            <button onclick={() => copyToClipboard(newIdentitySecret, 'API key')} class="copy-button">Copy</button>
+          </div>
         </div>
-        <button onclick={closeSecretModal} class="close-button">Done</button>
+
+        {#if selectedCapabilities.size > 0}
+          <div class="result-section">
+            <span class="section-label">Capabilities</span>
+            <div class="capability-badges">
+              {#each AVAILABLE_CAPABILITIES.filter(c => selectedCapabilities.has(c.id)) as cap}
+                <span class="badge">{cap.name}</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if shareUrl}
+          <div class="result-section">
+            <span class="section-label">Share Link</span>
+            <p class="share-hint">Share this link to give someone else access to your gateway with these capabilities.</p>
+            <div class="secret-display">
+              <input type="text" readonly value={shareUrl} class="secret-input" />
+              <button onclick={() => copyToClipboard(shareUrl, 'Share link')} class="copy-button">Copy</button>
+            </div>
+          </div>
+        {/if}
+
+        <div class="result-actions">
+          <button onclick={saveToVault} class="action-button primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Save to Vault
+          </button>
+          {#if !shareUrl}
+            <button onclick={generateShareLink} class="action-button secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+              Create Share Link
+            </button>
+          {/if}
+          <button onclick={closeResultModal} class="action-button secondary">Done</button>
+        </div>
+
+        <p class="vault-hint">
+          {#if shareUrl}
+            Anyone with the share link can add this identity to their vault and access your gateway.
+          {:else}
+            Save to vault for yourself, or create a share link to give access to another device or person.
+          {/if}
+        </p>
       </div>
     </div>
   {/if}
@@ -567,8 +793,92 @@
     transition: all 0.2s;
   }
 
-  .submit-button:hover {
+  .submit-button:hover:not(:disabled) {
     background: rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Form groups */
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .form-group label,
+  .form-group .form-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #ccc;
+    margin-bottom: 0.5rem;
+  }
+
+  .loading-text,
+  .empty-text {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  .form-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.75rem 0;
+  }
+
+  .capability-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Permission toggles */
+  .permission-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .permission-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+  }
+
+  .permission-toggle input[type="checkbox"] {
+    margin-top: 0.15rem;
+    accent-color: #8b5cf6;
+    width: 16px;
+    height: 16px;
+  }
+
+  .permission-toggle input[type="checkbox"]:disabled {
+    opacity: 0.5;
+  }
+
+  .toggle-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .toggle-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-white);
+  }
+
+  .toggle-desc {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
   }
 
   .tabs {
@@ -827,6 +1137,122 @@
 
   .close-button:hover {
     background: rgba(139, 92, 246, 0.4);
+  }
+
+  /* Result modal styles */
+  .result-modal {
+    max-width: 480px;
+  }
+
+  .success-text {
+    color: var(--color-text-muted);
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9rem;
+  }
+
+  .success-text strong {
+    color: var(--color-white);
+  }
+
+  .result-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .section-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-white);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .result-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .action-button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+  }
+
+  .action-button.primary {
+    background: rgba(139, 92, 246, 0.3);
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    color: var(--color-white);
+  }
+
+  .action-button.primary:hover {
+    background: rgba(139, 92, 246, 0.4);
+  }
+
+  .action-button.secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--color-white);
+  }
+
+  .action-button.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .vault-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    text-align: center;
+  }
+
+  .share-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.75rem 0;
+  }
+
+  .expiry-note {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0 0 1.5rem 0;
+    text-align: center;
+  }
+
+  /* Permission badges */
+  .permission-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    justify-content: center;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 4px;
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+  }
+
+  .badge-warn {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.3);
   }
 
   .toast {

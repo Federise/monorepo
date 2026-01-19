@@ -104,12 +104,12 @@ export class IdentityInviteEndpoint extends OpenAPIRoute {
     // Get channel metadata to verify ownership
     const channelMeta = await channelStore.getMetadata(channelId);
     if (!channelMeta) {
-      return c.json({ code: 404, message: "Channel not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Channel not found" }, 404);
     }
 
     // Verify the caller owns the channel
     if (channelMeta.ownerNamespace !== namespace) {
-      return c.json({ code: 403, message: "Not the channel owner" }, 403);
+      return c.json({ code: "FORBIDDEN", message: "Not the channel owner" }, 403);
     }
 
     // 1. Create claimable identity

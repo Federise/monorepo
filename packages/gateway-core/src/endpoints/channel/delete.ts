@@ -47,12 +47,12 @@ export class ChannelDeleteEndpoint extends OpenAPIRoute {
     // Get channel metadata
     const meta = await channelStore.getMetadata(channelId);
     if (!meta) {
-      return c.json({ code: 404, message: "Channel not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Channel not found" }, 404);
     }
 
     // Verify caller owns the channel
     if (meta.ownerNamespace !== namespace) {
-      return c.json({ code: 403, message: "Not the channel owner" }, 403);
+      return c.json({ code: "FORBIDDEN", message: "Not the channel owner" }, 403);
     }
 
     // Delete all channel data from Durable Object

@@ -59,7 +59,7 @@ export class TokenRevokeEndpoint extends OpenAPIRoute {
 
     // Must be authenticated
     if (!identity) {
-      return c.json({ code: 401, message: "Unauthorized" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
     }
 
     // Validate token ID format
@@ -90,7 +90,7 @@ export class TokenRevokeEndpoint extends OpenAPIRoute {
 
     // Check if caller owns the token
     if (token.createdBy !== identity.id) {
-      return c.json({ code: 403, message: "Not authorized to revoke this token" }, 403);
+      return c.json({ code: "FORBIDDEN", message: "Not authorized to revoke this token" }, 403);
     }
 
     // Check if already revoked

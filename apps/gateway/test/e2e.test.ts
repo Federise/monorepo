@@ -10,134 +10,135 @@ describe("KV Gateway E2E Tests", () => {
   const BOOTSTRAP_API_KEY = "testbootstrapkey123";
   let adminApiKey: string;
 
-  describe("Bootstrap & Principal Management", () => {
+  describe("Bootstrap & Identity Management", () => {
     beforeEach(async () => {
       // Clear KV before each test
       const list = await env.KV.list();
       await Promise.all(list.keys.map((k: { name: string }) => env.KV.delete(k.name)));
     });
 
-    it("should create first principal with bootstrap key", async () => {
-      const response = await SELF.fetch("http://localhost/principal/create", {
+    it("should create first identity with bootstrap key", async () => {
+      const response = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
 
       expect(response.status).toBe(200);
       const data = await response.json() as any;
       expect(data).toHaveProperty("secret");
-      expect(data).toHaveProperty("secret_hash");
-      expect(data.display_name).toBe("Admin");
-      expect(data.active).toBe(true);
+      expect(data).toHaveProperty("identity");
+      expect(data).toHaveProperty("credential");
+      expect(data.identity.displayName).toBe("Admin");
+      expect(data.identity.status).toBe("active");
 
       adminApiKey = data.secret;
     });
 
-    it("should list principals", async () => {
-      // Create a principal first with bootstrap key
-      const createRes = await SELF.fetch("http://localhost/principal/create", {
+    it("should list identities", async () => {
+      // Create an identity first with bootstrap key
+      const createRes = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
       const admin = await createRes.json() as any;
       adminApiKey = admin.secret;
 
-      const response = await SELF.fetch("http://localhost/principal/list", {
+      const response = await SELF.fetch("http://localhost/identity/list", {
         method: "POST",
         headers: { Authorization: `ApiKey ${adminApiKey}` },
       });
 
       expect(response.status).toBe(200);
       const data = await response.json() as any;
-      expect(data).toHaveProperty("items");
-      expect(data.items).toHaveLength(1);
-      expect(data.items[0].display_name).toBe("Admin");
-      expect(data.items[0]).toHaveProperty("secret_hash");
-      expect(data.items[0]).not.toHaveProperty("secret");
+      expect(data).toHaveProperty("identities");
+      expect(data.identities).toHaveLength(1);
+      expect(data.identities[0].displayName).toBe("Admin");
+      expect(data.identities[0]).toHaveProperty("id");
+      expect(data.identities[0]).not.toHaveProperty("secret");
     });
 
-    it("should create additional principals when authenticated", async () => {
+    it("should create additional identities when authenticated", async () => {
       // Bootstrap admin with bootstrap key
-      const bootstrap = await SELF.fetch("http://localhost/principal/create", {
+      const bootstrap = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
       const admin = await bootstrap.json() as any;
       adminApiKey = admin.secret;
 
-      const response = await SELF.fetch("http://localhost/principal/create", {
+      const response = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           Authorization: `ApiKey ${adminApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ display_name: "User" }),
+        body: JSON.stringify({ displayName: "User", type: "user" }),
       });
 
       expect(response.status).toBe(200);
       const data = await response.json() as any;
-      expect(data.display_name).toBe("User");
+      expect(data.identity.displayName).toBe("User");
       expect(data).toHaveProperty("secret");
     });
 
-    it("should delete a principal", async () => {
+    it("should delete an identity", async () => {
       // Bootstrap admin with bootstrap key
-      const bootstrap = await SELF.fetch("http://localhost/principal/create", {
+      const bootstrap = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
       const admin = await bootstrap.json() as any;
       adminApiKey = admin.secret;
 
       // Create user to delete
-      const createRes = await SELF.fetch("http://localhost/principal/create", {
+      const createRes = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           Authorization: `ApiKey ${adminApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ display_name: "ToDelete" }),
+        body: JSON.stringify({ displayName: "ToDelete", type: "user" }),
       });
       const user = await createRes.json() as any;
 
-      const response = await SELF.fetch("http://localhost/principal/delete", {
+      const response = await SELF.fetch("http://localhost/identity/delete", {
         method: "POST",
         headers: {
           Authorization: `ApiKey ${adminApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ secret_hash: user.secret_hash }),
+        body: JSON.stringify({ identityId: user.identity.id }),
       });
 
       expect(response.status).toBe(204);
 
       // Verify deleted
-      const listRes = await SELF.fetch("http://localhost/principal/list", {
+      const listRes = await SELF.fetch("http://localhost/identity/list", {
         method: "POST",
         headers: { Authorization: `ApiKey ${adminApiKey}` },
       });
       const list = await listRes.json() as any;
-      expect(list.items).toHaveLength(1);
+      expect(list.identities).toHaveLength(1);
     });
 
     it("should reject requests without valid auth", async () => {
-      const response = await SELF.fetch("http://localhost/principal/list", {
+      const response = await SELF.fetch("http://localhost/identity/list", {
         method: "POST",
         headers: { Authorization: "ApiKey invalid" },
       });
@@ -146,7 +147,7 @@ describe("KV Gateway E2E Tests", () => {
     });
 
     it("should reject requests with malformed auth header", async () => {
-      const response = await SELF.fetch("http://localhost/principal/list", {
+      const response = await SELF.fetch("http://localhost/identity/list", {
         method: "POST",
         headers: { Authorization: "Bearer invalid" },
       });
@@ -154,19 +155,19 @@ describe("KV Gateway E2E Tests", () => {
       expect(response.status).toBe(401);
     });
 
-    it("should reject bootstrap key for non-create endpoints after principals exist", async () => {
-      // Create a principal first
-      await SELF.fetch("http://localhost/principal/create", {
+    it("should reject bootstrap key for non-create endpoints after identities exist", async () => {
+      // Create an identity first
+      await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
 
       // Try to use bootstrap key for list endpoint (should be rejected)
-      const response = await SELF.fetch("http://localhost/principal/list", {
+      const response = await SELF.fetch("http://localhost/identity/list", {
         method: "POST",
         headers: { Authorization: `ApiKey ${BOOTSTRAP_API_KEY}` },
       });
@@ -181,13 +182,13 @@ describe("KV Gateway E2E Tests", () => {
       const list = await env.KV.list();
       await Promise.all(list.keys.map((k: { name: string }) => env.KV.delete(k.name)));
 
-      const bootstrap = await SELF.fetch("http://localhost/principal/create", {
+      const bootstrap = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
       const admin = await bootstrap.json() as any;
       adminApiKey = admin.secret;
@@ -330,7 +331,7 @@ describe("KV Gateway E2E Tests", () => {
       expect(response.status).toBe(200);
       const data = await response.json() as any;
       expect(data).toEqual(expect.arrayContaining(["app1", "app2"]));
-      expect(data).not.toContain("__PRINCIPAL");
+      expect(data).not.toContain("__IDENTITY");
     });
 
     it("should bulk get values", async () => {
@@ -479,13 +480,13 @@ describe("KV Gateway E2E Tests", () => {
       const list = await env.KV.list();
       await Promise.all(list.keys.map((k: { name: string }) => env.KV.delete(k.name)));
 
-      const bootstrap = await SELF.fetch("http://localhost/principal/create", {
+      const bootstrap = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
       const admin = await bootstrap.json() as any;
       adminApiKey = admin.secret;
@@ -833,13 +834,13 @@ describe("KV Gateway E2E Tests", () => {
       const list = await env.KV.list();
       await Promise.all(list.keys.map((k: { name: string }) => env.KV.delete(k.name)));
 
-      const bootstrap = await SELF.fetch("http://localhost/principal/create", {
+      const bootstrap = await SELF.fetch("http://localhost/identity/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `ApiKey ${BOOTSTRAP_API_KEY}`,
         },
-        body: JSON.stringify({ display_name: "Admin" }),
+        body: JSON.stringify({ displayName: "Admin", type: "user" }),
       });
       const admin = await bootstrap.json() as any;
       adminApiKey = admin.secret;

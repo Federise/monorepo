@@ -191,14 +191,18 @@ describe('VaultQueries', () => {
       expect(identities.map((i) => i.identityId)).not.toContain('ident_viewer');
     });
 
-    it('should return empty array when querying for specific resource with no matches', () => {
+    it('should return owner identities even for resource-specific queries with no explicit matches', () => {
+      // Owner identities have full access to all resources on their gateway,
+      // so they should be returned even if they don't have explicit capabilities
       const identities = queries.getIdentitiesForCapability(
         'blob:write',
         'blob',
         'blob_xyz'
       );
 
-      expect(identities).toEqual([]);
+      // Both owner identities should be returned
+      expect(identities).toHaveLength(2);
+      expect(identities.every((i) => i.source === 'owner')).toBe(true);
     });
 
     it('should not return expired identities by default', () => {

@@ -1,16 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createGatewayClient, withAuth } from '../../api/client';
-  import { getGatewayConfig, saveGatewayConfig, clearGatewayConfig } from '../../utils/auth';
+  import { createVaultStorage } from '@federise/proxy';
+  import { getPrimaryIdentity } from '../../utils/vault';
 
   // Gateway state
   let gatewayUrl = $state('');
   let apiKey = $state('');
+  let displayName = $state('');
   let isConnected = $state(false);
 
   // Test connection state
   let testUrl = $state('');
   let testApiKey = $state('');
+  let testDisplayName = $state('Owner');
   let testStatus = $state<'idle' | 'testing' | 'success' | 'error'>('idle');
   let testMessage = $state('');
   let showTestApiKey = $state(false);
@@ -19,13 +22,15 @@
   let loaded = $state(false);
 
   onMount(async () => {
-    const config = getGatewayConfig();
+    const identity = getPrimaryIdentity();
 
-    if (config.apiKey && config.url) {
-      apiKey = config.apiKey;
-      gatewayUrl = config.url;
-      testUrl = config.url;
-      testApiKey = config.apiKey;
+    if (identity) {
+      apiKey = identity.apiKey;
+      gatewayUrl = identity.gatewayUrl;
+      displayName = identity.displayName;
+      testUrl = identity.gatewayUrl;
+      testApiKey = identity.apiKey;
+      testDisplayName = identity.displayName;
       await checkConnection();
     }
     loaded = true;
@@ -79,26 +84,48 @@
   }
 
   function saveCredentials() {
-    saveGatewayConfig(testApiKey, testUrl);
+    const vault = createVaultStorage(localStorage);
+
+    // Add or update identity in vault
+    vault.add({
+      identityId: 'owner_' + Date.now(),
+      displayName: testDisplayName || 'Owner',
+      identityType: 'user',
+      gatewayUrl: testUrl,
+      apiKey: testApiKey,
+      source: 'owner',
+      capabilities: [],
+      forcePrimary: true,
+    });
+
     gatewayUrl = testUrl;
     apiKey = testApiKey;
+    displayName = testDisplayName;
     isConnected = true;
     showLoginForm = false;
     testStatus = 'idle';
     testMessage = '';
-    showToast('Gateway credentials saved!');
+    showToast('Gateway credentials saved to vault!');
   }
 
   function disconnect() {
-    clearGatewayConfig();
+    const vault = createVaultStorage(localStorage);
+    const identity = getPrimaryIdentity();
+
+    if (identity) {
+      vault.remove(identity.identityId);
+    }
+
     apiKey = '';
     gatewayUrl = '';
+    displayName = '';
     testUrl = '';
     testApiKey = '';
+    testDisplayName = 'Owner';
     isConnected = false;
     testStatus = 'idle';
     testMessage = '';
-    showToast('Gateway disconnected');
+    showToast('Identity removed from vault');
   }
 
   function copyToClipboard(text: string, label: string) {
@@ -111,13 +138,24 @@
 <div class="page">
   <header class="page-header">
     <h1>Gateway Connection</h1>
-    <p>Connect to your Federise Gateway by entering its URL and API key.</p>
+    <p>Manage your Federise Gateway identity. Credentials are stored securely in the vault.</p>
   </header>
 
   {#if !isConnected || showLoginForm}
   <section class="card">
-    <h2>Test Connection</h2>
-    <p class="card-desc">Enter your gateway credentials to test the connection before saving.</p>
+    <h2>Add Identity</h2>
+    <p class="card-desc">Enter your gateway credentials to add an identity to your vault.</p>
+
+    <div class="form-group">
+      <label for="test-name">Display Name</label>
+      <input
+        id="test-name"
+        type="text"
+        bind:value={testDisplayName}
+        placeholder="Owner"
+        class="input"
+      />
+    </div>
 
     <div class="form-group">
       <label for="test-url">Gateway URL</label>
@@ -172,7 +210,7 @@
       </button>
       {#if testStatus === 'success'}
         <button class="btn btn-primary" onclick={saveCredentials}>
-          Save & Connect
+          Save to Vault
         </button>
       {/if}
     </div>
@@ -182,14 +220,18 @@
   {#if isConnected}
     <section class="card">
       <div class="card-header">
-        <h2>Current Connection</h2>
+        <h2>Current Identity</h2>
         {#if !showLoginForm}
           <button class="btn btn-secondary" onclick={() => (showLoginForm = true)}>
-            Change Connection
+            Change Identity
           </button>
         {/if}
       </div>
       <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">Display Name</span>
+          <code class="info-value">{displayName}</code>
+        </div>
         <div class="info-item">
           <span class="info-label">Gateway URL</span>
           <div class="info-value-row">
@@ -216,8 +258,8 @@
 
     <section class="card danger-zone">
       <h2>Danger Zone</h2>
-      <p class="card-desc">Disconnect this gateway from your browser. You'll need to re-enter credentials to use it again.</p>
-      <button class="btn btn-danger" onclick={disconnect}>Disconnect Gateway</button>
+      <p class="card-desc">Remove this identity from your vault. You'll need to re-enter credentials to use it again.</p>
+      <button class="btn btn-danger" onclick={disconnect}>Remove Identity</button>
     </section>
   {/if}
 </div>

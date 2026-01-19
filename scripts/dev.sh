@@ -63,6 +63,7 @@ provision_identity() {
         # URL-encode the gateway URL for use in hash params
         local encoded_gateway_url=$(printf '%s' "$GATEWAY_URL" | sed 's/:/%3A/g; s/\//%2F/g')
         local org_setup_url="http://localhost:$ORG_PORT/#gatewayUrl=$encoded_gateway_url&apiKey=$api_key"
+        local reset_url="http://localhost:$ORG_PORT/reset#gatewayUrl=$encoded_gateway_url&apiKey=$api_key"
 
         echo ""
         echo "=========================================="
@@ -75,6 +76,9 @@ provision_identity() {
         echo "Open this link to configure the Org app:"
         echo "  $org_setup_url"
         echo ""
+        echo "Or reset & configure in one step:"
+        echo "  $reset_url"
+        echo ""
         echo "Then configure the Demo app in browser console at http://localhost:$DEMO_PORT:"
         echo "  localStorage.setItem('federise-demo:frameUrl', 'http://localhost:$ORG_PORT/frame')"
         echo ""
@@ -84,8 +88,11 @@ provision_identity() {
         echo "  IDENTITY ALREADY EXISTS"
         echo "=========================================="
         echo "  An identity was already created previously."
-        echo "  Use your existing API key, or run with --reset to clear local data:"
+        echo "  Use your existing API key, or run with --reset to clear gateway data:"
         echo "    ./scripts/dev.sh start --reset"
+        echo ""
+        echo "  To reset browser storage with your existing credentials:"
+        echo "    http://localhost:$ORG_PORT/reset#gatewayUrl=<url>&apiKey=<key>"
         echo ""
         echo "  Gateway URL: $GATEWAY_URL"
         echo "  Frame URL:   http://localhost:$ORG_PORT/frame"

@@ -144,11 +144,9 @@ export function createVaultQueries(vault: VaultStorage): VaultQueries {
           continue;
         }
 
-        // Owner identities can use any app-granted capability when:
-        // - No specific resource is requested (general capability query)
-        // - They are querying for capabilities that apps request (kv:*, blob:*, channel:*)
-        if (entry.source === 'owner' && resourceType === undefined && resourceId === undefined) {
-          // Owner identities are always available for general (non-resource-specific) operations
+        // Owner identities have full access to all resources on their gateway.
+        // Include them for both general queries and resource-specific queries.
+        if (entry.source === 'owner') {
           results.push(vault.toSafeInfo(entry));
           continue;
         }

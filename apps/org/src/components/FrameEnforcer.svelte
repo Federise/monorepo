@@ -7,11 +7,9 @@
     CookieCapabilityStore,
     createVaultStorage,
     createVaultQueries,
-    needsMigration,
-    migrateToVault,
   } from '@federise/proxy';
-  import type { VaultStorage, VaultQueries } from '@federise/proxy';
-  import { checkStorageAccess, requestStorageAccess, isGatewayConfigured, getGatewayConfig } from '../utils/auth';
+  import type { VaultStorage, VaultQueries, VaultEntry } from '@federise/proxy';
+  import { checkStorageAccess, requestStorageAccess } from '../utils/auth';
 
   // Transport reference for cleanup
   let transport: PostMessageTransport | null = null;
@@ -22,8 +20,38 @@
 
   // UI state for storage access flow
   let needsStorageAccess = $state(false);
+  let needsSetup = $state(false);
   let storageAccessError = $state<string | null>(null);
   let isRequestingAccess = $state(false);
+
+  /**
+   * Get the primary identity from vault, or the first owner identity.
+   */
+  function getPrimaryIdentity(): VaultEntry | null {
+    if (!vault) return null;
+
+    const entries = vault.getAll();
+    if (entries.length === 0) return null;
+
+    // Find primary identity
+    const primary = entries.find(e => e.isPrimary);
+    if (primary) return primary;
+
+    // Fall back to first owner identity
+    const owner = entries.find(e => e.source === 'owner');
+    if (owner) return owner;
+
+    // Fall back to first identity
+    return entries[0];
+  }
+
+  /**
+   * Check if vault has any identities
+   */
+  function hasIdentities(): boolean {
+    if (!vault) return false;
+    return vault.getAll().length > 0;
+  }
 
   async function handleConnectClick(): Promise<void> {
     isRequestingAccess = true;
@@ -37,8 +65,13 @@
         return;
       }
 
-      if (!isGatewayConfigured()) {
-        storageAccessError = 'Storage access granted, but Federise is not configured. Please visit federise.org to set up your account first.';
+      // Re-initialize vault after storage access
+      vault = createVaultStorage(localStorage);
+      vaultQueries = createVaultQueries(vault);
+
+      if (!hasIdentities()) {
+        needsSetup = true;
+        needsStorageAccess = false;
         return;
       }
 
@@ -60,29 +93,22 @@
   function initializeProxy(): void {
     if (transport) return; // Already initialized
 
-    const { apiKey, url } = getGatewayConfig();
-    if (!apiKey || !url) {
-      console.error('[FrameEnforcer] Gateway not configured');
-      return;
-    }
-
-    // Initialize vault storage for multi-identity support
+    // Initialize vault storage
     vault = createVaultStorage(localStorage);
     vaultQueries = createVaultQueries(vault);
 
-    // Migrate legacy single-credential storage to vault if needed
-    if (needsMigration(localStorage)) {
-      console.log('[FrameEnforcer] Migrating legacy credentials to vault...');
-      migrateToVault(localStorage);
-      // Reload vault after migration
-      vault = createVaultStorage(localStorage);
-      vaultQueries = createVaultQueries(vault);
+    // Get primary identity for credentials
+    const identity = getPrimaryIdentity();
+    if (!identity) {
+      console.error('[FrameEnforcer] No identity in vault');
+      needsSetup = true;
+      return;
     }
 
-    // Create the backend
+    // Create the backend with identity's credentials
     const backend = new RemoteBackend({
-      gatewayUrl: url,
-      apiKey: apiKey,
+      gatewayUrl: identity.gatewayUrl,
+      apiKey: identity.apiKey,
     });
 
     // Create the capability store
@@ -106,7 +132,7 @@
         const actionUrl = `/claim?token=${encodeURIComponent(tokenId)}&action=${encodeURIComponent(action)}`;
         return new URL(actionUrl, window.location.origin).href;
       },
-      getGatewayUrl: () => url,
+      getGatewayUrl: () => identity.gatewayUrl,
       // Enable test messages only in development
       enableTestMessages: import.meta.env.DEV,
       testMessageOrigins: ['http://localhost:5174'],
@@ -133,10 +159,16 @@
   onMount(async () => {
     const isIframe = window.self !== window.top;
 
+    // Initialize vault
+    vault = createVaultStorage(localStorage);
+    vaultQueries = createVaultQueries(vault);
+
     if (!isIframe) {
-      // Top-level context - just initialize directly
-      if (isGatewayConfigured()) {
+      // Top-level context - just initialize directly if we have identities
+      if (hasIdentities()) {
         initializeProxy();
+      } else {
+        needsSetup = true;
       }
       return;
     }
@@ -144,14 +176,13 @@
     // In iframe context, check storage access
     await checkStorageAccess();
 
-    // Check if gateway is configured
-    if (isGatewayConfigured()) {
-      // Gateway is configured - initialize the proxy
+    // Check if we have identities in vault
+    if (hasIdentities()) {
       initializeProxy();
       return;
     }
 
-    // Gateway not configured - show modal
+    // No identities - show modal
     needsStorageAccess = true;
     if (window.parent !== window) {
       window.parent.postMessage({ type: '__STORAGE_ACCESS_REQUIRED__' }, '*');
@@ -164,7 +195,24 @@
   });
 </script>
 
-{#if needsStorageAccess}
+{#if needsSetup}
+  <div class="connect-container">
+    <div class="connect-card">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
+        <path d="M10 16h12M16 10v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <h2>Set Up Federise</h2>
+      <p>No identities found. Please set up your Federise account first.</p>
+
+      <a href="/" class="connect-button">Go to Setup</a>
+
+      <p class="hint">
+        Need help? <a href="https://federise.org/docs" target="_blank">Read the docs</a>
+      </p>
+    </div>
+  </div>
+{:else if needsStorageAccess}
   <div class="connect-container">
     <div class="connect-card">
       <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -248,6 +296,7 @@
   }
 
   .connect-button {
+    display: block;
     width: 100%;
     padding: 0.875rem 1.5rem;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -258,6 +307,8 @@
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+    text-align: center;
   }
 
   .connect-button:hover:not(:disabled) {
@@ -286,7 +337,6 @@
     text-decoration: underline;
   }
 
-  /* Mobile styles */
   @media (max-width: 480px) {
     .connect-container {
       padding: 0.75rem;

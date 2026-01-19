@@ -14,7 +14,7 @@ export function registerShortLinkResolveRoute<T extends { Variables: GatewayEnv 
 
     const link = await shortLink.resolve(id);
     if (!link) {
-      return c.json({ code: 404, message: "Short link not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Short link not found" }, 404);
     }
 
     return c.redirect(link.targetUrl, 302);

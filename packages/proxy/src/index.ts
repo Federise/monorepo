@@ -60,14 +60,8 @@ export { PROTOCOL_VERSION, isValidRequest } from '@federise/sdk';
 export {
   createVaultStorage,
   createVaultQueries,
-  migrateToVault,
-  needsMigration,
-  updateMigratedIdentity,
-  cleanupLegacyKeys,
   VAULT_VERSION,
   VAULT_STORAGE_KEY,
-  LEGACY_API_KEY,
-  LEGACY_GATEWAY_URL,
 } from './vault';
 export type {
   VaultStorage,

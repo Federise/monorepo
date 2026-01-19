@@ -4,26 +4,26 @@ const GATEWAY_URL = "http://localhost:3000";
 const FRAME_URL = "http://localhost:4321/frame";
 const BOOTSTRAP_KEY = "testbootstrapkey123";
 
-// Store the principal API key after creation
+// Store the identity API key after creation
 // Can be set via FEDERISE_API_KEY environment variable
-let principalApiKey: string | null = process.env.FEDERISE_API_KEY || null;
+let identityApiKey: string | null = process.env.FEDERISE_API_KEY || null;
 
 /**
- * Helper to create a principal via the gateway API
+ * Helper to create an identity via the gateway API
  */
-async function createPrincipal(): Promise<string> {
-  const response = await fetch(`${GATEWAY_URL}/principal/create`, {
+async function createIdentity(): Promise<string> {
+  const response = await fetch(`${GATEWAY_URL}/identity/create`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `ApiKey ${BOOTSTRAP_KEY}`,
     },
-    body: JSON.stringify({ display_name: "e2e-test-principal" }),
+    body: JSON.stringify({ displayName: "e2e-test-identity", type: "user" }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(`Failed to create principal: ${error.message}`);
+    throw new Error(`Failed to create identity: ${error.message}`);
   }
 
   const data = await response.json();
@@ -66,26 +66,26 @@ async function injectFrameUrl(page: Page): Promise<void> {
 
 test.describe("Gateway API Compliance", () => {
   test.beforeAll(async () => {
-    // Use existing API key from environment, or create a new principal
-    if (principalApiKey) {
+    // Use existing API key from environment, or create a new identity
+    if (identityApiKey) {
       console.log("Using API key from FEDERISE_API_KEY environment variable");
       return;
     }
 
     try {
-      principalApiKey = await createPrincipal();
-      console.log("Created test principal");
+      identityApiKey = await createIdentity();
+      console.log("Created test identity");
     } catch (e) {
-      // Principal might already exist, try to use bootstrap key won't work
+      // Identity might already exist, try to use bootstrap key won't work
       // In that case, tests will fail and we need to clean KV
-      console.warn("Could not create principal:", e);
+      console.warn("Could not create identity:", e);
     }
   });
 
   test("should respond to ping", async ({ request }) => {
     const response = await request.get(`${GATEWAY_URL}/ping`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey || BOOTSTRAP_KEY}`,
+        Authorization: `ApiKey ${identityApiKey || BOOTSTRAP_KEY}`,
       },
     });
 
@@ -103,7 +103,7 @@ test.describe("Gateway API Compliance", () => {
     // Set value
     const setResponse = await request.post(`${GATEWAY_URL}/kv/set`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey || BOOTSTRAP_KEY}`,
+        Authorization: `ApiKey ${identityApiKey || BOOTSTRAP_KEY}`,
         "Content-Type": "application/json",
       },
       data: { namespace, key, value },
@@ -113,7 +113,7 @@ test.describe("Gateway API Compliance", () => {
     // Get value
     const getResponse = await request.post(`${GATEWAY_URL}/kv/get`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey || BOOTSTRAP_KEY}`,
+        Authorization: `ApiKey ${identityApiKey || BOOTSTRAP_KEY}`,
         "Content-Type": "application/json",
       },
       data: { namespace, key },
@@ -150,7 +150,7 @@ test.describe("Gateway API Compliance", () => {
 
     expect(response.status()).toBe(401);
     const data = await response.json();
-    expect(data.code).toBe(401);
+    expect(data.code).toBe("UNAUTHORIZED");
   });
 });
 
@@ -167,7 +167,7 @@ test.describe("Cross-Origin Browser Behavior", () => {
               try {
                 const response = await fetch('${GATEWAY_URL}/ping', {
                   headers: {
-                    'Authorization': 'ApiKey ${principalApiKey || BOOTSTRAP_KEY}'
+                    'Authorization': 'ApiKey ${identityApiKey || BOOTSTRAP_KEY}'
                   }
                 });
                 const data = await response.json();
@@ -196,12 +196,12 @@ test.describe("Cross-Origin Browser Behavior", () => {
 
 test.describe("Full E2E Flow: SDK -> Frame -> Gateway", () => {
   test.beforeEach(async ({ page, context }) => {
-    // Ensure we have a principal
-    if (!principalApiKey) {
+    // Ensure we have an identity
+    if (!identityApiKey) {
       try {
-        principalApiKey = await createPrincipal();
+        identityApiKey = await createIdentity();
       } catch (e) {
-        console.warn("Principal creation failed, tests may fail");
+        console.warn("Identity creation failed, tests may fail");
       }
     }
 
@@ -210,20 +210,20 @@ test.describe("Full E2E Flow: SDK -> Frame -> Gateway", () => {
   });
 
   test("should configure gateway and frame URLs", async ({ page }) => {
-    if (!principalApiKey) {
+    if (!identityApiKey) {
       test.skip();
       return;
     }
 
     // First, set up the org app with gateway credentials
-    await injectGatewayConfig(page, principalApiKey);
+    await injectGatewayConfig(page, identityApiKey);
 
     // Verify the config was saved
     await page.goto("http://localhost:4321");
     const savedApiKey = await page.evaluate(() =>
       localStorage.getItem("federise:gateway:apiKey")
     );
-    expect(savedApiKey).toBe(principalApiKey);
+    expect(savedApiKey).toBe(identityApiKey);
 
     // Now set up the demo app with frame URL
     await injectFrameUrl(page);
@@ -237,13 +237,13 @@ test.describe("Full E2E Flow: SDK -> Frame -> Gateway", () => {
   });
 
   test("should connect demo app to frame", async ({ page }) => {
-    if (!principalApiKey) {
+    if (!identityApiKey) {
       test.skip();
       return;
     }
 
     // Set up configurations
-    await injectGatewayConfig(page, principalApiKey);
+    await injectGatewayConfig(page, identityApiKey);
     await injectFrameUrl(page);
 
     // Navigate to demo app
@@ -289,7 +289,7 @@ test.describe("Presigned URL Flow (Filesystem Mode)", () => {
     // Get presigned upload URL
     const presignResponse = await request.post(`${GATEWAY_URL}/blob/presign-upload`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey || BOOTSTRAP_KEY}`,
+        Authorization: `ApiKey ${identityApiKey || BOOTSTRAP_KEY}`,
         "Content-Type": "application/json",
       },
       data: {
@@ -319,7 +319,7 @@ test.describe("Presigned URL Flow (Filesystem Mode)", () => {
     // Verify blob exists by getting it
     const getResponse = await request.post(`${GATEWAY_URL}/blob/get`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey || BOOTSTRAP_KEY}`,
+        Authorization: `ApiKey ${identityApiKey || BOOTSTRAP_KEY}`,
         "Content-Type": "application/json",
       },
       data: { namespace, key },

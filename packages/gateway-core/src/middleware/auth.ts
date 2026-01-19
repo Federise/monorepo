@@ -48,7 +48,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
     const auth = c.req.header("authorization");
 
     if (!auth || !auth.match(/^ApiKey [a-zA-Z0-9_-]+$/)) {
-      return c.json({ code: 401, message: "Invalid authorization header" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Invalid authorization header" }, 401);
     }
 
     const apiKey = auth.replace("ApiKey ", "");
@@ -72,7 +72,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
       }
 
       // Bootstrap key not valid for this path
-      return c.json({ code: 401, message: "Unauthorized" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
     }
 
     // Look up credential by secret hash
@@ -80,45 +80,45 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions = {}) {
     const credentialVal = await kv.get(`__CREDENTIAL:${secretHash}`);
 
     if (!credentialVal) {
-      return c.json({ code: 401, message: "Unauthorized" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
     }
 
     let credential: Credential;
     try {
       credential = JSON.parse(credentialVal);
     } catch {
-      return c.json({ code: 401, message: "Unauthorized" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
     }
 
     // Check credential status
     if (credential.status === CredentialStatus.REVOKED) {
-      return c.json({ code: 401, message: "Credential revoked" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Credential revoked" }, 401);
     }
 
     // Check credential expiry
     if (credential.expiresAt) {
       const expiresAt = new Date(credential.expiresAt).getTime();
       if (Date.now() > expiresAt) {
-        return c.json({ code: 401, message: "Credential expired" }, 401);
+        return c.json({ code: "UNAUTHORIZED", message: "Credential expired" }, 401);
       }
     }
 
     // Look up identity
     const identityVal = await kv.get(`__IDENTITY:${credential.identityId}`);
     if (!identityVal) {
-      return c.json({ code: 401, message: "Identity not found" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Identity not found" }, 401);
     }
 
     let identity: Identity;
     try {
       identity = JSON.parse(identityVal);
     } catch {
-      return c.json({ code: 401, message: "Unauthorized" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
     }
 
     // Check identity status
     if (identity.status !== IdentityStatus.ACTIVE) {
-      return c.json({ code: 401, message: "Identity not active" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Identity not active" }, 401);
     }
 
     // Store auth context for downstream handlers

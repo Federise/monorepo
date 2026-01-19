@@ -57,7 +57,7 @@ export class TokenListEndpoint extends OpenAPIRoute {
 
     // Must be authenticated
     if (!identity) {
-      return c.json({ code: 401, message: "Unauthorized" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
     }
 
     const { includeUsed, includeRevoked, includeExpired } = data.body;

@@ -69,7 +69,7 @@ export class BlobPresignUploadEndpoint extends OpenAPIRoute {
     const body = await c.req.json();
     const parsed = PresignUploadRequest.safeParse(body);
     if (!parsed.success) {
-      return c.json({ code: 400, message: "Invalid request body" }, 400);
+      return c.json({ code: "INVALID_REQUEST", message: "Invalid request body" }, 400);
     }
 
     const { namespace, key, contentType, size, visibility: visibilityParam, isPublic } = parsed.data;

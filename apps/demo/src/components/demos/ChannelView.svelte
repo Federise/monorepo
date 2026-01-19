@@ -102,7 +102,7 @@
   const tokenDisplayName = $derived(client?.authorId || '');
 
   async function sendMessage() {
-    if (!newMessage.trim() || !client || !client.canWrite) return;
+    if (!newMessage.trim() || !client || !client.canAppend) return;
 
     isSending = true;
     try {
@@ -191,7 +191,7 @@
     </div>
   {:else}
     <div class="channel-header">
-      <div class="channel-info">
+      <div class="channel-center">
         <span class="channel-icon">#</span>
         <span class="channel-name">{channelName}</span>
         {#if client?.canWrite}
@@ -199,32 +199,8 @@
         {:else}
           <span class="badge readonly">Read Only</span>
         {/if}
-        <span class="shared-badge" title="You're viewing this channel via a shared link">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-          </svg>
-          Shared
-        </span>
       </div>
       <div class="channel-actions">
-        {#if tokenDisplayName}
-          <span class="identity-badge" title="Your assigned identity">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            {tokenDisplayName}
-          </span>
-        {/if}
-        <button class="icon-btn" onclick={() => showUsernameModal = true} title="Set custom username">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-        </button>
         <button class="icon-btn" onclick={refreshMessages} disabled={isRefreshing} title="Refresh">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class:spinning={isRefreshing}>
             <path d="M23 4v6h-6M1 20v-6h6" />
@@ -311,18 +287,21 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.75rem;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
+    gap: 0.5rem;
   }
 
-  .channel-info {
+  .channel-center {
     display: flex;
     align-items: center;
     gap: 0.375rem;
     font-weight: 600;
     font-size: 0.9rem;
+    flex: 1;
+    justify-content: center;
   }
 
   .channel-icon {
@@ -347,36 +326,6 @@
 
   .badge.readonly {
     background: var(--color-text-muted);
-  }
-
-  .shared-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.65rem;
-    font-weight: 500;
-    padding: 0.15rem 0.4rem;
-    background: var(--color-surface-hover);
-    color: var(--color-text-muted);
-    border-radius: 999px;
-  }
-
-  .identity-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.7rem;
-    font-weight: 500;
-    padding: 0.2rem 0.5rem;
-    background: var(--color-bg);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-  }
-
-  .identity-badge svg {
-    color: var(--color-success, #22c55e);
-    flex-shrink: 0;
   }
 
   .icon-btn {

@@ -48,7 +48,7 @@ export class ChannelDeleteEventEndpoint extends OpenAPIRoute {
     // Get channel metadata to retrieve secret
     const meta = await channelStore.getMetadata(channelId);
     if (!meta) {
-      return c.json({ code: 404, message: "Channel not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Channel not found" }, 404);
     }
 
     // Check authentication: either API key (already authenticated) or token
@@ -60,7 +60,7 @@ export class ChannelDeleteEventEndpoint extends OpenAPIRoute {
       // Token-based authentication
       const verified = await verifyChannelToken(tokenHeader, meta.secret);
       if (!verified) {
-        return c.json({ code: 401, message: "Invalid or expired token" }, 401);
+        return c.json({ code: "UNAUTHORIZED", message: "Invalid or expired token" }, 401);
       }
 
       // Check for delete permissions
@@ -68,7 +68,7 @@ export class ChannelDeleteEventEndpoint extends OpenAPIRoute {
       const hasDeleteAny = verified.permissions.includes("delete:any");
 
       if (!hasDeleteOwn && !hasDeleteAny) {
-        return c.json({ code: 403, message: "Token lacks delete permission" }, 403);
+        return c.json({ code: "FORBIDDEN", message: "Token lacks delete permission" }, 403);
       }
 
       canDeleteAny = hasDeleteAny;
@@ -78,7 +78,7 @@ export class ChannelDeleteEventEndpoint extends OpenAPIRoute {
       // API key users have full delete:any permissions
       if (!data.body.authorId) {
         return c.json(
-          { code: 400, message: "authorId required for API key auth" },
+          { code: "INVALID_REQUEST", message: "authorId required for API key auth" },
           400
         );
       }
@@ -89,13 +89,13 @@ export class ChannelDeleteEventEndpoint extends OpenAPIRoute {
     // Get the target event to check ownership
     const targetEvent = await channelStore.getEvent(channelId, targetSeq);
     if (!targetEvent) {
-      return c.json({ code: 404, message: "Event not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Event not found" }, 404);
     }
 
     // Check ownership if user only has delete:own permission
     if (!canDeleteAny && targetEvent.authorId !== authorId) {
       return c.json(
-        { code: 403, message: "Can only delete own events" },
+        { code: "FORBIDDEN", message: "Can only delete own events" },
         403
       );
     }

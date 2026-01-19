@@ -158,9 +158,9 @@ console.log(`Starting Federise Gateway on port ${config.port}...`);
 
 if (config.bootstrapApiKey) {
   console.log(`Bootstrap API key: ${config.bootstrapApiKey}`);
-  const principals = await kvStore.list({ prefix: "__PRINCIPAL:" });
-  if (principals.keys.length > 0) {
-    console.log(`Bootstrap API key will not be used - principals already exist`);
+  const identities = await kvStore.list({ prefix: "__IDENTITY:" });
+  if (identities.keys.length > 0) {
+    console.log(`Bootstrap API key will not be used - identities already exist`);
   }
 } else {
   console.log(`Bootstrap API key: not set`);

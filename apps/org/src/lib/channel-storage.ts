@@ -1,17 +1,14 @@
 import { createGatewayClient, withAuth } from '../api/client';
-import { getGatewayConfig } from '../utils/auth';
+import { getCredentials } from '../utils/vault';
 import type { ChannelMeta, ChannelEvent, ChannelCreateResult, ChannelReadResult, ChannelPermissionInput } from '@federise/sdk';
 
 /**
  * Get the gateway client and auth config.
- * Throws if gateway is not configured.
+ * Throws if no identity is configured.
  */
 function getClient() {
-  const { apiKey, url } = getGatewayConfig();
-  if (!apiKey || !url) {
-    throw new Error('Gateway not configured. API key and URL are required.');
-  }
-  return { client: createGatewayClient(url), apiKey };
+  const { apiKey, gatewayUrl } = getCredentials();
+  return { client: createGatewayClient(gatewayUrl), apiKey };
 }
 
 /**

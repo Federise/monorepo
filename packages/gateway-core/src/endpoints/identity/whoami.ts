@@ -54,7 +54,7 @@ export class IdentityWhoAmIEndpoint extends OpenAPIRoute {
     const identity = c.get("identity");
 
     if (!identity) {
-      return c.json({ code: 401, message: "Not authenticated" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Not authenticated" }, 401);
     }
 
     return c.json({

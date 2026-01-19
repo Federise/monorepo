@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import CtaButton from './CtaButton.svelte';
   import { createGatewayClient, withAuth } from '../api/client';
-  import { getGatewayConfig, saveGatewayConfig } from '../utils/auth';
+  import { createVaultStorage } from '@federise/proxy';
+  import { getPrimaryIdentity } from '../utils/vault';
 
   let bootstrapToken = $state('');
   let workerUrl = $state('');
@@ -21,11 +22,11 @@
   onMount(async () => {
     bootstrapToken = generateToken();
 
-    // Load saved gateway config
-    const config = getGatewayConfig();
-    if (config.apiKey && config.url) {
-      gatewayApiKey = config.apiKey;
-      workerUrl = config.url;
+    // Load saved gateway config from vault
+    const identity = getPrimaryIdentity();
+    if (identity) {
+      gatewayApiKey = identity.apiKey;
+      workerUrl = identity.gatewayUrl;
       await checkGatewayStatus();
     }
   });
@@ -89,7 +90,19 @@
       }
 
       gatewayApiKey = data.secret;
-      saveGatewayConfig(gatewayApiKey, workerUrl);
+
+      // Save to vault
+      const vault = createVaultStorage(localStorage);
+      vault.add({
+        identityId: 'owner_' + Date.now(),
+        displayName: 'Federise Gateway',
+        identityType: 'user',
+        gatewayUrl: workerUrl,
+        apiKey: gatewayApiKey,
+        source: 'owner',
+        capabilities: [],
+        forcePrimary: true,
+      });
 
       connectionStatus = 'success';
       connectionMessage = 'Gateway activated successfully!';

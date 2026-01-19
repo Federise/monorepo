@@ -33,7 +33,7 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
     const exp = c.req.query("exp");
 
     if (!namespaceOrAlias || !key) {
-      return c.json({ code: 400, message: "Missing namespace or key" }, 400);
+      return c.json({ code: "INVALID_REQUEST", message: "Missing namespace or key" }, 400);
     }
 
     const kv = c.get("kv");
@@ -43,7 +43,7 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
     // Resolve alias to full namespace (if it's an alias)
     const namespace = await resolveNamespace(kv, namespaceOrAlias);
     if (!namespace) {
-      return c.json({ code: 404, message: "Namespace not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Namespace not found" }, 404);
     }
 
     // Get metadata from KV
@@ -51,7 +51,7 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
     const metadataStr = await kv.get(kvKey);
 
     if (!metadataStr) {
-      return c.json({ code: 404, message: "Blob not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Blob not found" }, 404);
     }
 
     const metadata = JSON.parse(metadataStr);
@@ -67,19 +67,19 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
       // Presigned - validate signature
       if (!sig || !exp) {
         return c.json(
-          { code: 401, message: "Signature and expiration required" },
+          { code: "UNAUTHORIZED", message: "Signature and expiration required" },
           401
         );
       }
 
       const expiresAt = parseInt(exp, 10);
       if (isNaN(expiresAt)) {
-        return c.json({ code: 400, message: "Invalid expiration" }, 400);
+        return c.json({ code: "INVALID_REQUEST", message: "Invalid expiration" }, 400);
       }
 
       // Check expiration
       if (Date.now() / 1000 > expiresAt) {
-        return c.json({ code: 401, message: "Link expired" }, 401);
+        return c.json({ code: "UNAUTHORIZED", message: "Link expired" }, 401);
       }
 
       // Verify signature (use URL param, not resolved namespace - signature was created with alias)
@@ -90,12 +90,12 @@ export function registerPublicBlobRoute(app: Hono<{ Variables: GatewayEnv }>) {
       );
 
       if (!valid) {
-        return c.json({ code: 401, message: "Invalid signature" }, 401);
+        return c.json({ code: "UNAUTHORIZED", message: "Invalid signature" }, 401);
       }
     } else {
       // Private - reject, must use /blob/download with API key
       return c.json(
-        { code: 401, message: "Authentication required. Use /blob/download with API key." },
+        { code: "UNAUTHORIZED", message: "Authentication required. Use /blob/download with API key." },
         401
       );
     }
@@ -189,7 +189,7 @@ async function proxyFromBlob(
   const object = await blob.get(r2Key, blobOptions);
 
   if (!object) {
-    return c.json({ code: 404, message: "Blob not found in storage" }, 404);
+    return c.json({ code: "NOT_FOUND", message: "Blob not found in storage" }, 404);
   }
 
   // Build response headers

@@ -17,24 +17,24 @@ const ORG_URL = "http://localhost:4321";
 const BOOTSTRAP_KEY = "testbootstrapkey123";
 
 // Can be set via FEDERISE_API_KEY environment variable
-let principalApiKey: string | null = process.env.FEDERISE_API_KEY || null;
+let identityApiKey: string | null = process.env.FEDERISE_API_KEY || null;
 
 /**
- * Helper to create a principal via the gateway API
+ * Helper to create an identity via the gateway API
  */
-async function createPrincipal(): Promise<string> {
-  const response = await fetch(`${GATEWAY_URL}/principal/create`, {
+async function createIdentity(): Promise<string> {
+  const response = await fetch(`${GATEWAY_URL}/identity/create`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `ApiKey ${BOOTSTRAP_KEY}`,
     },
-    body: JSON.stringify({ display_name: "sdk-frame-test-principal" }),
+    body: JSON.stringify({ displayName: "sdk-frame-test-identity", type: "user" }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(`Failed to create principal: ${error.message}`);
+    throw new Error(`Failed to create identity: ${error.message}`);
   }
 
   const data = await response.json();
@@ -277,27 +277,27 @@ async function waitForFrameReady(page: Page): Promise<void> {
 
 test.describe("SDK → Frame Protocol Tests", () => {
   test.beforeAll(async () => {
-    if (principalApiKey) {
+    if (identityApiKey) {
       console.log("Using API key from FEDERISE_API_KEY environment variable");
       return;
     }
 
     try {
-      principalApiKey = await createPrincipal();
-      console.log("Created test principal for SDK-Frame tests");
+      identityApiKey = await createIdentity();
+      console.log("Created test identity for SDK-Frame tests");
     } catch (e) {
-      console.warn("Could not create principal:", e);
+      console.warn("Could not create identity:", e);
     }
   });
 
   test.beforeEach(async ({ page }) => {
-    if (!principalApiKey) {
+    if (!identityApiKey) {
       test.skip();
       return;
     }
 
     // Set up gateway config in org app
-    await injectGatewayConfig(page, principalApiKey);
+    await injectGatewayConfig(page, identityApiKey);
 
     // Set up frame URL in demo app
     await injectFrameUrl(page);
@@ -916,20 +916,20 @@ test.describe("SDK → Frame Protocol Tests", () => {
 
 test.describe("ChannelClient Direct Access", () => {
   test.beforeAll(async () => {
-    if (principalApiKey) {
+    if (identityApiKey) {
       console.log("Using existing API key for ChannelClient tests");
       return;
     }
 
     try {
-      principalApiKey = await createPrincipal();
+      identityApiKey = await createIdentity();
     } catch (e) {
-      console.warn("Could not create principal:", e);
+      console.warn("Could not create identity:", e);
     }
   });
 
   test("should read channel with token via direct API", async ({ request }) => {
-    if (!principalApiKey) {
+    if (!identityApiKey) {
       test.skip();
       return;
     }
@@ -937,7 +937,7 @@ test.describe("ChannelClient Direct Access", () => {
     // Create channel via gateway
     const createResponse = await request.post(`${GATEWAY_URL}/channel/create`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey}`,
+        Authorization: `ApiKey ${identityApiKey}`,
         "Content-Type": "application/json",
       },
       data: {
@@ -952,7 +952,7 @@ test.describe("ChannelClient Direct Access", () => {
     // Append an event
     const appendResponse = await request.post(`${GATEWAY_URL}/channel/append`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey}`,
+        Authorization: `ApiKey ${identityApiKey}`,
         "Content-Type": "application/json",
       },
       data: {
@@ -969,7 +969,7 @@ test.describe("ChannelClient Direct Access", () => {
       `${GATEWAY_URL}/channel/token/create`,
       {
         headers: {
-          Authorization: `ApiKey ${principalApiKey}`,
+          Authorization: `ApiKey ${identityApiKey}`,
           "Content-Type": "application/json",
         },
         data: {
@@ -1005,7 +1005,7 @@ test.describe("ChannelClient Direct Access", () => {
     // Cleanup
     await request.post(`${GATEWAY_URL}/channel/delete`, {
       headers: {
-        Authorization: `ApiKey ${principalApiKey}`,
+        Authorization: `ApiKey ${identityApiKey}`,
         "Content-Type": "application/json",
       },
       data: {

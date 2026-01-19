@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createGatewayClient, withAuth } from '../../api/client';
-  import { getGatewayConfig, saveGatewayConfig } from '../../utils/auth';
+  import { createVaultStorage } from '@federise/proxy';
+  import { getPrimaryIdentity } from '../../utils/vault';
 
   // Gateway state
   let gatewayUrl = $state('');
@@ -18,11 +19,10 @@
   let loaded = $state(false);
 
   onMount(() => {
-    const config = getGatewayConfig();
-
-    if (config.apiKey && config.url) {
-      apiKey = config.apiKey;
-      gatewayUrl = config.url;
+    const identity = getPrimaryIdentity();
+    if (identity) {
+      apiKey = identity.apiKey;
+      gatewayUrl = identity.gatewayUrl;
     }
     loaded = true;
   });
@@ -79,7 +79,19 @@
   function saveRecoveredCredentials() {
     if (!newPrincipalUrl || !newPrincipalKey) return;
 
-    saveGatewayConfig(newPrincipalKey, newPrincipalUrl);
+    // Save to vault
+    const vault = createVaultStorage(localStorage);
+    vault.add({
+      identityId: 'owner_' + Date.now(),
+      displayName: 'Recovery Principal',
+      identityType: 'user',
+      gatewayUrl: newPrincipalUrl,
+      apiKey: newPrincipalKey,
+      source: 'owner',
+      capabilities: [],
+      forcePrimary: true,
+    });
+
     gatewayUrl = newPrincipalUrl;
     apiKey = newPrincipalKey;
     isConnected = false;

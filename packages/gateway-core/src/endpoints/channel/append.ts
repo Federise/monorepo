@@ -46,7 +46,7 @@ export class ChannelAppendEndpoint extends OpenAPIRoute {
     // Get channel metadata to retrieve secret
     const meta = await channelStore.getMetadata(channelId);
     if (!meta) {
-      return c.json({ code: 404, message: "Channel not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Channel not found" }, 404);
     }
 
     // Check authentication: either API key (already authenticated) or token
@@ -57,17 +57,17 @@ export class ChannelAppendEndpoint extends OpenAPIRoute {
       // Token-based authentication
       const verified = await verifyChannelToken(tokenHeader, meta.secret);
       if (!verified) {
-        return c.json({ code: 401, message: "Invalid or expired token" }, 401);
+        return c.json({ code: "UNAUTHORIZED", message: "Invalid or expired token" }, 401);
       }
       if (!verified.permissions.includes("append")) {
-        return c.json({ code: 403, message: "Token lacks append permission" }, 403);
+        return c.json({ code: "FORBIDDEN", message: "Token lacks append permission" }, 403);
       }
       authorId = verified.authorId;
     } else {
       // API key authentication - must provide authorId in body
       if (!data.body.authorId) {
         return c.json(
-          { code: 400, message: "authorId required for API key auth" },
+          { code: "INVALID_REQUEST", message: "authorId required for API key auth" },
           400
         );
       }

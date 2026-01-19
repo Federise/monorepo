@@ -32,9 +32,15 @@ export class KVGetEndpoint extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const kv = c.get("kv");
-    const value = await kv.get(`${data.body.namespace}:${data.body.key}`);
+    const fullKey = `${data.body.namespace}:${data.body.key}`;
+    const value = await kv.get(fullKey);
+
     if (value === null) {
-      return c.json({ code: 404, message: "Key not found" }, 404);
+      // Return empty object for __ORG:permissions (app permissions table)
+      if (fullKey === "__ORG:permissions") {
+        return { key: data.body.key, value: "{}" };
+      }
+      return c.json({ code: "NOT_FOUND", message: "Key not found" }, 404);
     }
     return { key: data.body.key, value };
   }

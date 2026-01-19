@@ -284,13 +284,6 @@
           { expiresInSeconds: shareExpiryDays * 24 * 60 * 60 }
         );
 
-        // Also create a channel share token so they can view the channel after claiming
-        const channelToken = await client.channel.createToken(
-          selectedChannel.channelId,
-          permissions,
-          { expiresInSeconds: shareExpiryDays * 24 * 60 * 60 }
-        );
-
         // Format: /claim#<tokenId>@<base64urlGatewayUrl>@<base64urlReturnUrl>
         // Use org app URL (derived from frameUrl) for claim page
         const orgBaseUrl = frameUrl.value.replace(/\/frame\/?$/, '');
@@ -298,8 +291,8 @@
           .replace(/\+/g, '-')
           .replace(/\//g, '_')
           .replace(/=+$/, '');
-        // Return URL takes them to /channel view with their channel token
-        const returnUrl = `${baseUrl}/channel#${channelToken.token}@${base64Gateway}`;
+        // Return URL takes them to the chat view where they can use their new identity
+        const returnUrl = `${baseUrl}/#chat`;
         const base64Return = btoa(returnUrl)
           .replace(/\+/g, '-')
           .replace(/\//g, '_')
@@ -415,15 +408,24 @@
     </div>
 
     <div class="create-channel">
-      <input
-        type="text"
-        placeholder="New channel name"
-        bind:value={newChannelName}
-        onkeydown={(e) => e.key === 'Enter' && createChannel()}
-      />
-      <button class="btn btn-primary btn-sm" onclick={createChannel} disabled={isCreating || !newChannelName.trim()}>
-        {isCreating ? '...' : '+'}
-      </button>
+      {#if activeIdentity.value}
+        <input
+          type="text"
+          placeholder="New channel name"
+          bind:value={newChannelName}
+          onkeydown={(e) => e.key === 'Enter' && createChannel()}
+        />
+        <button
+          class="btn btn-primary btn-sm"
+          onclick={createChannel}
+          disabled={isCreating || !newChannelName.trim()}
+          title="Create channel"
+        >
+          {isCreating ? '...' : '+'}
+        </button>
+      {:else}
+        <span class="no-identity-hint">Select an identity to create channels</span>
+      {/if}
     </div>
   </div>
 
@@ -801,6 +803,14 @@
 
   .create-channel button {
     flex-shrink: 0;
+  }
+
+  .no-identity-hint {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    text-align: center;
+    width: 100%;
+    padding: 0.25rem 0;
   }
 
   .btn-sm {

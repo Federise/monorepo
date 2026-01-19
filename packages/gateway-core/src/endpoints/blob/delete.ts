@@ -40,7 +40,7 @@ export class BlobDeleteEndpoint extends OpenAPIRoute {
     const metadataStr = await kv.get(kvKey);
 
     if (!metadataStr) {
-      return c.json({ code: 404, message: "Blob not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Blob not found" }, 404);
     }
 
     const r2Key = `${namespace}:${key}`;

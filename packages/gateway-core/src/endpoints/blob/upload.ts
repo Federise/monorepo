@@ -56,7 +56,7 @@ export class BlobUploadEndpoint extends OpenAPIRoute {
     }
 
     if (!namespace || !key) {
-      return c.json({ code: 400, message: "Missing x-blob-namespace or x-blob-key header" }, 400);
+      return c.json({ code: "INVALID_REQUEST", message: "Missing x-blob-namespace or x-blob-key header" }, 400);
     }
 
     // Get the raw body
@@ -64,7 +64,7 @@ export class BlobUploadEndpoint extends OpenAPIRoute {
     const size = body.byteLength;
 
     if (size === 0) {
-      return c.json({ code: 400, message: "Empty file" }, 400);
+      return c.json({ code: "INVALID_REQUEST", message: "Empty file" }, 400);
     }
 
     const kv = c.get("kv");

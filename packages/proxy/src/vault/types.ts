@@ -184,7 +184,3 @@ export const VAULT_VERSION = 1;
 
 /** localStorage key for the vault */
 export const VAULT_STORAGE_KEY = 'federise:vault';
-
-/** Legacy localStorage keys (for migration) */
-export const LEGACY_API_KEY = 'federise:gateway:apiKey';
-export const LEGACY_GATEWAY_URL = 'federise:gateway:url';

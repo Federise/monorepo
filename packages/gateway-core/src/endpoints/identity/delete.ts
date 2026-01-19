@@ -51,7 +51,7 @@ export class IdentityDeleteEndpoint extends OpenAPIRoute {
     const identityVal = await kv.get(identityKey);
 
     if (!identityVal) {
-      return c.json({ code: 404, message: "Identity not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Identity not found" }, 404);
     }
 
     const identity = JSON.parse(identityVal) as Identity;

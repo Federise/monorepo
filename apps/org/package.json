@@ -3,6 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
+    "generate:schema": "npx openapi-typescript http://localhost:3000/openapi -o src/api/schema.ts",
     "dev": "pnpm build:sw && astro dev",
     "dev:sw": "cd service-worker && pnpm watch",
     "build": "pnpm build:sw && astro build && pnpm build:sw:full && pnpm build:sw:copy",

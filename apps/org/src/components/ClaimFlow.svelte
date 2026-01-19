@@ -1,14 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
-    createVaultStorage,
-    needsMigration,
-    migrateToVault,
-    type VaultCapability,
-  } from '@federise/proxy';
+  import { createVaultStorage, type VaultCapability } from '@federise/proxy';
 
   // Flow states
   type FlowState = 'loading' | 'ready' | 'claiming' | 'success' | 'error';
+
+  // Flow modes
+  type FlowMode = 'token' | 'share';
 
   // Token lookup result from gateway
   interface TokenInfo {
@@ -45,11 +43,24 @@
     error?: string;
   }
 
+  // Direct share payload (from identity manager share link)
+  interface SharePayload {
+    identityId: string;
+    displayName: string;
+    identityType: string;
+    apiKey: string;
+    gatewayUrl: string;
+    capabilities: string[];
+    returnUrl?: string;
+  }
+
   let state = $state<FlowState>('loading');
+  let mode = $state<FlowMode>('token');
   let token = $state('');
   let gatewayUrl = $state('');
   let returnUrl = $state<string | null>(null);
   let tokenInfo = $state<TokenInfo | null>(null);
+  let sharePayload = $state<SharePayload | null>(null);
   let error = $state('');
 
   function decodeBase64Url(base64url: string): string | null {
@@ -65,8 +76,43 @@
   }
 
   onMount(async () => {
-    // Parse hash format: #<tokenId>@<base64urlGatewayUrl>@<base64urlReturnUrl>
+    // Parse hash format:
+    // Token claim: #<tokenId>@<base64urlGatewayUrl>@<base64urlReturnUrl>
+    // Direct share: #share@<base64urlPayload>
     const hash = window.location.hash.slice(1);
+
+    // Check for direct share format first
+    if (hash.startsWith('share@')) {
+      mode = 'share';
+      const payloadStr = hash.slice(6); // Remove 'share@' prefix
+      const decoded = decodeBase64Url(payloadStr);
+
+      if (!decoded) {
+        error = 'Invalid share link format';
+        state = 'error';
+        return;
+      }
+
+      try {
+        sharePayload = JSON.parse(decoded) as SharePayload;
+
+        if (!sharePayload.identityId || !sharePayload.apiKey || !sharePayload.gatewayUrl) {
+          error = 'Invalid share link: missing required fields';
+          state = 'error';
+          return;
+        }
+
+        gatewayUrl = sharePayload.gatewayUrl;
+        state = 'ready';
+      } catch {
+        error = 'Invalid share link: could not parse data';
+        state = 'error';
+      }
+      return;
+    }
+
+    // Standard token claim format
+    mode = 'token';
     let tokenParam: string | null = null;
     let gatewayParam: string | null = null;
     let returnParam: string | null = null;
@@ -166,13 +212,8 @@
         return;
       }
 
-      // Migrate legacy credentials to vault if needed
-      if (needsMigration()) {
-        migrateToVault();
-      }
-
       // Initialize vault and add the new identity
-      const vault = createVaultStorage();
+      const vault = createVaultStorage(localStorage);
 
       // Convert grants to vault capabilities
       const capabilities: VaultCapability[] = (result.grants || []).map((grant) => ({
@@ -205,20 +246,69 @@
         capabilities,
       });
 
-      // Also set legacy keys for backward compatibility with older frame versions
-      // These will be removed in a future version
-      localStorage.setItem('federise:gateway:url', gatewayUrl);
-      localStorage.setItem('federise:gateway:apiKey', result.secret);
-
-      // Redirect to the app if we have a return URL
+      // Redirect to the app if we have a return URL, otherwise go to manage
       if (returnUrl) {
         window.location.href = returnUrl;
         return;
       }
 
       state = 'success';
+
+      // Redirect to manage page after a brief delay
+      setTimeout(() => {
+        window.location.href = '/manage/identities';
+      }, 1500);
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to accept invitation';
+      state = 'ready';
+    }
+  }
+
+  function handleAcceptShare(): void {
+    if (!sharePayload) {
+      error = 'No share data available';
+      state = 'error';
+      return;
+    }
+
+    state = 'claiming';
+    error = '';
+
+    try {
+      const vault = createVaultStorage(localStorage);
+
+      // Convert capability strings to VaultCapability format
+      const capabilities: VaultCapability[] = (sharePayload.capabilities || []).map((cap) => ({
+        capability: cap,
+        grantedAt: new Date().toISOString(),
+      }));
+
+      // Add to vault
+      vault.add({
+        identityId: sharePayload.identityId,
+        displayName: sharePayload.displayName,
+        identityType: (sharePayload.identityType as 'user' | 'service' | 'agent' | 'app' | 'anonymous') || 'user',
+        gatewayUrl: sharePayload.gatewayUrl,
+        apiKey: sharePayload.apiKey,
+        source: 'granted',
+        claimedAt: new Date().toISOString(),
+        capabilities,
+      });
+
+      // Redirect to the app if we have a return URL, otherwise go to manage
+      if (sharePayload.returnUrl) {
+        window.location.href = sharePayload.returnUrl;
+        return;
+      }
+
+      state = 'success';
+
+      // Redirect to manage page after a brief delay
+      setTimeout(() => {
+        window.location.href = '/manage/identities';
+      }, 1500);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to save identity';
       state = 'ready';
     }
   }
@@ -256,15 +346,33 @@
       <div class="logo">
         <span class="logo-icon">F</span>
       </div>
-      <h1>You've Been Invited</h1>
+      <h1>{mode === 'share' ? 'Gateway Access Shared' : 'You\'ve Been Invited'}</h1>
     </div>
 
     <div class="invitation-info">
-      <p class="invite-text">You're invited to join as:</p>
-      <span class="identity-name">{tokenInfo?.identityInfo?.displayName || 'Unknown'}</span>
+      {#if mode === 'share' && sharePayload}
+        <p class="invite-text">You've received access to a gateway as:</p>
+        <span class="identity-name">{sharePayload.displayName}</span>
 
-      {#if tokenInfo?.label}
-        <p class="access-description">{tokenInfo.label}</p>
+        {#if sharePayload.capabilities && sharePayload.capabilities.length > 0}
+          <div class="capabilities-list">
+            <p class="capabilities-label">Capabilities:</p>
+            <div class="capability-badges">
+              {#each sharePayload.capabilities as cap}
+                <span class="capability-badge">{cap}</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        <p class="gateway-info">Gateway: <code>{sharePayload.gatewayUrl}</code></p>
+      {:else}
+        <p class="invite-text">You're invited to join as:</p>
+        <span class="identity-name">{tokenInfo?.identityInfo?.displayName || 'Unknown'}</span>
+
+        {#if tokenInfo?.label}
+          <p class="access-description">{tokenInfo.label}</p>
+        {/if}
       {/if}
     </div>
 
@@ -276,8 +384,8 @@
       <button class="btn btn-secondary" type="button" onclick={handleDecline} disabled={state === 'claiming'}>
         Decline
       </button>
-      <button class="btn btn-primary" type="button" onclick={handleAccept} disabled={state === 'claiming'}>
-        {state === 'claiming' ? 'Accepting...' : 'Accept'}
+      <button class="btn btn-primary" type="button" onclick={mode === 'share' ? handleAcceptShare : handleAccept} disabled={state === 'claiming'}>
+        {state === 'claiming' ? 'Adding...' : 'Add to Vault'}
       </button>
     </div>
   {:else if state === 'success'}
@@ -290,10 +398,14 @@
       </div>
       <h2>You're In!</h2>
       <p class="success-text">
-        You now have access as <strong>{tokenInfo?.identityInfo?.displayName}</strong>.
+        {#if mode === 'share' && sharePayload}
+          You now have access as <strong>{sharePayload.displayName}</strong>.
+        {:else}
+          You now have access as <strong>{tokenInfo?.identityInfo?.displayName}</strong>.
+        {/if}
       </p>
       <p class="success-hint">
-        You can close this page and return to the app.
+        Redirecting to your identities...
       </p>
     </div>
   {/if}
@@ -452,6 +564,50 @@
     margin-top: var(--space-lg);
     color: var(--color-text-subtle);
     font-size: var(--font-size-sm);
+  }
+
+  .capabilities-list {
+    margin-top: var(--space-lg);
+    text-align: center;
+  }
+
+  .capabilities-label {
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-sm);
+  }
+
+  .capability-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    justify-content: center;
+  }
+
+  .capability-badge {
+    display: inline-block;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--surface-3);
+    border: 1px solid var(--border-normal);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+  }
+
+  .gateway-info {
+    margin-top: var(--space-lg);
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-sm);
+  }
+
+  .gateway-info code {
+    background: var(--surface-3);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text);
   }
 
   .form-error {

@@ -6,88 +6,88 @@ const DEMO_URL = "http://localhost:5174";
 const FRAME_URL = `${ORG_URL}/frame`;
 const BOOTSTRAP_KEY = "testbootstrapkey123";
 
-export interface TestPrincipal {
+export interface TestIdentity {
   secret: string;
-  secretHash: string;
+  identityId: string;
   displayName: string;
 }
 
-// Cache for principal secret across tests
-let cachedPrincipal: TestPrincipal | null = null;
+// Cache for identity secret across tests
+let cachedIdentity: TestIdentity | null = null;
 
 /**
- * Ensures a principal exists. Creates one if needed.
- * Caches the principal for subsequent test runs in the same process.
+ * Ensures an identity exists. Creates one if needed.
+ * Caches the identity for subsequent test runs in the same process.
  */
-export async function ensurePrincipal(): Promise<TestPrincipal> {
-  // Return cached principal if available
-  if (cachedPrincipal) {
-    return cachedPrincipal;
+export async function ensureIdentity(): Promise<TestIdentity> {
+  // Return cached identity if available
+  if (cachedIdentity) {
+    return cachedIdentity;
   }
 
   // Check if we have a saved secret from a previous run
-  const savedSecret = process.env.E2E_PRINCIPAL_SECRET;
+  const savedSecret = process.env.E2E_IDENTITY_SECRET;
   if (savedSecret) {
     // Verify the secret works by making an authenticated request
     const verifyResponse = await fetch(`${GATEWAY_URL}/ping`, {
       headers: { Authorization: `ApiKey ${savedSecret}` },
     });
     if (verifyResponse.ok) {
-      cachedPrincipal = {
+      cachedIdentity = {
         secret: savedSecret,
-        secretHash: "cached",
+        identityId: "cached",
         displayName: "e2e-test",
       };
-      return cachedPrincipal;
+      return cachedIdentity;
     }
   }
 
-  // Try to create a new principal
-  const response = await fetch(`${GATEWAY_URL}/principal/create`, {
+  // Try to create a new identity
+  const response = await fetch(`${GATEWAY_URL}/identity/create`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `ApiKey ${BOOTSTRAP_KEY}`,
     },
-    body: JSON.stringify({ display_name: "e2e-test" }),
+    body: JSON.stringify({ displayName: "e2e-test", type: "user" }),
   });
 
   if (response.ok) {
     const data = await response.json();
-    cachedPrincipal = {
+    cachedIdentity = {
       secret: data.secret,
-      secretHash: data.secret_hash,
-      displayName: data.display_name,
+      identityId: data.identity.id,
+      displayName: data.identity.displayName,
     };
-    console.log(`\n  Created principal. To reuse, set: E2E_PRINCIPAL_SECRET=${cachedPrincipal.secret}\n`);
-    return cachedPrincipal;
+    console.log(`\n  Created identity. To reuse, set: E2E_IDENTITY_SECRET=${cachedIdentity.secret}\n`);
+    return cachedIdentity;
   }
 
-  // If 401, a principal already exists but we don't have the secret
+  // If 401, an identity already exists but we don't have the secret
   if (response.status === 401) {
     throw new Error(
-      "Principal already exists but no secret available.\n" +
+      "Identity already exists but no secret available.\n" +
       "Options:\n" +
-      "  1. Set E2E_PRINCIPAL_SECRET env var with the existing secret\n" +
+      "  1. Set E2E_IDENTITY_SECRET env var with the existing secret\n" +
       "  2. Clear gateway state: rm -rf apps/gateway/.wrangler/state && restart gateway\n" +
-      "  3. Use the secret printed when the principal was first created"
+      "  3. Use the secret printed when the identity was first created"
     );
   }
 
-  throw new Error(`Failed to create principal: ${response.status}`);
+  throw new Error(`Failed to create identity: ${response.status}`);
 }
 
 /**
  * Configures the Org app localStorage with gateway credentials
  */
-export async function setupOrgApp(page: Page, principalSecret: string) {
+export async function setupOrgApp(page: Page, identitySecret: string) {
   await page.goto(ORG_URL);
   await page.evaluate(
     ({ secret, gatewayUrl }) => {
       localStorage.setItem("federise:gateway:apiKey", secret);
       localStorage.setItem("federise:gateway:url", gatewayUrl);
     },
-    { secret: principalSecret, gatewayUrl: GATEWAY_URL }
+    { secret: identitySecret, gatewayUrl: GATEWAY_URL }
   );
 }
 
@@ -105,13 +105,13 @@ export async function setupDemoApp(page: Page) {
 }
 
 /**
- * Full setup: creates principal and configures both apps
+ * Full setup: creates identity and configures both apps
  */
-export async function fullSetup(page: Page): Promise<TestPrincipal> {
-  const principal = await ensurePrincipal();
-  await setupOrgApp(page, principal.secret);
+export async function fullSetup(page: Page): Promise<TestIdentity> {
+  const identity = await ensureIdentity();
+  await setupOrgApp(page, identity.secret);
   await setupDemoApp(page);
-  return principal;
+  return identity;
 }
 
 export const urls = {

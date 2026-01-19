@@ -43,12 +43,6 @@ import { ClientRouter } from 'astro:transitions';
       rel="stylesheet"
     />
     <title>federise</title>
-    <script>
-      // Check for gateway configuration in URL hash params on page load
-      // This enables single-link setup: http://localhost:4321/#gatewayUrl=...&apiKey=...
-      import { applyHashConfig } from '../utils/auth';
-      applyHashConfig();
-    </script>
   </head>
   <body>
     <div class="background-glow"></div>

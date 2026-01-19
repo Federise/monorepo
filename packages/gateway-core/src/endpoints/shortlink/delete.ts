@@ -36,7 +36,7 @@ export class ShortLinkDeleteEndpoint extends OpenAPIRoute {
 
     const deleted = await shortLink.delete(data.params.id);
     if (!deleted) {
-      return c.json({ code: 404, message: "Short link not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Short link not found" }, 404);
     }
 
     return c.json({ success: true });

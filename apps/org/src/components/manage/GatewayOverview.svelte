@@ -3,7 +3,7 @@
   import { getAllPermissions } from '../../lib/permissions';
   import type { PermissionRecord } from '../../lib/protocol';
   import { createGatewayClient, withAuth } from '../../api/client';
-  import { getGatewayConfig } from '../../utils/auth';
+  import { getPrimaryIdentity } from '../../utils/vault';
 
   let isConnected = $state(false);
   let gatewayUrl = $state('');
@@ -11,15 +11,15 @@
   let loaded = $state(false);
 
   onMount(async () => {
-    const config = getGatewayConfig();
+    const identity = getPrimaryIdentity();
 
-    if (config.apiKey && config.url) {
-      gatewayUrl = config.url;
+    if (identity) {
+      gatewayUrl = identity.gatewayUrl;
 
       // Check connection
       try {
-        const client = createGatewayClient(config.url);
-        const { data } = await client.GET('/ping', withAuth(config.apiKey));
+        const client = createGatewayClient(identity.gatewayUrl);
+        const { data } = await client.GET('/ping', withAuth(identity.apiKey));
         isConnected = data?.message === 'pong';
       } catch {
         isConnected = false;

@@ -135,7 +135,7 @@ export const BlobSetVisibilityResponse = z.object({
 
 // Error response
 export const ErrorResponse = z.object({
-  code: z.number().int(),
+  code: z.string(),
   message: z.string(),
 });
 

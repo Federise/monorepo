@@ -1,0 +1,256 @@
+---
+// Reset page - clears localStorage for development/testing
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reset - Federise</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .card {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        max-width: 400px;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+
+      .icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 1rem;
+        color: #667eea;
+      }
+
+      .icon.success {
+        color: #22c55e;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        color: #1a1a2e;
+        margin-bottom: 0.5rem;
+      }
+
+      p {
+        color: #666;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin-bottom: 1.5rem;
+      }
+
+      .details {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        text-align: left;
+        font-size: 0.85rem;
+      }
+
+      .details strong {
+        color: #1a1a2e;
+      }
+
+      .details ul {
+        margin: 0.5rem 0 0 1.25rem;
+        color: #666;
+      }
+
+      .details li {
+        margin: 0.25rem 0;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: #f0f0f0;
+        color: #333;
+        margin-right: 0.5rem;
+      }
+
+      .btn-secondary:hover {
+        background: #e0e0e0;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      #pending, #done {
+        display: none;
+      }
+
+      #pending.show, #done.show {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div id="confirm">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+        </svg>
+        <h1>Reset Local Storage</h1>
+        <p>This will clear all Federise data stored in this browser.</p>
+
+        <div class="details">
+          <strong>This will remove:</strong>
+          <ul>
+            <li>Identity vault (all saved credentials)</li>
+            <li>Gateway configuration</li>
+            <li>App permissions</li>
+            <li>Session data</li>
+          </ul>
+        </div>
+
+        <div class="actions">
+          <a href="/" class="btn btn-secondary">Cancel</a>
+          <button id="resetBtn" class="btn btn-primary">Reset Now</button>
+        </div>
+      </div>
+
+      <div id="pending">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </svg>
+        <h1>Resetting...</h1>
+        <p>Clearing local storage data.</p>
+      </div>
+
+      <div id="done">
+        <svg class="icon success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+        <h1>Reset Complete</h1>
+        <p>All local storage data has been cleared. You'll need to log in again.</p>
+
+        <div class="actions">
+          <a href="/" class="btn btn-primary">Go to Home</a>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const confirmEl = document.getElementById('confirm');
+      const pendingEl = document.getElementById('pending');
+      const doneEl = document.getElementById('done');
+      const resetBtn = document.getElementById('resetBtn');
+
+      // Parse hash params (e.g., #gatewayUrl=...&apiKey=...)
+      function parseHashParams() {
+        const hash = window.location.hash.slice(1);
+        if (!hash) return null;
+
+        const params = {};
+        for (const part of hash.split('&')) {
+          const [key, value] = part.split('=');
+          if (key && value) {
+            params[key] = decodeURIComponent(value);
+          }
+        }
+
+        if (params.gatewayUrl && params.apiKey) {
+          return params;
+        }
+        return null;
+      }
+
+      const hashParams = parseHashParams();
+
+      // If we have hash params, auto-execute the reset
+      if (hashParams) {
+        confirmEl.style.display = 'none';
+        pendingEl.classList.add('show');
+
+        setTimeout(() => {
+          // Clear all localStorage
+          localStorage.clear();
+
+          // Create vault with owner identity
+          const vault = {
+            version: 1,
+            entries: [{
+              identityId: 'owner_' + Date.now(),
+              displayName: 'Owner',
+              identityType: 'user',
+              gatewayUrl: hashParams.gatewayUrl,
+              apiKey: hashParams.apiKey,
+              capabilities: [],
+              source: 'owner',
+              createdAt: new Date().toISOString(),
+              isPrimary: true,
+            }]
+          };
+          localStorage.setItem('federise:vault', JSON.stringify(vault));
+
+          // Show done state
+          pendingEl.classList.remove('show');
+          doneEl.classList.add('show');
+
+          // Update the done message
+          document.querySelector('#done p').textContent =
+            'Storage cleared and configured with gateway credentials.';
+        }, 300);
+      }
+
+      resetBtn.addEventListener('click', () => {
+        // Show pending state
+        confirmEl.style.display = 'none';
+        pendingEl.classList.add('show');
+
+        // Clear all localStorage
+        setTimeout(() => {
+          localStorage.clear();
+
+          // Show done state
+          pendingEl.classList.remove('show');
+          doneEl.classList.add('show');
+        }, 500);
+      });
+    </script>
+  </body>
+</html>

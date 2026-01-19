@@ -23,7 +23,7 @@ const AdminCheckResponse = z.object({
     error: z.string().optional(),
   }),
   presigned_ready: z.boolean(),
-  principals_exist: z.boolean(),
+  identities_exist: z.boolean(),
 });
 
 export class AdminCheckEndpoint extends OpenAPIRoute {
@@ -54,7 +54,7 @@ export class AdminCheckEndpoint extends OpenAPIRoute {
       r2_private: { ok: false, error: undefined as string | undefined },
       r2_public: { ok: false, error: undefined as string | undefined },
       presigned_ready: presigner !== undefined, // True if presigner is configured (S3 mode)
-      principals_exist: false,
+      identities_exist: false,
     };
 
     // Test KV (Deno KV)
@@ -81,12 +81,12 @@ export class AdminCheckEndpoint extends OpenAPIRoute {
       results.r2_public.error = e instanceof Error ? e.message : "Public blob storage failed";
     }
 
-    // Check if principals exist
+    // Check if identities exist
     try {
-      const list = await kv.list({ prefix: "__PRINCIPAL:", limit: 1 });
-      results.principals_exist = list.keys.length > 0;
+      const list = await kv.list({ prefix: "__IDENTITY:", limit: 1 });
+      results.identities_exist = list.keys.length > 0;
     } catch {
-      // If KV failed, principals_exist stays false
+      // If KV failed, identities_exist stays false
     }
 
     return results;

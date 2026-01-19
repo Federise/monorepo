@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { createVaultStorage } from '@federise/proxy';
 
-  type Section = 'connection' | 'overview' | 'permissions' | 'data' | 'settings' | 'recovery' | 'principals';
+  type Section = 'connection' | 'overview' | 'permissions' | 'data' | 'settings' | 'recovery' | 'identities';
 
   let { activeSection }: { activeSection: Section } = $props();
   let isConnected = $state(false);
@@ -25,7 +26,7 @@
     {
       label: 'System',
       items: [
-        { id: 'principals' as Section, label: 'Principals', icon: 'users', href: '/manage/principals' },
+        { id: 'identities' as Section, label: 'Identities', icon: 'users', href: '/manage/identities' },
         { id: 'settings' as Section, label: 'Settings', icon: 'gear', href: '/manage/settings' },
         { id: 'recovery' as Section, label: 'Recovery', icon: 'key', href: '/manage/recovery' },
       ],
@@ -33,15 +34,24 @@
   ];
 
   onMount(() => {
-    // Check connection status from localStorage
+    // Check connection status from vault
     const checkConnection = async () => {
-      const apiKey = localStorage.getItem('federise:gateway:apiKey');
-      const gatewayUrl = localStorage.getItem('federise:gateway:url');
+      const vault = createVaultStorage(localStorage);
+      const gateways = vault.getGateways();
 
-      if (!apiKey || !gatewayUrl) {
+      if (gateways.length === 0) {
         isConnected = false;
         return;
       }
+
+      // Get primary identity for first gateway
+      const primary = vault.getPrimary(gateways[0]);
+      if (!primary) {
+        isConnected = false;
+        return;
+      }
+
+      const { apiKey, gatewayUrl } = primary;
 
       try {
         const response = await fetch(`${gatewayUrl}/ping`, {

@@ -24,7 +24,7 @@ export function registerBlobDownloadRoute(app: Hono<{ Variables: GatewayEnv }>) 
     const key = c.req.param("key");
 
     if (!namespaceOrAlias || !key) {
-      return c.json({ code: 400, message: "Missing namespace or key" }, 400);
+      return c.json({ code: "INVALID_REQUEST", message: "Missing namespace or key" }, 400);
     }
 
     const kv = c.get("kv");
@@ -34,7 +34,7 @@ export function registerBlobDownloadRoute(app: Hono<{ Variables: GatewayEnv }>) 
     // Resolve alias to full namespace (if it's an alias)
     const namespace = await resolveNamespace(kv, namespaceOrAlias);
     if (!namespace) {
-      return c.json({ code: 404, message: "Namespace not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Namespace not found" }, 404);
     }
 
     // Get metadata from KV to check if blob exists and get content type
@@ -42,7 +42,7 @@ export function registerBlobDownloadRoute(app: Hono<{ Variables: GatewayEnv }>) 
     const metadataStr = await kv.get(kvKey);
 
     if (!metadataStr) {
-      return c.json({ code: 404, message: "Blob not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Blob not found" }, 404);
     }
 
     const metadata = JSON.parse(metadataStr);
@@ -117,7 +117,7 @@ async function proxyFromBlob(
   const object = await blob.get(r2Key, blobOptions);
 
   if (!object) {
-    return c.json({ code: 404, message: "Blob not found in storage" }, 404);
+    return c.json({ code: "NOT_FOUND", message: "Blob not found in storage" }, 404);
   }
 
   // Stream the response

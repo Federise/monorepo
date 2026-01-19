@@ -1,20 +1,17 @@
 import type { Capability, PermissionRecord, PermissionsTable } from './protocol';
 import { createGatewayClient, withAuth } from '../api/client';
-import { getGatewayConfig } from '../utils/auth';
+import { getCredentials } from '../utils/vault';
 
 const KV_NAMESPACE = '__ORG';
 const KV_KEY = 'permissions';
 
 /**
  * Get the gateway client and auth config.
- * Throws if gateway is not configured.
+ * Throws if no identity is configured.
  */
 function getClient() {
-  const { apiKey, url } = getGatewayConfig();
-  if (!apiKey || !url) {
-    throw new Error('Gateway not configured');
-  }
-  return { client: createGatewayClient(url), apiKey };
+  const { apiKey, gatewayUrl } = getCredentials();
+  return { client: createGatewayClient(gatewayUrl), apiKey };
 }
 
 /**

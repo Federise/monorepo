@@ -16,28 +16,28 @@ export function registerChannelSubscribeRoute(app: Hono<{ Variables: GatewayEnv 
     // Get token from query or header
     const token = c.req.query("token") || c.req.header("X-Channel-Token");
     if (!token) {
-      return c.json({ code: 401, message: "Token required" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Token required" }, 401);
     }
 
     // Get channelId from query
     const channelId = c.req.query("channelId");
     if (!channelId) {
-      return c.json({ code: 400, message: "channelId required" }, 400);
+      return c.json({ code: "INVALID_REQUEST", message: "channelId required" }, 400);
     }
 
     // Get channel metadata to retrieve secret
     const meta = await channelStore.getMetadata(channelId);
     if (!meta) {
-      return c.json({ code: 404, message: "Channel not found" }, 404);
+      return c.json({ code: "NOT_FOUND", message: "Channel not found" }, 404);
     }
 
     // Verify token
     const verified = await verifyChannelToken(token, meta.secret);
     if (!verified) {
-      return c.json({ code: 401, message: "Invalid or expired token" }, 401);
+      return c.json({ code: "UNAUTHORIZED", message: "Invalid or expired token" }, 401);
     }
     if (!verified.permissions.includes("read")) {
-      return c.json({ code: 403, message: "Token lacks read permission" }, 403);
+      return c.json({ code: "FORBIDDEN", message: "Token lacks read permission" }, 403);
     }
 
     // Get optional afterSeq from query

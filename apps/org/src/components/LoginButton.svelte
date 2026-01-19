@@ -1,10 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import CtaButton from './CtaButton.svelte';
-
-  const STORAGE_KEY_API = 'federise:gateway:apiKey';
-  const STORAGE_KEY_URL = 'federise:gateway:url';
-
+  import { createVaultStorage } from '@federise/proxy';
 
   interface Props {
     defaultText?: string;
@@ -16,9 +13,10 @@
   let buttonText = $state('Get Started');
 
   onMount(() => {
-    const savedKey = localStorage.getItem(STORAGE_KEY_API);
-    const savedUrl = localStorage.getItem(STORAGE_KEY_URL);
-    isLoggedIn = !!savedKey && !!savedUrl;
+    // Check if vault has any identities
+    const vault = createVaultStorage(localStorage);
+    const gateways = vault.getGateways();
+    isLoggedIn = gateways.length > 0;
     buttonText = isLoggedIn ? 'Manage' : defaultText;
   });
 
