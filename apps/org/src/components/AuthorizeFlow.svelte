@@ -9,9 +9,9 @@
   let error = $state('');
 
   onMount(() => {
-    // Parse parameters from hash (format: #app_origin=...&scope=...)
-    const hash = window.location.hash.slice(1); // Remove leading #
-    const params = new URLSearchParams(hash);
+    // Parameters come in the hash (e.g., #app_origin=...&scope=...)
+    const hashParams = window.location.hash.slice(1); // Remove leading '#'
+    const params = new URLSearchParams(hashParams);
     const origin = params.get('app_origin');
     const scope = params.get('scope');
 

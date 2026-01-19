@@ -1,62 +1,81 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import {
+    createVaultStorage,
+    needsMigration,
+    migrateToVault,
+    type VaultCapability,
+  } from '@federise/proxy';
 
   // Flow states
-  type FlowState = 'loading' | 'setup' | 'claiming' | 'success' | 'error';
+  type FlowState = 'loading' | 'ready' | 'claiming' | 'success' | 'error';
 
   // Token lookup result from gateway
   interface TokenInfo {
     valid: boolean;
     action?: string;
-    payload?: {
-      identityId: string;
-      displayName?: string;
+    label?: string;
+    expiresAt?: string;
+    identityInfo?: {
+      displayName: string;
+      type: string;
     };
     error?: string;
   }
 
+  // Grant info from claim response
+  interface GrantInfo {
+    grantId: string;
+    capability: string;
+    resourceType?: string;
+    resourceId?: string;
+  }
+
   // Claim result from gateway
   interface ClaimResult {
-    identity: {
+    success: boolean;
+    identity?: {
       id: string;
+      type: string;
       displayName: string;
+      status: string;
     };
-    credential: {
-      id: string;
-    };
-    secret: string;
+    secret?: string;
+    grants?: GrantInfo[];
+    error?: string;
   }
 
   let state = $state<FlowState>('loading');
   let token = $state('');
   let gatewayUrl = $state('');
+  let returnUrl = $state<string | null>(null);
   let tokenInfo = $state<TokenInfo | null>(null);
-  let password = $state('');
-  let confirmPassword = $state('');
-  let claimResult = $state<ClaimResult | null>(null);
   let error = $state('');
-  let copied = $state(false);
+
+  function decodeBase64Url(base64url: string): string | null {
+    try {
+      const base64 = base64url
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+        .padEnd(base64url.length + (4 - base64url.length % 4) % 4, '=');
+      return atob(base64);
+    } catch {
+      return null;
+    }
+  }
 
   onMount(async () => {
-    // Parse hash format: #<tokenId>@<base64urlGatewayUrl>
+    // Parse hash format: #<tokenId>@<base64urlGatewayUrl>@<base64urlReturnUrl>
     const hash = window.location.hash.slice(1);
     let tokenParam: string | null = null;
     let gatewayParam: string | null = null;
+    let returnParam: string | null = null;
 
     if (hash && hash.includes('@')) {
-      const atIndex = hash.lastIndexOf('@');
-      tokenParam = hash.slice(0, atIndex);
-      const base64Gateway = hash.slice(atIndex + 1);
-      // Decode base64url: restore standard base64 chars and add padding
-      const base64 = base64Gateway
-        .replace(/-/g, '+')
-        .replace(/_/g, '/')
-        .padEnd(base64Gateway.length + (4 - base64Gateway.length % 4) % 4, '=');
-      try {
-        gatewayParam = atob(base64);
-      } catch {
-        // Invalid base64, fall through to error
-      }
+      const parts = hash.split('@');
+      tokenParam = parts[0] || null;
+      gatewayParam = parts[1] ? decodeBase64Url(parts[1]) : null;
+      returnParam = parts[2] ? decodeBase64Url(parts[2]) : null;
     }
 
     // Fallback to query params for backwards compatibility
@@ -74,16 +93,15 @@
 
     token = tokenParam;
 
-    // Gateway URL can come from param or from localStorage
-    gatewayUrl = gatewayParam ||
-      localStorage.getItem('federise:gateway:url') ||
-      '';
-
-    if (!gatewayUrl) {
-      error = 'No gateway URL configured';
+    // Gateway URL must come from the link
+    if (!gatewayParam) {
+      error = 'Missing gateway URL';
       state = 'error';
       return;
     }
+
+    gatewayUrl = gatewayParam;
+    returnUrl = returnParam;
 
     // Look up token info
     try {
@@ -103,7 +121,7 @@
       const info = await response.json() as TokenInfo;
 
       if (!info.valid) {
-        error = info.error || 'Token is invalid or expired';
+        error = info.error || 'This invitation is invalid or has expired';
         state = 'error';
         return;
       }
@@ -115,30 +133,14 @@
       }
 
       tokenInfo = info;
-      state = 'setup';
+      state = 'ready';
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to validate token';
+      error = e instanceof Error ? e.message : 'Failed to validate invitation';
       state = 'error';
     }
   });
 
-  function validateForm(): string | null {
-    if (password.length < 8) {
-      return 'Password must be at least 8 characters';
-    }
-    if (password !== confirmPassword) {
-      return 'Passwords do not match';
-    }
-    return null;
-  }
-
-  async function handleClaim(): Promise<void> {
-    const validationError = validateForm();
-    if (validationError) {
-      error = validationError;
-      return;
-    }
-
+  async function handleAccept(): Promise<void> {
     state = 'claiming';
     error = '';
 
@@ -146,41 +148,88 @@
       const response = await fetch(`${gatewayUrl}/token/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tokenId: token,
-          password,
-        }),
+        body: JSON.stringify({ tokenId: token }),
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        error = data.message || `Claim failed: HTTP ${response.status}`;
-        state = 'setup';
+        error = data.message || `Failed to accept: HTTP ${response.status}`;
+        state = 'ready';
         return;
       }
 
-      claimResult = await response.json();
+      const result = await response.json() as ClaimResult;
+
+      if (!result.success || !result.secret || !result.identity) {
+        error = result.error || 'Failed to accept invitation';
+        state = 'ready';
+        return;
+      }
+
+      // Migrate legacy credentials to vault if needed
+      if (needsMigration()) {
+        migrateToVault();
+      }
+
+      // Initialize vault and add the new identity
+      const vault = createVaultStorage();
+
+      // Convert grants to vault capabilities
+      const capabilities: VaultCapability[] = (result.grants || []).map((grant) => ({
+        capability: grant.capability,
+        resourceType: grant.resourceType,
+        resourceId: grant.resourceId,
+        grantedAt: new Date().toISOString(),
+      }));
+
+      // Determine referrer from return URL if present
+      let referrer: string | undefined;
+      if (returnUrl) {
+        try {
+          referrer = new URL(returnUrl).origin;
+        } catch {
+          // Invalid URL, skip referrer
+        }
+      }
+
+      // Add to vault (this will set isPrimary appropriately)
+      vault.add({
+        identityId: result.identity.id,
+        displayName: result.identity.displayName,
+        identityType: (result.identity.type as 'user' | 'service' | 'agent' | 'app' | 'anonymous') || 'user',
+        gatewayUrl: gatewayUrl,
+        apiKey: result.secret,
+        source: 'granted',
+        referrer,
+        claimedAt: new Date().toISOString(),
+        capabilities,
+      });
+
+      // Also set legacy keys for backward compatibility with older frame versions
+      // These will be removed in a future version
+      localStorage.setItem('federise:gateway:url', gatewayUrl);
+      localStorage.setItem('federise:gateway:apiKey', result.secret);
+
+      // Redirect to the app if we have a return URL
+      if (returnUrl) {
+        window.location.href = returnUrl;
+        return;
+      }
+
       state = 'success';
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to claim identity';
-      state = 'setup';
+      error = e instanceof Error ? e.message : 'Failed to accept invitation';
+      state = 'ready';
     }
   }
 
-  async function copyApiKey(): Promise<void> {
-    if (!claimResult?.secret) return;
-
-    try {
-      await navigator.clipboard.writeText(claimResult.secret);
-      copied = true;
-      setTimeout(() => { copied = false; }, 2000);
-    } catch (e) {
-      console.error('Failed to copy:', e);
+  function handleDecline(): void {
+    // Just go back or close
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.close();
     }
-  }
-
-  function handleClose(): void {
-    window.close();
   }
 </script>
 
@@ -188,7 +237,7 @@
   {#if state === 'loading'}
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Validating token...</p>
+      <p>Loading invitation...</p>
     </div>
   {:else if state === 'error'}
     <div class="error-state">
@@ -201,61 +250,36 @@
       </div>
       <h2>Unable to Proceed</h2>
       <p>{error}</p>
-      <button class="btn btn-secondary" onclick={handleClose}>Close</button>
     </div>
-  {:else if state === 'setup' || state === 'claiming'}
+  {:else if state === 'ready' || state === 'claiming'}
     <div class="header">
       <div class="logo">
         <span class="logo-icon">F</span>
       </div>
-      <h1>Set Up Your Account</h1>
+      <h1>You've Been Invited</h1>
     </div>
 
-    <div class="identity-info">
-      <p class="welcome-text">You've been invited to join as:</p>
-      <span class="identity-name">{tokenInfo?.payload?.displayName || 'New User'}</span>
-    </div>
+    <div class="invitation-info">
+      <p class="invite-text">You're invited to join as:</p>
+      <span class="identity-name">{tokenInfo?.identityInfo?.displayName || 'Unknown'}</span>
 
-    <form class="setup-form" onsubmit={(e) => { e.preventDefault(); handleClaim(); }}>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input
-          type="password"
-          id="password"
-          bind:value={password}
-          placeholder="Create a password"
-          minlength="8"
-          required
-          disabled={state === 'claiming'}
-        />
-        <span class="hint">At least 8 characters</span>
-      </div>
-
-      <div class="form-group">
-        <label for="confirmPassword">Confirm Password</label>
-        <input
-          type="password"
-          id="confirmPassword"
-          bind:value={confirmPassword}
-          placeholder="Confirm your password"
-          required
-          disabled={state === 'claiming'}
-        />
-      </div>
-
-      {#if error}
-        <div class="form-error">{error}</div>
+      {#if tokenInfo?.label}
+        <p class="access-description">{tokenInfo.label}</p>
       {/if}
+    </div>
 
-      <div class="actions">
-        <button class="btn btn-secondary" type="button" onclick={handleClose} disabled={state === 'claiming'}>
-          Cancel
-        </button>
-        <button class="btn btn-primary" type="submit" disabled={state === 'claiming'}>
-          {state === 'claiming' ? 'Creating Account...' : 'Create Account'}
-        </button>
-      </div>
-    </form>
+    {#if error}
+      <div class="form-error">{error}</div>
+    {/if}
+
+    <div class="actions">
+      <button class="btn btn-secondary" type="button" onclick={handleDecline} disabled={state === 'claiming'}>
+        Decline
+      </button>
+      <button class="btn btn-primary" type="button" onclick={handleAccept} disabled={state === 'claiming'}>
+        {state === 'claiming' ? 'Accepting...' : 'Accept'}
+      </button>
+    </div>
   {:else if state === 'success'}
     <div class="success-state">
       <div class="success-icon">
@@ -264,33 +288,13 @@
           <path d="M9 12l2 2 4-4" />
         </svg>
       </div>
-      <h2>Account Created!</h2>
-      <p class="identity-display">Welcome, <strong>{claimResult?.identity.displayName}</strong></p>
-
-      <div class="api-key-section">
-        <p class="api-key-warning">
-          Save your API key now - it won't be shown again!
-        </p>
-        <div class="api-key-container">
-          <code class="api-key">{claimResult?.secret}</code>
-          <button class="copy-btn" onclick={copyApiKey} title="Copy to clipboard">
-            {#if copied}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            {:else}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            {/if}
-          </button>
-        </div>
-      </div>
-
-      <button class="btn btn-primary done-btn" onclick={handleClose}>
-        Done
-      </button>
+      <h2>You're In!</h2>
+      <p class="success-text">
+        You now have access as <strong>{tokenInfo?.identityInfo?.displayName}</strong>.
+      </p>
+      <p class="success-hint">
+        You can close this page and return to the app.
+      </p>
     </div>
   {/if}
 </div>
@@ -360,7 +364,6 @@
 
   .error-state p {
     color: var(--color-text);
-    margin-bottom: var(--space-xl);
   }
 
   /* Success state */
@@ -385,61 +388,14 @@
     margin-bottom: var(--space-sm);
   }
 
-  .identity-display {
+  .success-text {
     color: var(--color-text);
-    margin-bottom: var(--space-xl);
+    margin-bottom: var(--space-sm);
   }
 
-  .api-key-section {
-    background: var(--surface-darker);
-    border-radius: var(--radius-md);
-    padding: var(--space-lg);
-    margin-bottom: var(--space-xl);
-  }
-
-  .api-key-warning {
-    color: var(--color-warning);
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--space-md);
-  }
-
-  .api-key-container {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    background: var(--surface-3);
-    border-radius: var(--radius-md);
-    padding: var(--space-sm) var(--space-md);
-  }
-
-  .api-key {
-    flex: 1;
-    font-family: monospace;
-    font-size: var(--font-size-sm);
-    color: var(--color-white);
-    word-break: break-all;
-  }
-
-  .copy-btn {
-    background: transparent;
-    border: none;
+  .success-hint {
     color: var(--color-text-subtle);
-    cursor: pointer;
-    padding: var(--space-sm);
-    border-radius: var(--radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition-base);
-  }
-
-  .copy-btn:hover {
-    background: var(--surface-darker);
-    color: var(--color-white);
-  }
-
-  .done-btn {
-    width: 100%;
+    font-size: var(--font-size-sm);
   }
 
   /* Header */
@@ -471,13 +427,13 @@
     color: var(--color-white);
   }
 
-  /* Identity info */
-  .identity-info {
+  /* Invitation info */
+  .invitation-info {
     text-align: center;
     margin-bottom: var(--space-xl);
   }
 
-  .welcome-text {
+  .invite-text {
     color: var(--color-text);
     margin-bottom: var(--space-sm);
   }
@@ -492,48 +448,10 @@
     font-size: var(--font-size-lg);
   }
 
-  /* Form */
-  .setup-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-  }
-
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-  }
-
-  .form-group label {
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    font-weight: 500;
-  }
-
-  .form-group input {
-    padding: var(--space-md);
-    background: var(--surface-darker);
-    border: 1px solid var(--border-normal);
-    border-radius: var(--radius-md);
-    color: var(--color-white);
-    font-size: var(--font-size-md);
-    font-family: inherit;
-    transition: border-color var(--transition-base);
-  }
-
-  .form-group input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-  }
-
-  .form-group input:disabled {
-    opacity: 0.6;
-  }
-
-  .hint {
-    font-size: var(--font-size-xs);
+  .access-description {
+    margin-top: var(--space-lg);
     color: var(--color-text-subtle);
+    font-size: var(--font-size-sm);
   }
 
   .form-error {
@@ -543,13 +461,14 @@
     padding: var(--space-sm) var(--space-md);
     color: var(--color-error);
     font-size: var(--font-size-sm);
+    margin-bottom: var(--space-lg);
+    text-align: center;
   }
 
   /* Actions */
   .actions {
     display: flex;
     gap: var(--space-md);
-    margin-top: var(--space-md);
   }
 
   .btn {

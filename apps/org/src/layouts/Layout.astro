@@ -17,18 +17,16 @@ import { ClientRouter } from 'astro:transitions';
     <meta name="apple-mobile-web-app-title" content="Federise" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <ClientRouter />
+    <!-- Service worker temporarily disabled for debugging
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', async () => {
           try {
-            // Check if already registered
             const existing = await navigator.serviceWorker.getRegistration('/sw.js');
             if (existing) {
               console.log('[SW] Already registered:', existing.scope);
               return;
             }
-
-            // Register if not already registered
             const reg = await navigator.serviceWorker.register('/sw.js');
             console.log('[SW] Registered:', reg.scope);
           } catch (err) {
@@ -37,6 +35,7 @@ import { ClientRouter } from 'astro:transitions';
         });
       }
     </script>
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -44,6 +43,12 @@ import { ClientRouter } from 'astro:transitions';
       rel="stylesheet"
     />
     <title>federise</title>
+    <script>
+      // Check for gateway configuration in URL hash params on page load
+      // This enables single-link setup: http://localhost:4321/#gatewayUrl=...&apiKey=...
+      import { applyHashConfig } from '../utils/auth';
+      applyHashConfig();
+    </script>
   </head>
   <body>
     <div class="background-glow"></div>

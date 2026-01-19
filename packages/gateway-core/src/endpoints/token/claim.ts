@@ -13,10 +13,18 @@ import {
 } from "../../lib/stateful-token.js";
 import { IdentityStatus, type Identity } from "../../lib/identity.js";
 import { createCredential, CredentialType } from "../../lib/credential.js";
+import type { CapabilityGrant } from "../../lib/grants.js";
 
 const TokenClaimRequest = z.object({
   tokenId: z.string().min(1),
   // For now, we just create an API key. Future: support password/passkey
+});
+
+const GrantInfo = z.object({
+  grantId: z.string(),
+  capability: z.string(),
+  resourceType: z.string().optional(),
+  resourceId: z.string().optional(),
 });
 
 const TokenClaimResponse = z.object({
@@ -36,6 +44,7 @@ const TokenClaimResponse = z.object({
     })
     .optional(),
   secret: z.string().optional(),
+  grants: z.array(GrantInfo).optional(),
   error: z.string().optional(),
 });
 
@@ -160,6 +169,42 @@ export class TokenClaimEndpoint extends OpenAPIRoute {
       kv.put(getTokenKVKey(tokenId), serializeToken(usedToken)),
     ]);
 
+    // Load grants for this identity
+    const grantsList = await kv.list({ prefix: "__GRANT:" });
+    const grants: Array<{
+      grantId: string;
+      capability: string;
+      resourceType?: string;
+      resourceId?: string;
+    }> = [];
+
+    for (const key of grantsList.keys) {
+      const grantJson = await kv.get(key.name);
+      if (grantJson) {
+        try {
+          const grant = JSON.parse(grantJson) as CapabilityGrant;
+          // Only include grants for this identity
+          if (grant.identityId === identity.id) {
+            // Extract resource info from scope if present
+            let resourceType: string | undefined;
+            let resourceId: string | undefined;
+            if (grant.scope?.resources?.length) {
+              resourceType = grant.scope.resources[0].type;
+              resourceId = grant.scope.resources[0].id;
+            }
+            grants.push({
+              grantId: grant.grantId,
+              capability: grant.capability,
+              resourceType,
+              resourceId,
+            });
+          }
+        } catch {
+          // Skip malformed grants
+        }
+      }
+    }
+
     return {
       success: true,
       identity: {
@@ -173,6 +218,7 @@ export class TokenClaimEndpoint extends OpenAPIRoute {
         type: credential.type,
       },
       secret,
+      grants: grants.length > 0 ? grants : undefined,
     };
   }
 }

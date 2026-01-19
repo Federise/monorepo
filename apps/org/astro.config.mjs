@@ -14,12 +14,4 @@ export default defineConfig({
     imageService: 'cloudflare',
   }),
   integrations: [svelte()],
-  vite: {
-    server: {
-      hmr: {
-        // Use the same port as the dev server for HMR WebSocket
-        clientPort: 4321,
-      },
-    },
-  },
 });

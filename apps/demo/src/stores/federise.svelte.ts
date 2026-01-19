@@ -1,4 +1,4 @@
-import { FederiseClient, type Capability } from '@federise/sdk';
+import { FederiseClient, type Capability, type IdentityInfo, type VaultSummary } from '@federise/sdk';
 import type { ConnectionState } from '../lib/types';
 
 const FRAME_URL_KEY = 'federise-demo:frameUrl';
@@ -17,6 +17,10 @@ export const connectionFailed = $state<{ value: boolean }>({ value: false });
 export const frameVerified = $state<{ value: boolean }>({
   value: localStorage.getItem(FRAME_VERIFIED_KEY) === 'true',
 });
+
+// Identity-related state
+export const activeIdentity = $state<{ value: IdentityInfo | null }>({ value: null });
+export const vaultSummary = $state<{ value: VaultSummary | null }>({ value: null });
 
 let client: FederiseClient | null = null;
 let initializationPromise: Promise<void> | null = null;
@@ -55,6 +59,10 @@ export async function connect(): Promise<void> {
     capabilities.value = client.getGrantedCapabilities();
     connectionState.value = 'connected';
     markFrameVerified();
+
+    // Load identity info in the background
+    loadActiveIdentity().catch(() => {});
+    loadVaultSummary().catch(() => {});
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to connect';
     connectionState.value = 'disconnected';
@@ -92,6 +100,8 @@ export function disconnect(): void {
   connectionState.value = 'disconnected';
   capabilities.value = [];
   error.value = null;
+  activeIdentity.value = null;
+  vaultSummary.value = null;
 }
 
 export async function requestPermissions(): Promise<void> {
@@ -126,6 +136,102 @@ export function hasChannelPermissions(): boolean {
 
 export function hasChannelDeletePermissions(): boolean {
   return hasCapability('channel:delete');
+}
+
+// Identity-related functions
+
+/**
+ * Load the active identity from the vault.
+ */
+export async function loadActiveIdentity(): Promise<void> {
+  if (!client || connectionState.value !== 'connected') {
+    return;
+  }
+
+  try {
+    const identity = await client.identity.getActive();
+    activeIdentity.value = identity;
+  } catch (err) {
+    console.error('Failed to load active identity:', err);
+    activeIdentity.value = null;
+  }
+}
+
+/**
+ * Load the vault summary.
+ */
+export async function loadVaultSummary(): Promise<void> {
+  if (!client || connectionState.value !== 'connected') {
+    return;
+  }
+
+  try {
+    const summary = await client.identity.getVaultSummary();
+    vaultSummary.value = summary;
+  } catch (err) {
+    console.error('Failed to load vault summary:', err);
+    vaultSummary.value = null;
+  }
+}
+
+/**
+ * Get identities that have a specific capability.
+ */
+export async function getIdentitiesForCapability(
+  capability: string,
+  resourceType?: string,
+  resourceId?: string,
+  gatewayUrl?: string
+): Promise<IdentityInfo[]> {
+  if (!client || connectionState.value !== 'connected') {
+    return [];
+  }
+
+  try {
+    return await client.identity.getForCapability(capability, resourceType, resourceId, gatewayUrl);
+  } catch (err) {
+    console.error('Failed to get identities for capability:', err);
+    return [];
+  }
+}
+
+/**
+ * Select an identity to use for subsequent operations.
+ */
+export async function selectIdentity(identityId: string): Promise<IdentityInfo | null> {
+  if (!client || connectionState.value !== 'connected') {
+    return null;
+  }
+
+  try {
+    const identity = await client.identity.select(identityId);
+    activeIdentity.value = identity;
+    return identity;
+  } catch (err) {
+    console.error('Failed to select identity:', err);
+    return null;
+  }
+}
+
+/**
+ * Ensure an identity is selected, auto-selecting the primary if none selected.
+ * Returns the active identity or null if no identities available.
+ */
+export async function ensureIdentitySelected(): Promise<IdentityInfo | null> {
+  // Already have an active identity
+  if (activeIdentity.value) {
+    return activeIdentity.value;
+  }
+
+  // Try to get available identities and select the primary one
+  const identities = await getIdentitiesForCapability('channel:read');
+  if (identities.length === 0) {
+    return null;
+  }
+
+  // Find primary identity or use first one
+  const primary = identities.find(i => i.isPrimary) ?? identities[0];
+  return selectIdentity(primary.identityId);
 }
 
 /**

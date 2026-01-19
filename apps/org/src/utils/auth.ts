@@ -278,3 +278,42 @@ export function clearGatewayConfig(): void {
   deleteCookie(COOKIE_KEY_API);
   deleteCookie(COOKIE_KEY_URL);
 }
+
+// ============================================================================
+// Hash Parameter Configuration
+// ============================================================================
+
+/**
+ * Check for gateway configuration in URL hash params and apply if present.
+ * This enables single-link setup for development: http://localhost:4321/#gatewayUrl=...&apiKey=...
+ *
+ * @returns true if configuration was applied from hash params
+ */
+export function applyHashConfig(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const hash = window.location.hash.slice(1); // Remove leading #
+  if (!hash) {
+    return false;
+  }
+
+  const params = new URLSearchParams(hash);
+  const gatewayUrl = params.get('gatewayUrl');
+  const apiKey = params.get('apiKey');
+
+  if (gatewayUrl && apiKey) {
+    // Save the configuration
+    saveGatewayConfig(apiKey, gatewayUrl);
+
+    // Clear the hash to avoid exposing credentials in URL
+    // Use replaceState to avoid adding to browser history
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    console.log('[Auth] Gateway configured from URL hash');
+    return true;
+  }
+
+  return false;
+}

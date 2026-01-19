@@ -56,6 +56,10 @@ export class IdentityListEndpoint extends OpenAPIRoute {
       if (val) {
         try {
           const identity = JSON.parse(val) as Identity;
+          // Skip deleted identities
+          if (identity.status === 'deleted') {
+            continue;
+          }
           identities.push({
             id: identity.id,
             type: identity.type,

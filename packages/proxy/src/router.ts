@@ -16,6 +16,9 @@ import type {
   TokenActionType,
 } from './types';
 import { buildNamespace } from './namespace';
+import type { VaultStorage } from './vault/storage';
+import type { VaultQueries, VaultSummary as VaultSummaryStats } from './vault/queries';
+import type { IdentityInfo } from './vault/types';
 
 /**
  * Options for MessageRouter construction.
@@ -53,6 +56,16 @@ export interface MessageRouterOptions {
    * Origins allowed to use test messages.
    */
   testMessageOrigins?: string[];
+  /**
+   * Vault storage instance for multi-identity support.
+   * If provided, enables identity-related message handlers.
+   */
+  vault?: VaultStorage;
+  /**
+   * Vault queries instance for identity lookups.
+   * Required if vault is provided.
+   */
+  vaultQueries?: VaultQueries;
 }
 
 /**
@@ -72,12 +85,20 @@ export class MessageRouter {
   private getGatewayUrl?: () => string;
   private enableTestMessages: boolean;
   private testMessageOrigins: Set<string>;
+  private vault?: VaultStorage;
+  private vaultQueries?: VaultQueries;
 
   /**
    * Cache of channel secrets for token creation.
    * When a channel is created, its secret is stored here.
    */
   private channelSecrets: ChannelSecretsCache = new Map();
+
+  /**
+   * Active identity per origin.
+   * Maps origin to identityId.
+   */
+  private activeIdentities: Map<string, string> = new Map();
 
   constructor(options: MessageRouterOptions) {
     this.backend = options.backend;
@@ -87,6 +108,8 @@ export class MessageRouter {
     this.getGatewayUrl = options.getGatewayUrl;
     this.enableTestMessages = options.enableTestMessages ?? false;
     this.testMessageOrigins = new Set(options.testMessageOrigins ?? []);
+    this.vault = options.vault;
+    this.vaultQueries = options.vaultQueries;
   }
 
   /**
@@ -97,10 +120,16 @@ export class MessageRouter {
    * @returns The response message to send back
    */
   async handleMessage(origin: string, message: unknown): Promise<ResponseMessage> {
+    // DEBUG: Log the incoming message
+    console.log('[MessageRouter] handleMessage called with:', origin, message);
+    console.log('[MessageRouter] isValidRequest result:', isValidRequest(message));
+
     // Validate message format
     if (!isValidRequest(message)) {
       const id = (message as { id?: string })?.id ?? 'unknown';
-      return { type: 'ERROR', id, code: 'INVALID_MESSAGE', message: 'Invalid message format' };
+      const msgType = (message as { type?: string })?.type ?? 'undefined';
+      console.log('[MessageRouter] Validation failed for message type:', msgType);
+      return { type: 'ERROR', id, code: 'INVALID_MESSAGE', message: `Invalid message format: type=${msgType}` };
     }
 
     const msg = message as RequestMessage;
@@ -196,6 +225,18 @@ export class MessageRouter {
 
       case 'HANDLE_TOKEN':
         return this.handleToken(origin, msg);
+
+      case 'GET_VAULT_SUMMARY':
+        return this.handleGetVaultSummary(msg);
+
+      case 'GET_IDENTITIES_FOR_CAPABILITY':
+        return this.handleGetIdentitiesForCapability(msg);
+
+      case 'SELECT_IDENTITY':
+        return this.handleSelectIdentity(origin, msg);
+
+      case 'GET_ACTIVE_IDENTITY':
+        return this.handleGetActiveIdentity(origin, msg);
 
       default:
         return {
@@ -509,7 +550,17 @@ export class MessageRouter {
     const denied = await this.checkCapability(origin, 'channel:create', msg.id);
     if (denied) return denied;
 
-    const event = await this.backend.channelAppend(namespace, msg.channelId, msg.content);
+    // Get the active identity's display name to use as authorId
+    let authorId: string | undefined;
+    const activeId = this.activeIdentities.get(origin);
+    if (activeId && this.vault) {
+      const entry = this.vault.getById(activeId);
+      if (entry && !this.vault.isExpired(entry)) {
+        authorId = entry.displayName;
+      }
+    }
+
+    const event = await this.backend.channelAppend(namespace, msg.channelId, msg.content, authorId);
     return {
       type: 'CHANNEL_APPENDED',
       id: msg.id,
@@ -733,5 +784,191 @@ export class MessageRouter {
   clearChannelSecret(namespace: string, channelId: string): void {
     const cacheKey = `${namespace}:${channelId}`;
     this.channelSecrets.delete(cacheKey);
+  }
+
+  // --- Identity Handlers ---
+
+  /**
+   * Handle GET_VAULT_SUMMARY message.
+   * Returns minimal vault statistics - no gateway URLs or detailed info.
+   */
+  private handleGetVaultSummary(
+    msg: Extract<RequestMessage, { type: 'GET_VAULT_SUMMARY' }>
+  ): ResponseMessage {
+    if (!this.vault || !this.vaultQueries) {
+      return {
+        type: 'ERROR',
+        id: msg.id,
+        code: 'VAULT_NOT_CONFIGURED',
+        message: 'Vault storage is not configured',
+      };
+    }
+
+    const summary = this.vaultQueries.getSummary();
+
+    // Only return minimal info - no gateway URLs or detailed lists
+    return {
+      type: 'VAULT_SUMMARY',
+      id: msg.id,
+      summary: {
+        totalIdentities: summary.totalIdentities,
+        hasOwnerIdentity: summary.hasOwnerIdentity,
+      },
+    };
+  }
+
+  /**
+   * Handle GET_IDENTITIES_FOR_CAPABILITY message.
+   * Returns identities that have the specified capability.
+   */
+  private handleGetIdentitiesForCapability(
+    msg: Extract<RequestMessage, { type: 'GET_IDENTITIES_FOR_CAPABILITY' }>
+  ): ResponseMessage {
+    if (!this.vault || !this.vaultQueries) {
+      return {
+        type: 'ERROR',
+        id: msg.id,
+        code: 'VAULT_NOT_CONFIGURED',
+        message: 'Vault storage is not configured',
+      };
+    }
+
+    const identities = this.vaultQueries.getIdentitiesForCapability(
+      msg.capability,
+      msg.resourceType,
+      msg.resourceId,
+      { gatewayUrl: msg.gatewayUrl }
+    );
+
+    return {
+      type: 'IDENTITIES_FOR_CAPABILITY',
+      id: msg.id,
+      identities,
+    };
+  }
+
+  /**
+   * Handle SELECT_IDENTITY message.
+   * Sets the active identity for subsequent operations from this origin.
+   */
+  private handleSelectIdentity(
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'SELECT_IDENTITY' }>
+  ): ResponseMessage {
+    if (!this.vault) {
+      return {
+        type: 'ERROR',
+        id: msg.id,
+        code: 'VAULT_NOT_CONFIGURED',
+        message: 'Vault storage is not configured',
+      };
+    }
+
+    const entry = this.vault.getById(msg.identityId);
+    if (!entry) {
+      return {
+        type: 'ERROR',
+        id: msg.id,
+        code: 'IDENTITY_NOT_FOUND',
+        message: `Identity not found: ${msg.identityId}`,
+      };
+    }
+
+    // Check if expired
+    if (this.vault.isExpired(entry)) {
+      return {
+        type: 'ERROR',
+        id: msg.id,
+        code: 'IDENTITY_EXPIRED',
+        message: 'Identity credential has expired',
+      };
+    }
+
+    // Set as active for this origin
+    this.activeIdentities.set(origin, msg.identityId);
+
+    // Update last used time
+    this.vault.update(msg.identityId, { lastUsedAt: new Date().toISOString() });
+
+    return {
+      type: 'IDENTITY_SELECTED',
+      id: msg.id,
+      identity: this.vault.toSafeInfo(entry),
+    };
+  }
+
+  /**
+   * Handle GET_ACTIVE_IDENTITY message.
+   * Returns the currently active identity for this origin, or null if none.
+   */
+  private handleGetActiveIdentity(
+    origin: string,
+    msg: Extract<RequestMessage, { type: 'GET_ACTIVE_IDENTITY' }>
+  ): ResponseMessage {
+    if (!this.vault) {
+      return {
+        type: 'ERROR',
+        id: msg.id,
+        code: 'VAULT_NOT_CONFIGURED',
+        message: 'Vault storage is not configured',
+      };
+    }
+
+    const activeId = this.activeIdentities.get(origin);
+
+    if (!activeId) {
+      return {
+        type: 'ACTIVE_IDENTITY',
+        id: msg.id,
+        identity: null,
+      };
+    }
+
+    const entry = this.vault.getById(activeId);
+    if (!entry || this.vault.isExpired(entry)) {
+      // Clear invalid active identity
+      this.activeIdentities.delete(origin);
+      return {
+        type: 'ACTIVE_IDENTITY',
+        id: msg.id,
+        identity: null,
+      };
+    }
+
+    return {
+      type: 'ACTIVE_IDENTITY',
+      id: msg.id,
+      identity: this.vault.toSafeInfo(entry),
+    };
+  }
+
+  /**
+   * Get the active identity ID for an origin.
+   * Returns undefined if no active identity.
+   */
+  getActiveIdentityId(origin: string): string | undefined {
+    return this.activeIdentities.get(origin);
+  }
+
+  /**
+   * Set the active identity for an origin programmatically.
+   */
+  setActiveIdentity(origin: string, identityId: string): void {
+    this.activeIdentities.set(origin, identityId);
+  }
+
+  /**
+   * Clear the active identity for an origin.
+   */
+  clearActiveIdentity(origin: string): void {
+    this.activeIdentities.delete(origin);
+  }
+
+  /**
+   * Update the vault instance (useful after migration).
+   */
+  setVault(vault: VaultStorage, queries: VaultQueries): void {
+    this.vault = vault;
+    this.vaultQueries = queries;
   }
 }

@@ -60,6 +60,10 @@ provision_identity() {
     local api_key=$(echo "$response" | grep -o '"secret":"[^"]*"' | cut -d'"' -f4)
 
     if [ -n "$api_key" ]; then
+        # URL-encode the gateway URL for use in hash params
+        local encoded_gateway_url=$(printf '%s' "$GATEWAY_URL" | sed 's/:/%3A/g; s/\//%2F/g')
+        local org_setup_url="http://localhost:$ORG_PORT/#gatewayUrl=$encoded_gateway_url&apiKey=$api_key"
+
         echo ""
         echo "=========================================="
         echo "  LOCAL DEV CREDENTIALS (NEW)"
@@ -68,10 +72,10 @@ provision_identity() {
         echo "  API Key:     $api_key"
         echo "=========================================="
         echo ""
-        echo "To configure the Org app, run in browser console at http://localhost:$ORG_PORT:"
-        echo "  localStorage.setItem('federise:gateway:url', '$GATEWAY_URL'); localStorage.setItem('federise:gateway:apiKey', '$api_key'); document.cookie = 'federise_gateway_url=$GATEWAY_URL; path=/; SameSite=Lax'; document.cookie = 'federise_gateway_apiKey=$api_key; path=/; SameSite=Lax';"
+        echo "Open this link to configure the Org app:"
+        echo "  $org_setup_url"
         echo ""
-        echo "To configure the Demo app, run in browser console at http://localhost:$DEMO_PORT:"
+        echo "Then configure the Demo app in browser console at http://localhost:$DEMO_PORT:"
         echo "  localStorage.setItem('federise-demo:frameUrl', 'http://localhost:$ORG_PORT/frame')"
         echo ""
     else

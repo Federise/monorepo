@@ -22,6 +22,10 @@
     "./capabilities": {
       "import": "./dist/capabilities/index.js",
       "types": "./dist/capabilities/index.d.ts"
+    },
+    "./vault": {
+      "import": "./dist/vault/index.js",
+      "types": "./dist/vault/index.d.ts"
     }
   },
   "files": [

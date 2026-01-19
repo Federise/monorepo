@@ -5,11 +5,13 @@ import type {
   ChannelPermissionInput,
   FederiseClientOptions,
   GrantResult,
+  IdentityInfo,
   RequestPayload,
   ResponseMessage,
   TokenHandleResult,
   UploadOptions,
   UploadProgress,
+  VaultSummary,
 } from './types';
 import {
   PROTOCOL_VERSION,
@@ -807,6 +809,103 @@ export class FederiseClient {
       }
       if (response.type === 'PERMISSION_DENIED') {
         throw new PermissionDeniedError(response.capability);
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+  };
+
+  // Identity namespace - for multi-identity vault operations
+  identity = {
+    /**
+     * Get a summary of all identities in the vault.
+     * Returns counts and identities grouped by gateway.
+     */
+    getVaultSummary: async (): Promise<VaultSummary> => {
+      this.ensureConnected();
+
+      const response = await this.sendRequest({ type: 'GET_VAULT_SUMMARY' });
+
+      if (response.type === 'VAULT_SUMMARY') {
+        return response.summary;
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Get identities that have a specific capability.
+     * Optionally filter by resource type and ID for scoped capabilities.
+     * @param capability - The capability to filter by (e.g., 'channel:read')
+     * @param resourceType - Optional resource type (e.g., 'channel')
+     * @param resourceId - Optional resource ID
+     * @param gatewayUrl - Optional gateway URL to filter by
+     */
+    getForCapability: async (
+      capability: string,
+      resourceType?: string,
+      resourceId?: string,
+      gatewayUrl?: string
+    ): Promise<IdentityInfo[]> => {
+      this.ensureConnected();
+
+      const response = await this.sendRequest({
+        type: 'GET_IDENTITIES_FOR_CAPABILITY',
+        capability,
+        resourceType,
+        resourceId,
+        gatewayUrl,
+      });
+
+      if (response.type === 'IDENTITIES_FOR_CAPABILITY') {
+        return response.identities;
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Select an identity to use for subsequent operations.
+     * @param identityId - The identity ID to select
+     */
+    select: async (identityId: string): Promise<IdentityInfo> => {
+      this.ensureConnected();
+
+      const response = await this.sendRequest({
+        type: 'SELECT_IDENTITY',
+        identityId,
+      });
+
+      if (response.type === 'IDENTITY_SELECTED') {
+        return response.identity;
+      }
+      if (response.type === 'ERROR') {
+        throw new FederiseError(response.message, response.code);
+      }
+
+      throw new FederiseError('Unexpected response', 'UNKNOWN');
+    },
+
+    /**
+     * Get the currently active identity for this origin.
+     * Returns null if no identity is selected.
+     */
+    getActive: async (): Promise<IdentityInfo | null> => {
+      this.ensureConnected();
+
+      const response = await this.sendRequest({ type: 'GET_ACTIVE_IDENTITY' });
+
+      if (response.type === 'ACTIVE_IDENTITY') {
+        return response.identity;
       }
       if (response.type === 'ERROR') {
         throw new FederiseError(response.message, response.code);

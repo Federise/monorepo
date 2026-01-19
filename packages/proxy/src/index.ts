@@ -55,3 +55,35 @@ export type {
 
 // Re-export SDK utilities
 export { PROTOCOL_VERSION, isValidRequest } from '@federise/sdk';
+
+// Vault (multi-identity credential storage)
+export {
+  createVaultStorage,
+  createVaultQueries,
+  migrateToVault,
+  needsMigration,
+  updateMigratedIdentity,
+  cleanupLegacyKeys,
+  VAULT_VERSION,
+  VAULT_STORAGE_KEY,
+  LEGACY_API_KEY,
+  LEGACY_GATEWAY_URL,
+} from './vault';
+export type {
+  VaultStorage,
+} from './vault/storage';
+export type {
+  VaultQueries,
+  CapabilityQueryOptions,
+  VaultSummary,
+} from './vault/queries';
+export type {
+  Vault,
+  VaultEntry,
+  VaultCapability,
+  IdentityInfo,
+  IdentityType,
+  IdentitySource,
+  AddVaultEntryOptions,
+  VaultQueryOptions,
+} from './vault/types';

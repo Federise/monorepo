@@ -10,6 +10,7 @@ import {
   IdentityDeleteEndpoint,
   IdentityInviteEndpoint,
   IdentityRegisterAppEndpoint,
+  IdentityWhoAmIEndpoint,
 } from "./endpoints/identity/index.js";
 import { KVListNamespacesEndpoint } from "./endpoints/kv/list-namespaces.js";
 import { KVListKeysEndpoint } from "./endpoints/kv/list-keys.js";
@@ -65,6 +66,7 @@ export function registerGatewayRoutes<T extends { Variables: GatewayEnv }>(
   openapi.get("/ping", PingEndpoint);
 
   // Identity routes
+  openapi.get("/identity/whoami", IdentityWhoAmIEndpoint);
   openapi.post("/identity/list", IdentityListEndpoint);
   openapi.post("/identity/create", IdentityCreateEndpoint);
   openapi.post("/identity/delete", IdentityDeleteEndpoint);

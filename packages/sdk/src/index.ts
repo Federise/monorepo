@@ -22,6 +22,8 @@ export type {
   UploadProgress,
   TokenActionType,
   TokenHandleResult,
+  IdentityInfo,
+  VaultSummary,
 } from './types';
 
 // Errors and utilities

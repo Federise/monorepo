@@ -21,7 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/identity/list": {
+    "/principal/list": {
         parameters: {
             query?: never;
             header?: never;
@@ -30,15 +30,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** List all identities */
-        post: operations["post_IdentityListEndpoint"];
+        /** List all principals */
+        post: operations["post_PrincipalListEndpoint"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/identity/create": {
+    "/principal/create": {
         parameters: {
             query?: never;
             header?: never;
@@ -47,15 +47,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a new identity */
-        post: operations["post_IdentityCreateEndpoint"];
+        /** Create a new principal */
+        post: operations["post_PrincipalCreateEndpoint"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/identity/delete": {
+    "/principal/delete": {
         parameters: {
             query?: never;
             header?: never;
@@ -64,25 +64,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Delete an identity */
-        post: operations["post_IdentityDeleteEndpoint"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/identity/app/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register or update an APP identity */
-        post: operations["post_IdentityRegisterAppEndpoint"];
+        /** Delete a principal */
+        post: operations["post_PrincipalDeleteEndpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -342,7 +325,7 @@ export interface operations {
             };
         };
     };
-    post_IdentityListEndpoint: {
+    post_PrincipalListEndpoint: {
         parameters: {
             query?: never;
             header: {
@@ -360,13 +343,12 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        identities: {
-                            id: string;
-                            type: string;
-                            displayName: string;
-                            status: string;
+                        items: {
+                            secret_hash: string;
+                            display_name: string;
                             /** Format: date-time */
-                            createdAt: string;
+                            created_at: string;
+                            active: boolean;
                         }[];
                     };
                 };
@@ -385,7 +367,7 @@ export interface operations {
             };
         };
     };
-    post_IdentityCreateEndpoint: {
+    post_PrincipalCreateEndpoint: {
         parameters: {
             query?: never;
             header: {
@@ -397,8 +379,7 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    displayName: string;
-                    type?: "user" | "service" | "agent";
+                    display_name: string;
                 };
             };
         };
@@ -410,18 +391,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        identity: {
-                            id: string;
-                            type: string;
-                            displayName: string;
-                            status: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                        };
-                        credential: {
-                            id: string;
-                            type: string;
-                        };
+                        secret_hash: string;
+                        display_name: string;
+                        /** Format: date-time */
+                        created_at: string;
+                        active: boolean;
                         secret: string;
                     };
                 };
@@ -440,7 +414,7 @@ export interface operations {
             };
         };
     };
-    post_IdentityDeleteEndpoint: {
+    post_PrincipalDeleteEndpoint: {
         parameters: {
             query?: never;
             header: {
@@ -452,21 +426,17 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    identityId: string;
+                    secret_hash: string;
                 };
             };
         };
         responses: {
-            /** @description The request has succeeded. */
-            200: {
+            /** @description No content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        success: boolean;
-                    };
-                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
@@ -482,62 +452,6 @@ export interface operations {
             };
             /** @description Not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code: number;
-                        message: string;
-                    };
-                };
-            };
-        };
-    };
-    post_IdentityRegisterAppEndpoint: {
-        parameters: {
-            query?: never;
-            header: {
-                authorization: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    origin: string;
-                    displayName?: string;
-                    capabilities: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description The request has succeeded. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        identity: {
-                            id: string;
-                            type: "APP";
-                            displayName?: string;
-                            createdAt: string;
-                            appConfig: {
-                                origin: string;
-                                namespace: string;
-                                grantedCapabilities: string[];
-                                frameAccess: boolean;
-                            };
-                        };
-                        created: boolean;
-                    };
-                };
-            };
-            /** @description Unauthorized */
-            401: {
                 headers: {
                     [name: string]: unknown;
                 };

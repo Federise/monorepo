@@ -5,6 +5,7 @@
 
   let appPermissions = $state<PermissionRecord[]>([]);
   let loaded = $state(false);
+  let loadError = $state<string | null>(null);
   let isRevoking = $state(false);
 
   onMount(async () => {
@@ -13,10 +14,20 @@
   });
 
   async function loadPermissions() {
+    loadError = null;
     try {
       appPermissions = await getAllPermissions();
     } catch (err) {
       console.error('Failed to load permissions:', err);
+      const message = err instanceof Error ? err.message : 'Failed to load permissions';
+      // Check for common error types
+      if (message.includes('Unauthorized') || message.includes('401')) {
+        loadError = 'Unable to authenticate with the gateway. Please check your connection settings.';
+      } else if (message.includes('Gateway not configured')) {
+        loadError = 'Gateway not configured. Please set up your connection first.';
+      } else {
+        loadError = message;
+      }
       showToast('Failed to load permissions');
     }
   }
@@ -63,7 +74,19 @@
 
   <section class="card">
     <h2>Connected Apps</h2>
-    {#if appPermissions.length === 0}
+    {#if loadError}
+      <div class="error-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <p>{loadError}</p>
+        <button class="btn btn-small btn-secondary" onclick={loadPermissions}>
+          Try Again
+        </button>
+      </div>
+    {:else if appPermissions.length === 0}
       <div class="empty-list">
         <p>No apps have been granted permissions yet.</p>
       </div>
@@ -132,6 +155,36 @@
     padding: var(--space-2xl);
     text-align: center;
     color: var(--color-text-subtle);
+  }
+
+  .error-state {
+    padding: var(--space-2xl);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .error-state svg {
+    color: var(--color-error);
+    opacity: 0.8;
+  }
+
+  .error-state p {
+    color: var(--color-text);
+    margin: 0;
+    max-width: 400px;
+  }
+
+  .btn-secondary {
+    background: var(--surface-3);
+    color: var(--color-white);
+    border: 1px solid var(--border-normal);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .permissions-list {

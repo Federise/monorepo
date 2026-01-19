@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { getClient, hasChannelDeletePermissions, frameUrl } from '../../stores/federise.svelte';
+  import { getClient, hasChannelDeletePermissions, frameUrl, activeIdentity, ensureIdentitySelected } from '../../stores/federise.svelte';
   import { onMount, onDestroy } from 'svelte';
   import type { ChannelMeta, ChannelEvent, ChannelPermissionInput } from '@federise/sdk';
   import MessageList from '../chat/MessageList.svelte';
   import MessageInput from '../chat/MessageInput.svelte';
   import UsernameModal from '../chat/UsernameModal.svelte';
+  import IdentitySelector from '../chat/IdentitySelector.svelte';
   import { getNamespace } from '../../lib/namespace';
 
   const LAST_CHANNEL_KEY = 'federise-demo:lastChannel';
@@ -75,15 +76,8 @@
     try {
       const result = await client.channel.list();
       channels = result;
-
-      // Restore last selected channel
-      const lastChannelId = localStorage.getItem(LAST_CHANNEL_KEY);
-      if (lastChannelId && !selectedChannel) {
-        const lastChannel = channels.find(c => c.channelId === lastChannelId);
-        if (lastChannel) {
-          selectChannel(lastChannel);
-        }
-      }
+      // Don't auto-select last channel - user should explicitly select one
+      // This ensures the identity selector shows all available identities initially
     } catch (err) {
       console.error('Failed to load channels:', err);
     }
@@ -94,6 +88,14 @@
 
     const client = getClient();
     if (!client) return;
+
+    // Ensure an identity is selected before creating a channel
+    const identity = await ensureIdentitySelected();
+    if (!identity) {
+      console.error('Cannot create channel: no identity available');
+      alert('Please configure an identity before creating a channel.');
+      return;
+    }
 
     const channelName = toKebabCase(newChannelName);
 
@@ -193,10 +195,13 @@
 
     isSending = true;
     try {
+      // Prefer active identity display name, then username, then Anonymous
+      const authorName = activeIdentity.value?.displayName || username || 'Anonymous';
+
       // Include username in message content
       const messageContent = JSON.stringify({
         type: '__chat__',
-        author: username || 'Anonymous',
+        author: authorName,
         text: newMessage.trim(),
       });
       const event = await client.channel.append(selectedChannel.channelId, messageContent);
@@ -279,14 +284,27 @@
           { expiresInSeconds: shareExpiryDays * 24 * 60 * 60 }
         );
 
-        // Format: /claim#<tokenId>@<base64urlGatewayUrl>
+        // Also create a channel share token so they can view the channel after claiming
+        const channelToken = await client.channel.createToken(
+          selectedChannel.channelId,
+          permissions,
+          { expiresInSeconds: shareExpiryDays * 24 * 60 * 60 }
+        );
+
+        // Format: /claim#<tokenId>@<base64urlGatewayUrl>@<base64urlReturnUrl>
         // Use org app URL (derived from frameUrl) for claim page
         const orgBaseUrl = frameUrl.value.replace(/\/frame\/?$/, '');
         const base64Gateway = btoa(result.gatewayUrl)
           .replace(/\+/g, '-')
           .replace(/\//g, '_')
           .replace(/=+$/, '');
-        shareUrl = `${orgBaseUrl}/claim#${result.tokenId}@${base64Gateway}`;
+        // Return URL takes them to /channel view with their channel token
+        const returnUrl = `${baseUrl}/channel#${channelToken.token}@${base64Gateway}`;
+        const base64Return = btoa(returnUrl)
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+        shareUrl = `${orgBaseUrl}/claim#${result.tokenId}@${base64Gateway}@${base64Return}`;
       }
     } catch (err) {
       console.error('Failed to create share link:', err);
@@ -360,12 +378,19 @@
   <div class="channel-list">
     <div class="channel-header">
       <h3>Channels</h3>
-      <button class="icon-btn" onclick={() => showUsernameModal = true} title="Set username">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-      </button>
+      <div class="header-actions">
+        <button class="icon-btn" onclick={() => showUsernameModal = true} title="Set username">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Identity Selector -->
+    <div class="identity-section">
+      <IdentitySelector channelId={selectedChannel?.channelId} />
     </div>
 
     <div class="channel-items">
@@ -443,7 +468,7 @@
 
       <MessageInput
         bind:value={newMessage}
-        placeholder={username ? `Message as ${username}...` : 'Type a message...'}
+        placeholder={activeIdentity.value ? `Message as ${activeIdentity.value.displayName}...` : (username ? `Message as ${username}...` : 'Type a message...')}
         {isSending}
         onSend={sendMessage}
       />
@@ -658,6 +683,16 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .identity-section {
+    padding: 0.5rem 0.5rem 0.25rem;
+    border-bottom: 1px solid var(--color-border);
   }
 
   .icon-btn {

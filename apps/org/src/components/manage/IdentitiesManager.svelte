@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createGatewayClient, withAuth } from '../../api/client';
+  import {
+    createVaultStorage,
+    createVaultQueries,
+  } from '@federise/proxy';
+  import type { IdentityInfo, VaultSummary } from '@federise/proxy';
 
   const STORAGE_KEY_API = 'federise:gateway:apiKey';
   const STORAGE_KEY_URL = 'federise:gateway:url';
@@ -29,7 +34,11 @@
   let newIdentitySecret = $state('');
   let toast = $state({ show: false, message: '', type: 'success' as 'success' | 'error' });
   let loaded = $state(false);
-  let activeTab = $state<'users' | 'apps'>('users');
+  let activeTab = $state<'users' | 'apps' | 'vault'>('users');
+
+  // Vault state
+  let vaultSummary = $state<VaultSummary | null>(null);
+  let vaultIdentities = $state<IdentityInfo[]>([]);
 
   let apiKey = $state<string | null>(null);
   let gatewayUrl = $state<string | null>(null);
@@ -146,9 +155,64 @@
     return caps.map(c => c.replace(':', ' ')).join(', ');
   }
 
+  function loadVault() {
+    try {
+      const vault = createVaultStorage(localStorage);
+      const queries = createVaultQueries(vault);
+
+      // Get summary
+      const summary = queries.getSummary();
+      const grouped = queries.groupByGateway();
+
+      vaultSummary = {
+        totalIdentities: summary.totalIdentities,
+        totalGateways: summary.totalGateways,
+        ownerIdentities: summary.ownerIdentities,
+        grantedIdentities: summary.grantedIdentities,
+        identitiesByGateway: grouped,
+      };
+
+      // Get all vault entries as safe info
+      vaultIdentities = vault.getAll().map((entry) => vault.toSafeInfo(entry));
+    } catch (error) {
+      console.error('Failed to load vault:', error);
+      vaultSummary = null;
+      vaultIdentities = [];
+    }
+  }
+
+  function removeFromVault(identityId: string, displayName: string) {
+    if (!confirm(`Remove "${displayName}" from your vault? This will revoke your access to resources shared with this identity.`)) {
+      return;
+    }
+
+    try {
+      const vault = createVaultStorage(localStorage);
+      vault.remove(identityId);
+      loadVault();
+      showToast('Identity removed from vault', 'success');
+    } catch (error) {
+      console.error('Failed to remove from vault:', error);
+      showToast('Failed to remove identity', 'error');
+    }
+  }
+
+  function setPrimaryIdentity(identityId: string) {
+    try {
+      const vault = createVaultStorage(localStorage);
+      vault.setPrimary(identityId);
+      loadVault();
+      showToast('Primary identity updated', 'success');
+    } catch (error) {
+      console.error('Failed to set primary:', error);
+      showToast('Failed to set primary identity', 'error');
+    }
+  }
+
   onMount(async () => {
     apiKey = localStorage.getItem(STORAGE_KEY_API);
     gatewayUrl = localStorage.getItem(STORAGE_KEY_URL);
+    loadVault();
     await loadIdentities();
     loaded = true;
   });
@@ -204,6 +268,13 @@
       >
         Connected Apps ({appIdentities.length})
       </button>
+      <button
+        class="tab"
+        class:active={activeTab === 'vault'}
+        onclick={() => activeTab = 'vault'}
+      >
+        My Vault ({vaultIdentities.length})
+      </button>
     </div>
 
     {#if loading}
@@ -242,7 +313,7 @@
           {/each}
         </div>
       {/if}
-    {:else}
+    {:else if activeTab === 'apps'}
       <!-- Apps tab -->
       {#if appIdentities.length === 0}
         <div class="empty-state">
@@ -282,6 +353,98 @@
                 >
                   Revoke Access
                 </button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {:else if activeTab === 'vault'}
+      <!-- Vault tab -->
+      {#if vaultSummary}
+        <div class="vault-summary">
+          <div class="summary-stats">
+            <div class="stat">
+              <span class="stat-value">{vaultSummary.totalIdentities}</span>
+              <span class="stat-label">Total Identities</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{vaultSummary.totalGateways}</span>
+              <span class="stat-label">Gateways</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{vaultSummary.ownerIdentities}</span>
+              <span class="stat-label">Owner</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{vaultSummary.grantedIdentities}</span>
+              <span class="stat-label">Granted</span>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if vaultIdentities.length === 0}
+        <div class="empty-state">
+          <p>Your vault is empty. Identities will appear here when you claim access to shared resources or connect to gateways.</p>
+        </div>
+      {:else}
+        <div class="vault-groups">
+          {#each Object.entries(vaultSummary?.identitiesByGateway || {}) as [gateway, gatewayIdentities]}
+            <div class="vault-group">
+              <h4 class="group-header">
+                <span class="gateway-url">{gateway}</span>
+                <span class="identity-count">{gatewayIdentities.length} {gatewayIdentities.length === 1 ? 'identity' : 'identities'}</span>
+              </h4>
+              <div class="identity-list">
+                {#each gatewayIdentities as identity}
+                  <div class="identity-card vault-card" class:primary={identity.isPrimary}>
+                    <div class="identity-header">
+                      <div class="identity-info">
+                        <span class="identity-name">
+                          {identity.displayName}
+                          {#if identity.isPrimary}
+                            <span class="primary-badge">Primary</span>
+                          {/if}
+                        </span>
+                        <span class="identity-type">{identity.identityType}</span>
+                      </div>
+                      <span class="source-badge" class:owner={identity.source === 'owner'} class:granted={identity.source === 'granted'}>
+                        {identity.source}
+                      </span>
+                    </div>
+                    {#if identity.capabilities.length > 0}
+                      <div class="capabilities">
+                        <span class="capabilities-label">Capabilities:</span>
+                        <div class="capability-badges">
+                          {#each identity.capabilities as cap}
+                            <span class="capability-badge">
+                              {cap.capability}
+                              {#if cap.resourceType}
+                                <span class="resource-scope">({cap.resourceType}{cap.resourceId ? `:${cap.resourceId.slice(0, 8)}...` : ''})</span>
+                              {/if}
+                            </span>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+                    <div class="identity-actions">
+                      {#if !identity.isPrimary}
+                        <button
+                          onclick={() => setPrimaryIdentity(identity.identityId)}
+                          class="set-primary-button"
+                        >
+                          Set as Primary
+                        </button>
+                      {/if}
+                      <button
+                        onclick={() => removeFromVault(identity.identityId, identity.displayName)}
+                        class="delete-button"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                {/each}
               </div>
             </div>
           {/each}
@@ -757,5 +920,147 @@
       right: 1rem;
       bottom: 1rem;
     }
+
+    .vault-summary {
+      margin-bottom: 1.5rem;
+    }
+
+    .summary-stats {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+  }
+
+  /* Vault-specific styles */
+  .vault-summary {
+    margin-bottom: 2rem;
+  }
+
+  .summary-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    min-width: 100px;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-white);
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .vault-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .vault-group {
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .gateway-url {
+    color: var(--color-white);
+    font-weight: 600;
+    font-size: 0.9rem;
+    font-family: monospace;
+  }
+
+  .identity-count {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .vault-card {
+    border-left: 3px solid rgba(139, 92, 246, 0.3);
+  }
+
+  .vault-card.primary {
+    border-left-color: rgba(34, 197, 94, 0.7);
+    background: rgba(34, 197, 94, 0.03);
+  }
+
+  .primary-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.15rem 0.5rem;
+    background: rgba(34, 197, 94, 0.2);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #4ade80;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .source-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .source-badge.owner {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+  }
+
+  .source-badge.granted {
+    background: rgba(249, 115, 22, 0.2);
+    color: #fb923c;
+  }
+
+  .resource-scope {
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    margin-left: 0.25rem;
+  }
+
+  .set-primary-button {
+    padding: 0.5rem 1rem;
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 6px;
+    color: #4ade80;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .set-primary-button:hover {
+    background: rgba(34, 197, 94, 0.25);
+    border-color: rgba(34, 197, 94, 0.5);
   }
 </style>

@@ -5,11 +5,20 @@
     PostMessageTransport,
     RemoteBackend,
     CookieCapabilityStore,
+    createVaultStorage,
+    createVaultQueries,
+    needsMigration,
+    migrateToVault,
   } from '@federise/proxy';
+  import type { VaultStorage, VaultQueries } from '@federise/proxy';
   import { checkStorageAccess, requestStorageAccess, isGatewayConfigured, getGatewayConfig } from '../utils/auth';
 
   // Transport reference for cleanup
   let transport: PostMessageTransport | null = null;
+
+  // Vault storage for multi-identity support
+  let vault: VaultStorage | null = null;
+  let vaultQueries: VaultQueries | null = null;
 
   // UI state for storage access flow
   let needsStorageAccess = $state(false);
@@ -57,6 +66,19 @@
       return;
     }
 
+    // Initialize vault storage for multi-identity support
+    vault = createVaultStorage(localStorage);
+    vaultQueries = createVaultQueries(vault);
+
+    // Migrate legacy single-credential storage to vault if needed
+    if (needsMigration(localStorage)) {
+      console.log('[FrameEnforcer] Migrating legacy credentials to vault...');
+      migrateToVault(localStorage);
+      // Reload vault after migration
+      vault = createVaultStorage(localStorage);
+      vaultQueries = createVaultQueries(vault);
+    }
+
     // Create the backend
     const backend = new RemoteBackend({
       gatewayUrl: url,
@@ -70,12 +92,19 @@
     const router = new MessageRouter({
       backend,
       capabilities,
+      vault,
+      vaultQueries,
       onAuthRequired: async (origin, requestedCapabilities, alreadyGranted) => {
         // Build the scope from capabilities that aren't already granted
         const needsApproval = requestedCapabilities.filter((c) => !alreadyGranted.includes(c));
         const scope = needsApproval.join(',');
         const authUrl = `/authorize#app_origin=${encodeURIComponent(origin)}&scope=${encodeURIComponent(scope)}`;
         return new URL(authUrl, window.location.origin).href;
+      },
+      onTokenActionRequired: async (tokenId, action) => {
+        // Build URL for token action (identity claim, etc.)
+        const actionUrl = `/claim?token=${encodeURIComponent(tokenId)}&action=${encodeURIComponent(action)}`;
+        return new URL(actionUrl, window.location.origin).href;
       },
       getGatewayUrl: () => url,
       // Enable test messages only in development

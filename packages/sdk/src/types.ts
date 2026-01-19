@@ -117,6 +117,18 @@ export type TestGrantPermissionsPayload = { type: 'TEST_GRANT_PERMISSIONS'; capa
 export type TestClearPermissionsPayload = { type: 'TEST_CLEAR_PERMISSIONS' };
 export type HandleTokenPayload = { type: 'HANDLE_TOKEN'; token: string; gatewayUrl?: string };
 
+// Identity-related payloads
+export type GetVaultSummaryPayload = { type: 'GET_VAULT_SUMMARY' };
+export type GetIdentitiesForCapabilityPayload = {
+  type: 'GET_IDENTITIES_FOR_CAPABILITY';
+  capability: string;
+  resourceType?: string;
+  resourceId?: string;
+  gatewayUrl?: string;
+};
+export type SelectIdentityPayload = { type: 'SELECT_IDENTITY'; identityId: string };
+export type GetActiveIdentityPayload = { type: 'GET_ACTIVE_IDENTITY' };
+
 export type RequestPayload =
   | SynPayload
   | RequestCapabilitiesPayload
@@ -140,7 +152,11 @@ export type RequestPayload =
   | ChannelInvitePayload
   | TestGrantPermissionsPayload
   | TestClearPermissionsPayload
-  | HandleTokenPayload;
+  | HandleTokenPayload
+  | GetVaultSummaryPayload
+  | GetIdentitiesForCapabilityPayload
+  | SelectIdentityPayload
+  | GetActiveIdentityPayload;
 
 // Request messages from SDK to Frame (with id)
 export type RequestMessage = RequestPayload & { id: string };
@@ -173,10 +189,38 @@ export type ResponseMessage =
   | { type: 'TEST_PERMISSIONS_CLEARED'; id: string }
   | { type: 'TOKEN_ACTION_REQUIRED'; id: string; action: TokenActionType; actionUrl: string }
   | { type: 'TOKEN_INVALID'; id: string; reason: string }
-  | { type: 'TOKEN_HANDLED'; id: string; result: TokenHandleResult };
+  | { type: 'TOKEN_HANDLED'; id: string; result: TokenHandleResult }
+  | { type: 'VAULT_SUMMARY'; id: string; summary: VaultSummary }
+  | { type: 'IDENTITIES_FOR_CAPABILITY'; id: string; identities: IdentityInfo[] }
+  | { type: 'IDENTITY_SELECTED'; id: string; identity: IdentityInfo }
+  | { type: 'ACTIVE_IDENTITY'; id: string; identity: IdentityInfo | null };
 
 // Token action types
 export type TokenActionType = 'identity_setup' | 'blob_access' | 'channel_access';
+
+// Identity types
+export type IdentityType = 'user' | 'service' | 'agent' | 'app' | 'anonymous';
+export type IdentitySource = 'owner' | 'granted';
+
+// Safe identity info for apps (no secrets, no infrastructure details)
+// Apps only need to know enough to display and select identities
+export interface IdentityInfo {
+  identityId: string;
+  displayName: string;
+  identityType: IdentityType;
+  source: IdentitySource;
+  isPrimary: boolean;
+  // Note: gatewayUrl is intentionally NOT exposed to apps
+  // Apps don't need to know which gateway the identity is connected to
+}
+
+// Vault summary - minimal info for apps
+// Does NOT expose gateway URLs or detailed identity info
+export interface VaultSummary {
+  totalIdentities: number;
+  hasOwnerIdentity: boolean;
+  // Note: gateway counts and identity lists are intentionally NOT exposed
+}
 
 // Result of handling a token
 export interface TokenHandleResult {
@@ -293,6 +337,13 @@ export function isValidRequest(data: unknown): data is RequestMessage {
       return typeof msg.channelId === 'string' && typeof msg.targetSeq === 'number';
     case 'HANDLE_TOKEN':
       return typeof msg.token === 'string';
+    case 'GET_VAULT_SUMMARY':
+    case 'GET_ACTIVE_IDENTITY':
+      return true;
+    case 'GET_IDENTITIES_FOR_CAPABILITY':
+      return typeof msg.capability === 'string';
+    case 'SELECT_IDENTITY':
+      return typeof msg.identityId === 'string';
     default:
       return false;
   }
