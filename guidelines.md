@@ -11,6 +11,7 @@
 ## Architecture Constraints
 
 - [ ] All app actions must flow through the SDK, not direct API calls from apps
+- [ ] All gateway endpoints must be associated with a permission.
 - [ ] Third party apps never see secrets, credentials, or gateway endpoints. All access is brokered through the frame as a proxy.
 - [ ] When we change a contract (api, function arguments, etc), we need to check all the places that may be effected by that change and either update them to the new method, or specifically call them out to the user if that is possible. We never have backwards compatibility. Better to remove and break then have backwards compatability.
 
