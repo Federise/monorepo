@@ -88,6 +88,9 @@ importers:
       '@astrojs/svelte':
         specifier: ^7.2.4
         version: 7.2.5(@types/node@25.0.3)(astro@5.16.6(@types/node@25.0.3)(rollup@4.54.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2))(svelte@5.46.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      '@federise/manage-ui':
+        specifier: workspace:*
+        version: link:../../packages/manage-ui
       '@federise/proxy':
         specifier: workspace:*
         version: link:../../packages/proxy
@@ -184,6 +187,28 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@25.0.3)
+
+  packages/manage-ui:
+    dependencies:
+      openapi-fetch:
+        specifier: ^0.13.3
+        version: 0.13.8
+    devDependencies:
+      '@federise/proxy':
+        specifier: workspace:*
+        version: link:../proxy
+      '@federise/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      svelte:
+        specifier: ^5.2.9
+        version: 5.46.1
+      tsup:
+        specifier: ^8.0.1
+        version: 8.5.1(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
 
   packages/proxy:
     devDependencies:

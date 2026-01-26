@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getAllPermissions, revokePermissions } from '../../lib/permissions';
-  import type { PermissionRecord } from '../../lib/protocol';
+  import { getAllPermissions, revokePermissions } from '../lib/permissions';
+  import type { PermissionRecord } from '../lib/protocol';
 
   let appPermissions = $state<PermissionRecord[]>([]);
   let loaded = $state(false);

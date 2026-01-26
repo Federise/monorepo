@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getAllPermissions } from '../../lib/permissions';
-  import type { PermissionRecord } from '../../lib/protocol';
-  import { createGatewayClient, withAuth } from '../../api/client';
-  import { getPrimaryIdentity } from '../../utils/vault';
+  import { getAllPermissions } from '../lib/permissions';
+  import type { PermissionRecord } from '../lib/protocol';
+  import { createGatewayClient, withAuth } from '../lib/client';
+  import { getPrimaryIdentity } from '../utils/vault';
 
   let isConnected = $state(false);
   let gatewayUrl = $state('');

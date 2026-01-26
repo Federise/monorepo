@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createGatewayClient, withAuth } from '../../api/client';
-  import { getPrimaryIdentity } from '../../utils/vault';
+  import { createGatewayClient, withAuth } from '../lib/client';
+  import { getPrimaryIdentity } from '../utils/vault';
 
   type Tab = 'kv' | 'blob';
 

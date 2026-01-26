@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createGatewayClient, withAuth } from '../../api/client';
+  import { createGatewayClient, withAuth } from '../lib/client';
   import { createVaultStorage } from '@federise/proxy';
-  import { getPrimaryIdentity } from '../../utils/vault';
+  import { getPrimaryIdentity } from '../utils/vault';
 
   // Gateway state
   let gatewayUrl = $state('');
