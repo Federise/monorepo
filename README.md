@@ -7,6 +7,25 @@ A pnpm monorepo for the Federise project.
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - Comprehensive overview of the system architecture, apps, packages, and how they work together
 - **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - How to integrate Federise into your applications using the SDK
 
+## Local Development
+
+```bash
+./scripts/dev.sh start          # Start all services (gateway, org, demo)
+./scripts/dev.sh start --reset  # Clear local state and start fresh
+./scripts/dev.sh stop           # Stop all services
+./scripts/dev.sh status         # Check what's running
+```
+
+Once running:
+
+| Service | URL |
+|---------|-----|
+| Gateway | http://localhost:3000 |
+| Org | http://localhost:4321 |
+| Demo | http://localhost:5174 |
+
+The start command automatically provisions a development identity and outputs the gateway URL and API key.
+
 ## Structure
 
 ```
